@@ -1,0 +1,29 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Quản lý quy trình sản xuất</title>
+    <link rel="stylesheet" href="~/css/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-7 col-md-9">
+                <div class="mb-4 text-center">
+                    <a href="/" class="text-decoration-none">
+                        <h4 class="mb-0">Hệ thống quản lý quy trình sản xuất</h4>
+                    </a>
+                    <small class="text-muted">Đồng bộ dữ liệu sang HanoiCheck</small>
+                </div>
+                @RenderBody()
+            </div>
+        </div>
+    </div>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

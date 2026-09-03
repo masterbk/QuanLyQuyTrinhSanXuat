@@ -1,0 +1,38 @@
+@page "/dang-nhap"
+@model HCP.Web.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Đăng nhập";
+}
+
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <h5 class="card-title mb-3">Đăng nhập</h5>
+
+        <form method="post">
+            <div asp-validation-summary="All" class="alert alert-danger @(ViewData.ModelState.IsValid ? "d-none" : "")"></div>
+
+            <div class="mb-3">
+                <label asp-for="Input.Email" class="form-label">Email</label>
+                <input asp-for="Input.Email" class="form-control" autocomplete="username" autofocus />
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Input.MatKhau" class="form-label">Mật khẩu</label>
+                <input asp-for="Input.MatKhau" class="form-control" type="password" autocomplete="current-password" />
+            </div>
+
+            <div class="form-check mb-3">
+                <input asp-for="Input.GhiNho" class="form-check-input" />
+                <label asp-for="Input.GhiNho" class="form-check-label">Ghi nhớ đăng nhập</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Đăng nhập</button>
+        </form>
+
+        <hr class="my-4" />
+        <p class="mb-0 text-center">
+            Cơ sở sản xuất chưa có tài khoản?
+            <a href="/dang-ky">Đăng ký sử dụng hệ thống</a>
+        </p>
+    </div>
+</div>

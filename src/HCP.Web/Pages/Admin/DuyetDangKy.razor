@@ -1,0 +1,174 @@
+@page "/admin/duyet-dang-ky"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Infrastructure
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.PlatformSuperAdmin)]
+@inject ICoSoService CoSoService
+@inject ISnackbar Snackbar
+
+<PageTitle>Duyệt đăng ký cơ sở</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Duyệt đăng ký cơ sở sản xuất</MudText>
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Cơ sở chỉ đăng nhập được sau khi hồ sơ được duyệt.
+</MudText>
+
+<MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4"
+         @bind-ActivePanelIndex="_tabIndex">
+    <MudTabPanel Text="@($"Chờ duyệt ({_choDuyet.Count})")" OnClick="@(() => TaiDuLieuAsync(TenantStatus.PendingApproval))" />
+    <MudTabPanel Text="Đã duyệt" OnClick="@(() => TaiDuLieuAsync(TenantStatus.Active))" />
+    <MudTabPanel Text="Đã từ chối" OnClick="@(() => TaiDuLieuAsync(TenantStatus.Rejected))" />
+</MudTabs>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-4" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">Không có hồ sơ nào ở trạng thái này.</MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Class="mt-4" Elevation="1">
+        <HeaderContent>
+            <MudTh>Tên cơ sở</MudTh>
+            <MudTh>Mã số thuế</MudTh>
+            <MudTh>Người đại diện</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Ngày đăng ký</MudTh>
+            <MudTh>Thao tác</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Tên cơ sở">
+                <MudText Typo="Typo.body2"><b>@context.Name</b></MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.DiaChi</MudText>
+                @if (context.TrangThai == TenantStatus.Rejected && !string.IsNullOrWhiteSpace(context.LyDoTuChoi))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error">Lý do: @context.LyDoTuChoi</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Mã số thuế">@context.MaSoThue</MudTd>
+            <MudTd DataLabel="Người đại diện">@context.NguoiDaiDien</MudTd>
+            <MudTd DataLabel="Email">@context.EmailLienHe</MudTd>
+            <MudTd DataLabel="Ngày đăng ký">@context.NgayDangKyUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd>
+                @if (context.TrangThai == TenantStatus.PendingApproval)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                               Disabled="_dangXuLy"
+                               OnClick="@(() => DuyetAsync(context))">Duyệt</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Class="ml-2"
+                               Disabled="_dangXuLy"
+                               OnClick="@(() => MoHopThoaiTuChoi(context))">Từ chối</MudButton>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.TrangThai == TenantStatus.Active ? Color.Success : Color.Error)">
+                        @(context.TrangThai == TenantStatus.Active ? "Đang hoạt động" : "Đã từ chối")
+                    </MudChip>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_hienHopThoaiTuChoi" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Từ chối hồ sơ</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Cơ sở: <b>@_coSoDangTuChoi?.Name</b>
+        </MudText>
+        <MudTextField @bind-Value="_lyDoTuChoi" Label="Lý do từ chối" Lines="3"
+                      Variant="Variant.Outlined"
+                      HelperText="Cơ sở sẽ thấy lý do này khi đăng nhập, hãy nêu rõ cần bổ sung gì." />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienHopThoaiTuChoi = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="_dangXuLy"
+                   OnClick="XacNhanTuChoiAsync">Xác nhận từ chối</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Tenant> _danhSach = new();
+    private List<Tenant> _choDuyet = new();
+    private TenantStatus _trangThaiDangXem = TenantStatus.PendingApproval;
+
+    private bool _dangTai = true;
+    private bool _dangXuLy;
+    private int _tabIndex;
+
+    private bool _hienHopThoaiTuChoi;
+    private Tenant? _coSoDangTuChoi;
+    private string _lyDoTuChoi = string.Empty;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiDuLieuAsync(TenantStatus.PendingApproval);
+
+    private async Task TaiDuLieuAsync(TenantStatus trangThai)
+    {
+        _dangTai = true;
+        _trangThaiDangXem = trangThai;
+        StateHasChanged();
+
+        _danhSach = (await CoSoService.LayDanhSachAsync(trangThai)).ToList();
+        _choDuyet = trangThai == TenantStatus.PendingApproval
+            ? _danhSach
+            : (await CoSoService.LayDanhSachAsync(TenantStatus.PendingApproval)).ToList();
+
+        _dangTai = false;
+        StateHasChanged();
+    }
+
+    private async Task<string> LayTenNguoiDuyetAsync()
+    {
+        if (AuthState is null) return "unknown";
+        var state = await AuthState;
+        return state.User.Identity?.Name ?? "unknown";
+    }
+
+    private async Task DuyetAsync(Tenant coSo)
+    {
+        _dangXuLy = true;
+        var ketQua = await CoSoService.DuyetAsync(coSo.Id!, await LayTenNguoiDuyetAsync());
+        _dangXuLy = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+        await TaiDuLieuAsync(_trangThaiDangXem);
+    }
+
+    private void MoHopThoaiTuChoi(Tenant coSo)
+    {
+        _coSoDangTuChoi = coSo;
+        _lyDoTuChoi = string.Empty;
+        _hienHopThoaiTuChoi = true;
+    }
+
+    private async Task XacNhanTuChoiAsync()
+    {
+        if (_coSoDangTuChoi is null) return;
+
+        _dangXuLy = true;
+        var ketQua = await CoSoService.TuChoiAsync(
+            _coSoDangTuChoi.Id!, await LayTenNguoiDuyetAsync(), _lyDoTuChoi);
+        _dangXuLy = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong)
+        {
+            _hienHopThoaiTuChoi = false;
+            await TaiDuLieuAsync(_trangThaiDangXem);
+        }
+    }
+}

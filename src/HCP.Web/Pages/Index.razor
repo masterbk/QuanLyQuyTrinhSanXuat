@@ -1,8 +1,54 @@
 @page "/"
+@using HCP.Domain.Constants
 
-<PageTitle>He thong quan ly quy trinh san xuat</PageTitle>
+<PageTitle>Trang chủ</PageTitle>
 
-<h1>He thong quan ly quy trinh san xuat</h1>
+<AuthorizeView>
+    <Authorized>
+        <MudText Typo="Typo.h5" Class="mb-4">
+            Xin chào, @(context.User.FindFirst("hoTen")?.Value ?? context.User.Identity?.Name)
+        </MudText>
 
-<p>Nen tang quan ly quy trinh san xuat cho cac co so, dong bo du lieu sang HanoiCheck.</p>
-<p><em>Giai doan 0: nen tang multi-tenant da san sang. Cac man hinh nghiep vu se duoc bo sung o cac giai doan sau.</em></p>
+        <AuthorizeView Roles="@AppRoles.PlatformSuperAdmin" Context="adminContext">
+            <MudPaper Class="pa-5 mb-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Quản trị nền tảng</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+                    Duyệt hồ sơ đăng ký của các cơ sở sản xuất và theo dõi tình trạng kết nối.
+                </MudText>
+                <MudButton Href="/admin/duyet-dang-ky" Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.FactCheck">
+                    Duyệt đăng ký
+                </MudButton>
+            </MudPaper>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="@AppRoles.TenantAdmin" Context="tenantContext">
+            <MudPaper Class="pa-5 mb-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Cơ sở của bạn</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+                    Trước khi dữ liệu được đồng bộ sang HanoiCheck, cơ sở cần khai báo bộ mã xác thực
+                    do HanoiCheck cấp riêng cho mình.
+                </MudText>
+                <MudButton Href="/app/cai-dat-ket-noi" Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Link">
+                    Cài đặt kết nối HanoiCheck
+                </MudButton>
+            </MudPaper>
+        </AuthorizeView>
+    </Authorized>
+
+    <NotAuthorized>
+        <MudText Typo="Typo.h5" Class="mb-2">Hệ thống quản lý quy trình sản xuất</MudText>
+        <MudText Typo="Typo.body1" Class="mb-4 mud-text-secondary">
+            Nền tảng giúp các cơ sở sản xuất suất ăn, bánh ngọt, bánh mì... quản lý quy trình sản xuất
+            và đồng bộ dữ liệu sang hệ thống HanoiCheck.
+        </MudText>
+
+        <MudButton Href="/dang-nhap" Variant="Variant.Filled" Color="Color.Primary" Class="mr-2">
+            Đăng nhập
+        </MudButton>
+        <MudButton Href="/dang-ky" Variant="Variant.Outlined" Color="Color.Primary">
+            Đăng ký cơ sở sản xuất
+        </MudButton>
+    </NotAuthorized>
+</AuthorizeView>

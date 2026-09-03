@@ -1,0 +1,83 @@
+@page "/dang-ky"
+@model HCP.Web.Pages.Account.DangKyModel
+@{
+    ViewData["Title"] = "Đăng ký cơ sở sản xuất";
+}
+
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <h5 class="card-title mb-1">Đăng ký cơ sở sản xuất</h5>
+        <p class="text-muted small mb-4">
+            Sau khi đăng ký, hồ sơ sẽ được quản trị viên xem xét. Bạn đăng nhập được ngay khi hồ sơ được duyệt.
+        </p>
+
+        @if (Model.ThanhCong)
+        {
+            <div class="alert alert-success">
+                @Model.ThongBao
+                <div class="mt-2"><a href="/dang-nhap">Về trang đăng nhập</a></div>
+            </div>
+        }
+        else
+        {
+            <form method="post">
+                <div asp-validation-summary="All" class="alert alert-danger @(ViewData.ModelState.IsValid ? "d-none" : "")"></div>
+
+                <h6 class="text-muted mt-2">Thông tin cơ sở</h6>
+                <div class="mb-3">
+                    <label asp-for="Input.TenCoSo" class="form-label">Tên cơ sở <span class="text-danger">*</span></label>
+                    <input asp-for="Input.TenCoSo" class="form-control" placeholder="VD: Cơ sở chế biến suất ăn ABC" />
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Input.MaSoThue" class="form-label">Mã số thuế <span class="text-danger">*</span></label>
+                        <input asp-for="Input.MaSoThue" class="form-control" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Input.SoDienThoai" class="form-label">Số điện thoại</label>
+                        <input asp-for="Input.SoDienThoai" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Input.DiaChi" class="form-label">Địa chỉ</label>
+                    <input asp-for="Input.DiaChi" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Input.NguoiDaiDien" class="form-label">Người đại diện</label>
+                    <input asp-for="Input.NguoiDaiDien" class="form-control" />
+                </div>
+
+                <h6 class="text-muted mt-4">Tài khoản quản trị của cơ sở</h6>
+                <div class="mb-3">
+                    <label asp-for="Input.HoTenQuanTri" class="form-label">Họ tên <span class="text-danger">*</span></label>
+                    <input asp-for="Input.HoTenQuanTri" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Input.Email" class="form-label">Email đăng nhập <span class="text-danger">*</span></label>
+                    <input asp-for="Input.Email" class="form-control" autocomplete="username" />
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Input.MatKhau" class="form-label">Mật khẩu <span class="text-danger">*</span></label>
+                        <input asp-for="Input.MatKhau" class="form-control" type="password" autocomplete="new-password" />
+                        <div class="form-text">Tối thiểu 8 ký tự.</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Input.XacNhanMatKhau" class="form-label">Nhập lại mật khẩu <span class="text-danger">*</span></label>
+                        <input asp-for="Input.XacNhanMatKhau" class="form-control" type="password" autocomplete="new-password" />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Gửi hồ sơ đăng ký</button>
+            </form>
+
+            <hr class="my-4" />
+            <p class="mb-0 text-center">Đã có tài khoản? <a href="/dang-nhap">Đăng nhập</a></p>
+        }
+    </div>
+</div>

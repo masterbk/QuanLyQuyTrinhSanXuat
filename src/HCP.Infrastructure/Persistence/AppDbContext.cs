@@ -4,6 +4,7 @@ using Finbuckle.MultiTenant.EntityFrameworkCore;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Entities.Infrastructure;
 using HCP.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Persistence;
@@ -11,25 +12,48 @@ namespace HCP.Infrastructure.Persistence;
 /// <summary>
 /// DbContext chính: dữ liệu Identity + toàn bộ dữ liệu nghiệp vụ của các cơ sở.
 ///
-/// Kế thừa MultiTenantIdentityDbContext nên mọi entity được đánh dấu .IsMultiTenant()
-/// sẽ tự động:
+/// Mọi entity được đánh dấu .IsMultiTenant() sẽ tự động:
 ///   - được gán TenantId khi ghi (SaveChanges gọi EnforceMultiTenant),
 ///   - bị lọc theo TenantId hiện tại khi đọc (global query filter).
-///
 /// Đây là hàng rào chống rò rỉ dữ liệu chéo giữa các cơ sở. Xem HCP.Tests/TenantIsolationTests.
+///
+/// CỐ Ý KHÔNG kế thừa MultiTenantIdentityDbContext: lớp đó lọc luôn cả bảng Identity
+/// (thậm chí chèn TenantId vào khoá chính của AspNetUserLogins). Điều đó phá vỡ đăng nhập,
+/// vì lúc xác thực chưa hề có tenant context - claim tenantId chỉ tồn tại SAU khi đăng nhập
+/// thành công. Bảng Identity vì vậy để ở phạm vi toàn hệ thống; việc người dùng thuộc cơ sở nào
+/// do cột ApplicationUser.TenantId và tầng ứng dụng kiểm soát.
 /// </summary>
-public class AppDbContext : MultiTenantIdentityDbContext<ApplicationUser>
+public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbContext
 {
+    private readonly IMultiTenantContextAccessor _multiTenantContextAccessor;
+
     public AppDbContext(IMultiTenantContextAccessor multiTenantContextAccessor,
                         DbContextOptions<AppDbContext> options)
-        : base(multiTenantContextAccessor, options)
+        : base(options)
     {
-        // Chưa gán TenantId khi tạo mới -> tự điền theo tenant đang đăng nhập.
-        TenantNotSetMode = TenantNotSetMode.Overwrite;
+        _multiTenantContextAccessor = multiTenantContextAccessor;
+    }
 
-        // Gán TenantId khác tenant đang đăng nhập -> NÉM LỖI, không âm thầm bỏ qua.
-        // Đây là chốt chặn cuối cùng nếu tầng ứng dụng để lọt request giả mạo Id.
-        TenantMismatchMode = TenantMismatchMode.Throw;
+    public ITenantInfo? TenantInfo => _multiTenantContextAccessor.MultiTenantContext?.TenantInfo;
+
+    /// <summary>Gán TenantId khác tenant đang đăng nhập -> NÉM LỖI, không âm thầm bỏ qua.
+    /// Chốt chặn cuối cùng nếu tầng ứng dụng để lọt request giả mạo Id.</summary>
+    public TenantMismatchMode TenantMismatchMode => TenantMismatchMode.Throw;
+
+    /// <summary>Chưa gán TenantId khi tạo mới -> tự điền theo tenant đang đăng nhập.</summary>
+    public TenantNotSetMode TenantNotSetMode => TenantNotSetMode.Overwrite;
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        this.EnforceMultiTenant();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
+                                               CancellationToken cancellationToken = default)
+    {
+        this.EnforceMultiTenant();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
     // --- Bảng hạ tầng (không lọc theo tenant: job nền và platform admin cần truy vấn xuyên tenant) ---

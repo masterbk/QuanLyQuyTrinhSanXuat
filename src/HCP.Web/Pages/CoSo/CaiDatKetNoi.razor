@@ -1,0 +1,221 @@
+@page "/app/cai-dat-ket-noi"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Infrastructure
+@using HCP.Infrastructure.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin)]
+@inject IKetNoiHnCService KetNoiService
+@inject ISnackbar Snackbar
+
+<PageTitle>Cài đặt kết nối HanoiCheck</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Cài đặt kết nối HanoiCheck</MudText>
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Nhập bộ mã xác thực mà HanoiCheck đã cấp riêng cho cơ sở của bạn.
+</MudText>
+
+<MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
+    <MudText Typo="Typo.body2">
+        Bộ <b>client_id / client_secret / hmac_secret</b> do HanoiCheck cấp cho từng nhà cung cấp
+        sau khi hồ sơ đăng ký kết nối được cơ quan quản lý phê duyệt. Nếu chưa có, cơ sở cần nộp
+        hồ sơ đăng ký kết nối trước. Lưu ý <b>hmac_secret khác client_secret</b>: một cái dùng để
+        lấy access token, một cái dùng để ký chữ ký X-Signature cho mỗi request.
+    </MudText>
+</MudAlert>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-5" Elevation="1">
+                <MudForm @ref="_form" Model="_input">
+                    <MudTextField @bind-Value="_input.BaseUrl" Label="Base URL"
+                                  Variant="Variant.Outlined" Class="mb-3"
+                                  Placeholder="https://hanoicheck.example.vn"
+                                  HelperText="Địa chỉ gốc môi trường HanoiCheck (thử nghiệm hoặc chính thức)."
+                                  Required="true" RequiredError="Vui lòng nhập Base URL" />
+
+                    <MudTextField @bind-Value="_input.ClientId" Label="client_id"
+                                  Variant="Variant.Outlined" Class="mb-3"
+                                  Required="true" RequiredError="Vui lòng nhập client_id" />
+
+                    <MudTextField @bind-Value="_input.ClientSecret" Label="client_secret"
+                                  Variant="Variant.Outlined" Class="mb-3"
+                                  InputType="InputType.Password"
+                                  Placeholder="@PlaceholderSecret"
+                                  HelperText="@HelperClientSecret" />
+
+                    <MudTextField @bind-Value="_input.HmacSecret" Label="hmac_secret"
+                                  Variant="Variant.Outlined" Class="mb-4"
+                                  InputType="InputType.Password"
+                                  Placeholder="@PlaceholderSecret"
+                                  HelperText="@HelperHmacSecret" />
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="_dangXuLy" OnClick="LuuAsync"
+                               StartIcon="@Icons.Material.Filled.Save">
+                        Lưu cấu hình
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined" Class="ml-2"
+                               Disabled="@(_dangXuLy || !_daCoCauHinh)" OnClick="KiemTraAsync"
+                               StartIcon="@Icons.Material.Filled.NetworkCheck">
+                        Kiểm tra kết nối
+                    </MudButton>
+                </MudForm>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-5" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-3">Trạng thái kết nối</MudText>
+
+                @if (!_daCoCauHinh)
+                {
+                    <MudChip T="string" Color="Color.Default"
+                             Icon="@Icons.Material.Filled.RadioButtonUnchecked">
+                        Chưa cấu hình
+                    </MudChip>
+                    <MudText Typo="Typo.body2" Class="mt-3 mud-text-secondary">
+                        Cơ sở vẫn nhập liệu bình thường, nhưng dữ liệu <b>chưa được đẩy</b> sang
+                        HanoiCheck cho tới khi cấu hình xong và kiểm tra kết nối thành công.
+                    </MudText>
+                }
+                else if (_cauHinh?.DaXacThuc == true)
+                {
+                    <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                        Đã kết nối
+                    </MudChip>
+                    <MudText Typo="Typo.body2" Class="mt-3 mud-text-secondary">
+                        Xác thực gần nhất: @_cauHinh.NgayXacThucUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    </MudText>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+                        Chưa xác thực
+                    </MudChip>
+
+                    @if (!string.IsNullOrWhiteSpace(_cauHinh?.LoiXacThucGanNhat))
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">
+                            @_cauHinh.LoiXacThucGanNhat
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-3 mud-text-secondary">
+                            Hãy bấm "Kiểm tra kết nối" để xác nhận thông tin đã nhập là đúng.
+                        </MudText>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private MudForm? _form;
+    private CauHinhKetNoiRequest _input = new();
+    private TenantHnCCredential? _cauHinh;
+
+    private string? _tenantId;
+    private bool _dangTai = true;
+    private bool _dangXuLy;
+    private bool _daCoCauHinh;
+
+    private string PlaceholderSecret => _daCoCauHinh ? "Để trống nếu không đổi" : string.Empty;
+
+    private string HelperClientSecret => _daCoCauHinh
+        ? "Đã lưu. Chỉ nhập khi muốn thay bằng secret mới."
+        : "Dùng để lấy access token.";
+
+    private string HelperHmacSecret => _daCoCauHinh
+        ? "Đã lưu. Chỉ nhập khi muốn thay bằng secret mới."
+        : "Dùng để ký chữ ký HMAC cho mỗi request.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TenantId LUÔN lấy từ claim của người đang đăng nhập, không bao giờ từ tham số URL,
+        // để không thể xem hay sửa cấu hình của cơ sở khác.
+        _tenantId = await LayTenantIdAsync();
+        await TaiCauHinhAsync();
+    }
+
+    private async Task<string?> LayTenantIdAsync()
+    {
+        if (AuthState is null) return null;
+        var state = await AuthState;
+        return state.User.FindFirst(AppClaimTypes.TenantId)?.Value;
+    }
+
+    private async Task TaiCauHinhAsync()
+    {
+        _dangTai = true;
+
+        if (!string.IsNullOrWhiteSpace(_tenantId))
+        {
+            _cauHinh = await KetNoiService.LayCauHinhAsync(_tenantId);
+            _daCoCauHinh = _cauHinh is not null;
+
+            if (_cauHinh is not null)
+            {
+                // Không đổ secret ra giao diện - chỉ hiển thị phần không nhạy cảm.
+                _input = new CauHinhKetNoiRequest
+                {
+                    BaseUrl = _cauHinh.BaseUrl,
+                    ClientId = _cauHinh.ClientId
+                };
+            }
+        }
+
+        _dangTai = false;
+    }
+
+    private async Task LuuAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_tenantId))
+        {
+            Snackbar.Add("Không xác định được cơ sở đang đăng nhập.", Severity.Error);
+            return;
+        }
+
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        _dangXuLy = true;
+        var ketQua = await KetNoiService.LuuCauHinhAsync(_tenantId, _input);
+        _dangXuLy = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong)
+        {
+            _input.ClientSecret = null;
+            _input.HmacSecret = null;
+            await TaiCauHinhAsync();
+        }
+    }
+
+    private async Task KiemTraAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_tenantId)) return;
+
+        _dangXuLy = true;
+        var ketQua = await KetNoiService.KiemTraKetNoiAsync(_tenantId);
+        _dangXuLy = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+        await TaiCauHinhAsync();
+    }
+}
