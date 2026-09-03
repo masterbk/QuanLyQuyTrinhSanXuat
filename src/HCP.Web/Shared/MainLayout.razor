@@ -3,6 +3,9 @@
 <MudThemeProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
+@* Bắt buộc cho các component bung ra ngoài luồng (MudSelect, MudDatePicker, MudMenu...).
+   Thiếu nó thì mở dialog có MudSelect sẽ ném lỗi và làm hỏng circuit. *@
+<MudPopoverProvider />
 
 <MudLayout>
     <MudAppBar Elevation="1" Color="Color.Primary">
@@ -27,7 +30,10 @@
         <NavMenu />
     </MudDrawer>
 
-    <MudMainContent Class="pa-6">
+    @* Chỉ đặt padding hai bên và dưới. Dùng "pa-6" sẽ ghi đè luôn padding-top mà
+       MudMainContent tự tính để chừa chỗ cho AppBar cố định, khiến nội dung
+       (kể cả các nút thao tác) chui xuống dưới thanh tiêu đề. *@
+    <MudMainContent Class="px-6 pb-6">
         @Body
     </MudMainContent>
 </MudLayout>

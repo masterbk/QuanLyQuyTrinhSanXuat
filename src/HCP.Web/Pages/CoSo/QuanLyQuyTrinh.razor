@@ -1,0 +1,281 @@
+@page "/app/quy-trinh"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Infrastructure.Services.DanhMuc
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDanhMucService<ProductionProcess> QuyTrinhService
+@inject IDanhMucService<ProductionStep> KhauService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Quy trình sản xuất</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Quy trình sản xuất</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Chuỗi khâu sản xuất theo đúng thứ tự thực hiện.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => MoForm(null))"
+               Disabled="@(_danhSachKhau.Count == 0)">
+        Thêm quy trình
+    </MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    @if (_danhSachKhau.Count == 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Chưa có khâu sản xuất nào, không thể tạo quy trình.
+            <MudLink Href="/app/khau-san-xuat">Khai báo khâu sản xuất trước</MudLink>.
+        </MudAlert>
+    }
+
+    @if (_danhSach.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">Chưa có quy trình sản xuất nào.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+            <HeaderContent>
+                <MudTh>Mã quy trình</MudTh>
+                <MudTh>Tên quy trình</MudTh>
+                <MudTh>Các khâu theo thứ tự</MudTh>
+                <MudTh Style="width:120px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Mã"><b>@context.MaQuyTrinh</b></MudTd>
+                <MudTd DataLabel="Tên">@context.TenQuyTrinh</MudTd>
+                <MudTd DataLabel="Các khâu">
+                    @foreach (var khau in context.DanhSachKhau.OrderBy(k => k.ThuTu))
+                    {
+                        <MudChip T="string" Size="Size.Small" Class="ma-1">
+                            @khau.ThuTu. @khau.MaKhau
+                        </MudChip>
+                    }
+                </MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => MoForm(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => XacNhanXoaAsync(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_dangSua ? "Sửa quy trình" : "Thêm quy trình")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input">
+            <MudTextField @bind-Value="_input.MaQuyTrinh" Label="Mã quy trình" Class="mb-3"
+                          Variant="Variant.Outlined" MaxLength="255"
+                          HelperText="vd QT001."
+                          Required="true" RequiredError="Vui lòng nhập mã quy trình" />
+
+            <MudTextField @bind-Value="_input.TenQuyTrinh" Label="Tên quy trình" Class="mb-3"
+                          Variant="Variant.Outlined" MaxLength="255"
+                          Required="true" RequiredError="Vui lòng nhập tên quy trình" />
+
+            <MudNumericField @bind-Value="_input.MaDanhMucThucPham" Label="Mã danh mục thực phẩm"
+                             Variant="Variant.Outlined" Class="mb-2" Min="0"
+                             HelperText="Đặc tả yêu cầu một số nguyên. Xem lưu ý bên dưới." />
+        </MudForm>
+
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+            <MudText Typo="Typo.caption">
+                Đặc tả ghi trường này kiểu số nguyên (ví dụ gửi giá trị 1), nhưng danh mục thực phẩm
+                chuẩn mà HanoiCheck trả về chỉ có mã chữ (THIT, RAU_CU...) chứ không có id số.
+                Cần hỏi lại đơn vị vận hành khi kiểm thử tích hợp. Tạm thời để trống nếu chưa rõ.
+            </MudText>
+        </MudAlert>
+
+        <MudDivider Class="my-3" />
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Các khâu của quy trình</MudText>
+
+        @if (_khauDaChon.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                Chưa chọn khâu nào. Quy trình phải có ít nhất một khâu.
+            </MudAlert>
+        }
+        else
+        {
+            <MudPaper Outlined="true" Class="mb-3">
+                @foreach (var (maKhau, viTri) in _khauDaChon.Select((m, i) => (m, i)))
+                {
+                    <div class="d-flex align-center pa-2 @(viTri > 0 ? "border-top" : "")">
+                        <MudText Typo="Typo.body2" Class="mr-3" Style="width:28px">@(viTri + 1).</MudText>
+                        <MudText Typo="Typo.body2" Class="flex-grow-1">
+                            @maKhau
+                            <span class="mud-text-secondary">— @TenKhauTheoMa(maKhau)</span>
+                        </MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
+                                       Disabled="@(viTri == 0)"
+                                       OnClick="@(() => DiChuyen(viTri, -1))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                                       Disabled="@(viTri == _khauDaChon.Count - 1)"
+                                       OnClick="@(() => DiChuyen(viTri, 1))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => _khauDaChon.RemoveAt(viTri))" />
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        <div class="d-flex align-center">
+            <MudSelect T="string" @bind-Value="_khauDangChon" Label="Chọn khâu để thêm"
+                       Variant="Variant.Outlined" Dense="true" Class="flex-grow-1 mr-2">
+                @foreach (var khau in _danhSachKhau.Where(k => !_khauDaChon.Contains(k.MaKhau)))
+                {
+                    <MudSelectItem T="string" Value="@khau.MaKhau">
+                        @khau.MaKhau — @khau.TenKhau
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Outlined" OnClick="ThemKhau"
+                       Disabled="@string.IsNullOrWhiteSpace(_khauDangChon)">
+                Thêm
+            </MudButton>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="_dangLuu" OnClick="LuuAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<ProductionProcess> _danhSach = new();
+    private List<ProductionStep> _danhSachKhau = new();
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private MudForm? _form;
+    private bool _hienForm;
+    private bool _dangSua;
+    private ProductionProcess _input = new();
+
+    /// <summary>Mã khâu theo đúng thứ tự người dùng sắp xếp.</summary>
+    private List<string> _khauDaChon = new();
+    private string? _khauDangChon;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
+
+    private async Task TaiDanhSachAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await QuyTrinhService.LayTatCaAsync()).ToList();
+        _danhSachKhau = (await KhauService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    private string TenKhauTheoMa(string maKhau) =>
+        _danhSachKhau.FirstOrDefault(k => k.MaKhau == maKhau)?.TenKhau ?? "(không còn trong danh mục)";
+
+    private void MoForm(ProductionProcess? quyTrinh)
+    {
+        _dangSua = quyTrinh is not null;
+        _khauDangChon = null;
+
+        if (quyTrinh is null)
+        {
+            _input = new ProductionProcess();
+            _khauDaChon = new List<string>();
+        }
+        else
+        {
+            _input = new ProductionProcess
+            {
+                Id = quyTrinh.Id,
+                MaQuyTrinh = quyTrinh.MaQuyTrinh,
+                TenQuyTrinh = quyTrinh.TenQuyTrinh,
+                MaDanhMucThucPham = quyTrinh.MaDanhMucThucPham
+            };
+
+            _khauDaChon = quyTrinh.DanhSachKhau
+                .OrderBy(k => k.ThuTu)
+                .Select(k => k.MaKhau)
+                .ToList();
+        }
+
+        _hienForm = true;
+    }
+
+    private void ThemKhau()
+    {
+        if (string.IsNullOrWhiteSpace(_khauDangChon)) return;
+        if (_khauDaChon.Contains(_khauDangChon)) return;
+
+        _khauDaChon.Add(_khauDangChon);
+        _khauDangChon = null;
+    }
+
+    private void DiChuyen(int viTri, int buoc)
+    {
+        var viTriMoi = viTri + buoc;
+        if (viTriMoi < 0 || viTriMoi >= _khauDaChon.Count) return;
+
+        (_khauDaChon[viTri], _khauDaChon[viTriMoi]) = (_khauDaChon[viTriMoi], _khauDaChon[viTri]);
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        // Thứ tự trong danh sách chính là thứ tự thực hiện; service đánh lại số 1..n.
+        _input.DanhSachKhau = _khauDaChon
+            .Select((ma, i) => new ProcessStepLine { MaKhau = ma, ThuTu = i + 1 })
+            .ToList();
+
+        _dangLuu = true;
+        var ketQua = _dangSua
+            ? await QuyTrinhService.CapNhatAsync(_input)
+            : await QuyTrinhService.ThemAsync(_input);
+        _dangLuu = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong)
+        {
+            _hienForm = false;
+            await TaiDanhSachAsync();
+        }
+    }
+
+    private async Task XacNhanXoaAsync(ProductionProcess quyTrinh)
+    {
+        var dongY = await DialogService.ShowMessageBox(
+            "Xác nhận xoá",
+            $"Xoá quy trình \"{quyTrinh.TenQuyTrinh}\" ({quyTrinh.MaQuyTrinh})?",
+            yesText: "Xoá", cancelText: "Huỷ");
+
+        if (dongY != true) return;
+
+        var ketQua = await QuyTrinhService.XoaAsync(quyTrinh.Id);
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong) await TaiDanhSachAsync();
+    }
+}

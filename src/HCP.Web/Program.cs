@@ -5,7 +5,9 @@ using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Identity;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Security;
+using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services;
+using HCP.Infrastructure.Services.DanhMuc;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -29,11 +31,13 @@ builder.Services.AddDbContext<TenantStoreDbContext>(o => o.UseSqlServer(connecti
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));
 
 // --- Multi-tenant ---
-// ClaimStrategy đọc claim "tenantId" của người dùng đang đăng nhập để xác định cơ sở.
+// ClaimStrategy đọc claim "tenantIdentifier" (KHÔNG phải "tenantId"): kho lưu tenant tra cứu
+// bằng TryGetByIdentifierAsync, tức so khớp cột Identifier. Đưa nhầm Id vào đây thì
+// TenantInfo là null và mọi truy vấn có bộ lọc tenant sẽ ném NullReferenceException.
 // Người dùng chưa đăng nhập (trang chủ, đăng ký) không có tenant context - đúng thiết kế.
 builder.Services
     .AddMultiTenant<Tenant>()
-    .WithClaimStrategy(AppClaimTypes.TenantId)
+    .WithClaimStrategy(AppClaimTypes.TenantIdentifier)
     .WithEFCoreStore<TenantStoreDbContext, Tenant>();
 
 // --- Identity ---
@@ -66,6 +70,14 @@ builder.Services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
 builder.Services.AddScoped<ICoSoService, CoSoService>();
 builder.Services.AddScoped<IKetNoiHnCService, KetNoiHnCService>();
 
+// Danh mục lõi của cơ sở. Tất cả đều dựa trên AppDbContext nên đã tự lọc theo tenant.
+builder.Services.AddScoped<IDanhMucService<Warehouse>, KhoService>();
+builder.Services.AddScoped<IDanhMucService<Facility>, CoSoSanXuatService>();
+builder.Services.AddScoped<IDanhMucService<ProductionStep>, KhauSanXuatService>();
+builder.Services.AddScoped<IDanhMucService<ProductionProcess>, QuyTrinhSanXuatService>();
+builder.Services.AddScoped<IDanhMucService<SubSupplier>, NccDauVaoService>();
+builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
+
 builder.Services.AddHttpClient<IHanoiCheckTokenClient, HanoiCheckTokenClient>(http =>
 {
     http.Timeout = TimeSpan.FromSeconds(30);
@@ -85,6 +97,13 @@ builder.Services.AddServerSideBlazor();
 builder.Services.AddMudServices();
 
 var app = builder.Build();
+
+// CỐ Ý KHÔNG đặt culture vi-VN cho toàn ứng dụng.
+// Ngày tháng đã nhập/hiển thị đúng nhờ DateFormat="dd/MM/yyyy" đặt trên từng MudDatePicker,
+// nên không cần đổi culture. Ngược lại, chuyển sang vi-VN sẽ biến dấu chấm thành phân cách
+// hàng nghìn: người dùng gõ diện tích "250.75" bị hiểu thành 25075 - sai 100 lần và không
+// có cảnh báo nào. Nếu sau này thực sự cần bản địa hoá, phải xử lý riêng ô nhập số
+// và kiểm thử lại toàn bộ các trường thập phân.
 
 if (!app.Environment.IsDevelopment())
 {

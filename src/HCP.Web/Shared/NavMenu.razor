@@ -10,6 +10,26 @@
         </MudNavLink>
     </AuthorizeView>
 
+    <AuthorizeView Roles="@(AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)">
+        <MudNavGroup Title="Danh mục" Icon="@Icons.Material.Filled.ListAlt" Expanded="true">
+            <MudNavLink Href="/app/kho" Icon="@Icons.Material.Filled.Warehouse">
+                Kho
+            </MudNavLink>
+            <MudNavLink Href="/app/co-so-san-xuat" Icon="@Icons.Material.Filled.Factory">
+                Cơ sở sản xuất
+            </MudNavLink>
+            <MudNavLink Href="/app/khau-san-xuat" Icon="@Icons.Material.Filled.Timeline">
+                Khâu sản xuất
+            </MudNavLink>
+            <MudNavLink Href="/app/quy-trinh" Icon="@Icons.Material.Filled.AccountTree">
+                Quy trình sản xuất
+            </MudNavLink>
+            <MudNavLink Href="/app/ncc-dau-vao" Icon="@Icons.Material.Filled.LocalShipping">
+                Nhà cung ứng đầu vào
+            </MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
+
     <AuthorizeView Roles="@AppRoles.TenantAdmin">
         <MudNavLink Href="/app/cai-dat-ket-noi" Icon="@Icons.Material.Filled.Link">
             Cài đặt kết nối HanoiCheck

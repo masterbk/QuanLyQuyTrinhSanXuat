@@ -1,0 +1,171 @@
+@page "/app/kho"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Infrastructure.Services.DanhMuc
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDanhMucService<Warehouse> KhoService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Quản lý kho</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Quản lý kho</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Đồng bộ sang HanoiCheck qua nghiệp vụ "Đồng bộ kho".
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => MoForm(null))">
+        Thêm kho
+    </MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        Chưa có kho nào. Bấm "Thêm kho" để khai báo kho đầu tiên.
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh>Mã kho</MudTh>
+            <MudTh>Tên kho</MudTh>
+            <MudTh>Địa chỉ</MudTh>
+            <MudTh Style="text-align:right">Diện tích (m²)</MudTh>
+            <MudTh Style="width:120px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã kho"><b>@context.MaKho</b></MudTd>
+            <MudTd DataLabel="Tên kho">@context.TenKho</MudTd>
+            <MudTd DataLabel="Địa chỉ">@context.DiaChi</MudTd>
+            <MudTd DataLabel="Diện tích" Style="text-align:right">
+                @(context.DienTich?.ToString("N2") ?? "-")
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => MoForm(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => XacNhanXoaAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_dangSua ? "Sửa kho" : "Thêm kho")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input">
+            <MudTextField @bind-Value="_input.MaKho" Label="Mã kho" Class="mb-3"
+                          Variant="Variant.Outlined" MaxLength="255"
+                          HelperText="Khoá nghiệp vụ dùng để đối chiếu với HanoiCheck, vd KHO01."
+                          Required="true" RequiredError="Vui lòng nhập mã kho" />
+
+            <MudTextField @bind-Value="_input.TenKho" Label="Tên kho" Class="mb-3"
+                          Variant="Variant.Outlined" MaxLength="255"
+                          Required="true" RequiredError="Vui lòng nhập tên kho" />
+
+            <MudTextField @bind-Value="_input.DiaChi" Label="Địa chỉ" Class="mb-3"
+                          Variant="Variant.Outlined" MaxLength="255"
+                          Required="true" RequiredError="Vui lòng nhập địa chỉ" />
+
+            <MudNumericField @bind-Value="_input.DienTich" Label="Diện tích (m²)"
+                             Variant="Variant.Outlined" Min="0m" Max="999999.99m"
+                             HelperText="Không bắt buộc. Tối đa 999999.99." />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="_dangLuu" OnClick="LuuAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Warehouse> _danhSach = new();
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private MudForm? _form;
+    private bool _hienForm;
+    private bool _dangSua;
+    private Warehouse _input = new();
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
+
+    private async Task TaiDanhSachAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await KhoService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    private void MoForm(Warehouse? kho)
+    {
+        _dangSua = kho is not null;
+
+        // Sao chép sang đối tượng riêng để bấm Huỷ không làm bẩn dữ liệu đang hiển thị.
+        _input = kho is null
+            ? new Warehouse()
+            : new Warehouse
+            {
+                Id = kho.Id,
+                MaKho = kho.MaKho,
+                TenKho = kho.TenKho,
+                DiaChi = kho.DiaChi,
+                DienTich = kho.DienTich
+            };
+
+        _hienForm = true;
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        _dangLuu = true;
+        var ketQua = _dangSua
+            ? await KhoService.CapNhatAsync(_input)
+            : await KhoService.ThemAsync(_input);
+        _dangLuu = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong)
+        {
+            _hienForm = false;
+            await TaiDanhSachAsync();
+        }
+    }
+
+    private async Task XacNhanXoaAsync(Warehouse kho)
+    {
+        var dongY = await DialogService.ShowMessageBox(
+            "Xác nhận xoá",
+            $"Xoá kho \"{kho.TenKho}\" ({kho.MaKho})?",
+            yesText: "Xoá", cancelText: "Huỷ");
+
+        if (dongY != true) return;
+
+        var ketQua = await KhoService.XoaAsync(kho.Id);
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong) await TaiDanhSachAsync();
+    }
+}

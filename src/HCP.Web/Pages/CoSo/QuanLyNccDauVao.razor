@@ -1,0 +1,338 @@
+@page "/app/ncc-dau-vao"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Infrastructure.Services.DanhMuc
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDanhMucService<SubSupplier> NccService
+@inject IDanhMucChuanService DanhMucChuanService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Nhà cung ứng đầu vào</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Nhà cung ứng đầu vào</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Nguồn nguyên liệu của cơ sở, kèm giấy chứng nhận ATTP và hợp đồng cung ứng.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => MoForm(null))">
+        Thêm nhà cung ứng
+    </MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Chưa có nhà cung ứng đầu vào nào.</MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh>Mã</MudTh>
+            <MudTh>Tên nhà cung ứng</MudTh>
+            <MudTh>Nhóm thực phẩm</MudTh>
+            <MudTh>Giấy tờ</MudTh>
+            <MudTh Style="width:120px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã"><b>@context.MaNccDauVao</b></MudTd>
+            <MudTd DataLabel="Tên">
+                @context.Ten
+                @if (!string.IsNullOrWhiteSpace(context.MaSoThue))
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                        MST: @context.MaSoThue
+                    </MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Nhóm thực phẩm">
+                @foreach (var nhom in context.NhomThucPham)
+                {
+                    <MudChip T="string" Size="Size.Small" Class="ma-1">@nhom.MaNhom</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Giấy tờ">
+                @{
+                    var canhBao = CanhBaoHetHan(context);
+                }
+                @if (canhBao is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning"
+                             Icon="@Icons.Material.Filled.Warning">@canhBao</MudChip>
+                }
+                else if (context.CoGiayChungNhanAttp || context.CoHopDong)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">Còn hiệu lực</MudChip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Chưa khai</MudText>
+                }
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => MoForm(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => XacNhanXoaAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_dangSua ? "Sửa nhà cung ứng" : "Thêm nhà cung ứng")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.MaNccDauVao" Label="Mã nhà cung ứng"
+                                  Variant="Variant.Outlined" MaxLength="255"
+                                  HelperText="vd NCC001."
+                                  Required="true" RequiredError="Vui lòng nhập mã" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.MaSoThue" Label="Mã số thuế"
+                                  Variant="Variant.Outlined" MaxLength="20" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_input.Ten" Label="Tên nhà cung ứng"
+                                  Variant="Variant.Outlined" MaxLength="255"
+                                  Required="true" RequiredError="Vui lòng nhập tên" />
+                </MudItem>
+                <MudItem xs="12" sm="8">
+                    <MudTextField @bind-Value="_input.DiaChi" Label="Địa chỉ"
+                                  Variant="Variant.Outlined" MaxLength="500" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField @bind-Value="_input.DienThoai" Label="Số điện thoại"
+                                  Variant="Variant.Outlined" MaxLength="20" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">
+            Nhóm thực phẩm cung ứng <span class="mud-error-text">*</span>
+        </MudText>
+
+        @if (_danhMucChuan.Count > 0)
+        {
+            <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_nhomDaChon"
+                       Label="Chọn nhóm thực phẩm" Variant="Variant.Outlined" Dense="true">
+                @foreach (var dm in _danhMucChuan)
+                {
+                    <MudSelectItem T="string" Value="@dm.Code">@dm.Code — @dm.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                <MudText Typo="Typo.caption">
+                    Danh mục thực phẩm chuẩn chưa được đồng bộ từ HanoiCheck (sẽ tự động hoá ở
+                    giai đoạn sau). Tạm thời nhập mã thủ công, mỗi mã cách nhau bởi dấu phẩy.
+                </MudText>
+            </MudAlert>
+            <MudTextField @bind-Value="_nhomNhapTay" Label="Mã nhóm thực phẩm"
+                          Variant="Variant.Outlined"
+                          HelperText="vd: THIT, RAU_CU, TRUNG" />
+        }
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Giấy chứng nhận ATTP</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2 d-block">
+            Không bắt buộc, nhưng đã khai thì phải đủ cả ba trường.
+        </MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudTextField @bind-Value="_input.AttpSoGiay" Label="Số giấy"
+                              Variant="Variant.Outlined" MaxLength="255" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudDatePicker @bind-Date="_attpNgayCap" Label="Ngày cấp"
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudDatePicker @bind-Date="_attpNgayHetHan" Label="Ngày hết hạn"
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2 mt-4">Hợp đồng cung ứng</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudTextField @bind-Value="_input.HopDongSo" Label="Số hợp đồng"
+                              Variant="Variant.Outlined" MaxLength="255" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudDatePicker @bind-Date="_hopDongNgayKy" Label="Ngày ký"
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudDatePicker @bind-Date="_hopDongNgayHetHan" Label="Ngày hết hạn"
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="_dangLuu" OnClick="LuuAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<SubSupplier> _danhSach = new();
+    private List<StandardFoodCategory> _danhMucChuan = new();
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private MudForm? _form;
+    private bool _hienForm;
+    private bool _dangSua;
+    private SubSupplier _input = new();
+
+    private IEnumerable<string> _nhomDaChon = new HashSet<string>();
+    private string _nhomNhapTay = string.Empty;
+
+    // MudDatePicker dùng DateTime?, còn entity dùng DateOnly? theo đúng kiểu date của đặc tả.
+    private DateTime? _attpNgayCap;
+    private DateTime? _attpNgayHetHan;
+    private DateTime? _hopDongNgayKy;
+    private DateTime? _hopDongNgayHetHan;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
+
+    private async Task TaiDanhSachAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await NccService.LayTatCaAsync()).ToList();
+        _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    /// <summary>Cảnh báo giấy tờ đã hết hạn hoặc sắp hết hạn trong 30 ngày.</summary>
+    private static string? CanhBaoHetHan(SubSupplier ncc)
+    {
+        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        var nguong = homNay.AddDays(30);
+
+        if (ncc.AttpNgayHetHan is { } attp)
+        {
+            if (attp < homNay) return "ATTP đã hết hạn";
+            if (attp <= nguong) return "ATTP sắp hết hạn";
+        }
+
+        if (ncc.HopDongNgayHetHan is { } hd)
+        {
+            if (hd < homNay) return "Hợp đồng đã hết hạn";
+            if (hd <= nguong) return "Hợp đồng sắp hết hạn";
+        }
+
+        return null;
+    }
+
+    private void MoForm(SubSupplier? ncc)
+    {
+        _dangSua = ncc is not null;
+        _nhomNhapTay = string.Empty;
+
+        if (ncc is null)
+        {
+            _input = new SubSupplier();
+            _nhomDaChon = new HashSet<string>();
+            _attpNgayCap = _attpNgayHetHan = _hopDongNgayKy = _hopDongNgayHetHan = null;
+        }
+        else
+        {
+            _input = new SubSupplier
+            {
+                Id = ncc.Id,
+                MaNccDauVao = ncc.MaNccDauVao,
+                Ten = ncc.Ten,
+                MaSoThue = ncc.MaSoThue,
+                DiaChi = ncc.DiaChi,
+                DienThoai = ncc.DienThoai,
+                AttpSoGiay = ncc.AttpSoGiay,
+                HopDongSo = ncc.HopDongSo
+            };
+
+            _nhomDaChon = ncc.NhomThucPham.Select(g => g.MaNhom).ToHashSet();
+            _nhomNhapTay = string.Join(", ", _nhomDaChon);
+
+            _attpNgayCap = ncc.AttpNgayCap?.ToDateTime(TimeOnly.MinValue);
+            _attpNgayHetHan = ncc.AttpNgayHetHan?.ToDateTime(TimeOnly.MinValue);
+            _hopDongNgayKy = ncc.HopDongNgayKy?.ToDateTime(TimeOnly.MinValue);
+            _hopDongNgayHetHan = ncc.HopDongNgayHetHan?.ToDateTime(TimeOnly.MinValue);
+        }
+
+        _hienForm = true;
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        _input.AttpNgayCap = _attpNgayCap is { } a ? DateOnly.FromDateTime(a) : null;
+        _input.AttpNgayHetHan = _attpNgayHetHan is { } b ? DateOnly.FromDateTime(b) : null;
+        _input.HopDongNgayKy = _hopDongNgayKy is { } c ? DateOnly.FromDateTime(c) : null;
+        _input.HopDongNgayHetHan = _hopDongNgayHetHan is { } d ? DateOnly.FromDateTime(d) : null;
+
+        // Có danh mục chuẩn thì lấy từ ô chọn nhiều, chưa có thì lấy từ ô nhập tay.
+        var maNhom = _danhMucChuan.Count > 0
+            ? _nhomDaChon
+            : _nhomNhapTay.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        _input.NhomThucPham = maNhom
+            .Select(m => new SubSupplierFoodGroup { MaNhom = m })
+            .ToList();
+
+        _dangLuu = true;
+        var ketQua = _dangSua
+            ? await NccService.CapNhatAsync(_input)
+            : await NccService.ThemAsync(_input);
+        _dangLuu = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong)
+        {
+            _hienForm = false;
+            await TaiDanhSachAsync();
+        }
+    }
+
+    private async Task XacNhanXoaAsync(SubSupplier ncc)
+    {
+        var dongY = await DialogService.ShowMessageBox(
+            "Xác nhận xoá",
+            $"Xoá nhà cung ứng \"{ncc.Ten}\" ({ncc.MaNccDauVao})?",
+            yesText: "Xoá", cancelText: "Huỷ");
+
+        if (dongY != true) return;
+
+        var ketQua = await NccService.XoaAsync(ncc.Id);
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong) await TaiDanhSachAsync();
+    }
+}

@@ -1,0 +1,169 @@
+@page "/app/khau-san-xuat"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Infrastructure.Services.DanhMuc
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDanhMucService<ProductionStep> KhauService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Khâu sản xuất</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Khâu sản xuất</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Các bước trong quy trình (giết mổ, sơ chế, đóng gói...). Dùng lại cho quy trình,
+            lô sản xuất và món ăn.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => MoForm(null))">
+        Thêm khâu
+    </MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        Chưa có khâu sản xuất nào. Cần khai báo khâu trước khi tạo quy trình sản xuất.
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh>Mã khâu</MudTh>
+            <MudTh>Tên khâu</MudTh>
+            <MudTh>Ghi chú</MudTh>
+            <MudTh Style="width:120px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã khâu"><b>@context.MaKhau</b></MudTd>
+            <MudTd DataLabel="Tên khâu">@context.TenKhau</MudTd>
+            <MudTd DataLabel="Ghi chú">@context.GhiChu</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => MoForm(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => XacNhanXoaAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_dangSua ? "Sửa khâu sản xuất" : "Thêm khâu sản xuất")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input">
+            <MudTextField @bind-Value="_input.MaKhau" Label="Mã khâu" Class="mb-3"
+                          Variant="Variant.Outlined" MaxLength="255"
+                          HelperText="Viết hoa không dấu, vd GIET_MO, SO_CHE."
+                          Required="true" RequiredError="Vui lòng nhập mã khâu" />
+
+            <MudTextField @bind-Value="_input.TenKhau" Label="Tên khâu" Class="mb-3"
+                          Variant="Variant.Outlined" MaxLength="255"
+                          Required="true" RequiredError="Vui lòng nhập tên khâu" />
+
+            <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Lines="2"
+                          Variant="Variant.Outlined" MaxLength="1000" />
+        </MudForm>
+
+        @if (_dangSua)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                Đổi mã khâu sẽ tự động cập nhật các quy trình đang dùng mã cũ, tránh gửi sang
+                HanoiCheck mã khâu không tồn tại.
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="_dangLuu" OnClick="LuuAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<ProductionStep> _danhSach = new();
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private MudForm? _form;
+    private bool _hienForm;
+    private bool _dangSua;
+    private ProductionStep _input = new();
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
+
+    private async Task TaiDanhSachAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await KhauService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    private void MoForm(ProductionStep? khau)
+    {
+        _dangSua = khau is not null;
+
+        _input = khau is null
+            ? new ProductionStep()
+            : new ProductionStep
+            {
+                Id = khau.Id,
+                MaKhau = khau.MaKhau,
+                TenKhau = khau.TenKhau,
+                GhiChu = khau.GhiChu
+            };
+
+        _hienForm = true;
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        _dangLuu = true;
+        var ketQua = _dangSua
+            ? await KhauService.CapNhatAsync(_input)
+            : await KhauService.ThemAsync(_input);
+        _dangLuu = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong)
+        {
+            _hienForm = false;
+            await TaiDanhSachAsync();
+        }
+    }
+
+    private async Task XacNhanXoaAsync(ProductionStep khau)
+    {
+        var dongY = await DialogService.ShowMessageBox(
+            "Xác nhận xoá",
+            $"Xoá khâu \"{khau.TenKhau}\" ({khau.MaKhau})?",
+            yesText: "Xoá", cancelText: "Huỷ");
+
+        if (dongY != true) return;
+
+        var ketQua = await KhauService.XoaAsync(khau.Id);
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+
+        if (ketQua.ThanhCong) await TaiDanhSachAsync();
+    }
+}

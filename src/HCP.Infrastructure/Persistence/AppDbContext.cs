@@ -64,10 +64,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
 
     // --- Bảng nghiệp vụ (LỌC theo tenant) ---
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
+    public DbSet<Facility> Facilities => Set<Facility>();
+    public DbSet<ProductionStep> ProductionSteps => Set<ProductionStep>();
+    public DbSet<ProductionProcess> ProductionProcesses => Set<ProductionProcess>();
+    public DbSet<ProcessStepLine> ProcessStepLines => Set<ProcessStepLine>();
+    public DbSet<SubSupplier> SubSuppliers => Set<SubSupplier>();
+    public DbSet<SubSupplierFoodGroup> SubSupplierFoodGroups => Set<SubSupplierFoodGroup>();
 
-    // TODO (Giai đoạn 2+): Facility, ProductionStep, ProductionProcess, Staff, SubSupplier,
-    // Product, Batch, Dish, Order... Mỗi entity nghiệp vụ PHẢI kế thừa TenantEntity
-    // và gọi .IsMultiTenant() ở dưới.
+    /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
+    public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
+
+    // TODO (Giai đoạn 3+): Staff, Product, Batch, Dish, Order...
+    // Mỗi entity nghiệp vụ PHẢI kế thừa TenantEntity và gọi .IsMultiTenant() ở dưới.
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -149,6 +157,74 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         // AdjustUniqueIndexes() tự thêm TenantId vào index để đảm bảo điều đó.
         warehouse.HasIndex(w => w.MaKho).IsUnique();
         warehouse.IsMultiTenant().AdjustUniqueIndexes();
+
+        var facility = builder.Entity<Facility>();
+        facility.ToTable("Facilities");
+        facility.Property(f => f.MaCoSo).HasMaxLength(255).IsRequired();
+        facility.Property(f => f.TenCoSo).HasMaxLength(255).IsRequired();
+        facility.Property(f => f.DiaChi).HasMaxLength(255);
+        facility.HasIndex(f => f.MaCoSo).IsUnique();
+        facility.IsMultiTenant().AdjustUniqueIndexes();
+
+        var step = builder.Entity<ProductionStep>();
+        step.ToTable("ProductionSteps");
+        step.Property(s => s.MaKhau).HasMaxLength(255).IsRequired();
+        step.Property(s => s.TenKhau).HasMaxLength(255).IsRequired();
+        step.Property(s => s.GhiChu).HasMaxLength(1000);
+        step.HasIndex(s => s.MaKhau).IsUnique();
+        step.IsMultiTenant().AdjustUniqueIndexes();
+
+        var process = builder.Entity<ProductionProcess>();
+        process.ToTable("ProductionProcesses");
+        process.Property(p => p.MaQuyTrinh).HasMaxLength(255).IsRequired();
+        process.Property(p => p.TenQuyTrinh).HasMaxLength(255).IsRequired();
+        process.HasMany(p => p.DanhSachKhau)
+               .WithOne(l => l.ProductionProcess!)
+               .HasForeignKey(l => l.ProductionProcessId)
+               .OnDelete(DeleteBehavior.Cascade);
+        process.HasIndex(p => p.MaQuyTrinh).IsUnique();
+        process.IsMultiTenant().AdjustUniqueIndexes();
+
+        // Bảng con CŨNG phải lọc theo tenant. Nếu chỉ dựa vào quy trình cha, một truy vấn
+        // trực tiếp vào bảng này (vd đếm quy trình đang dùng một mã khâu) sẽ quét dữ liệu
+        // của mọi cơ sở - mã khâu là mã chuẩn nên trùng nhau giữa các cơ sở là chuyện thường.
+        var stepLine = builder.Entity<ProcessStepLine>();
+        stepLine.ToTable("ProcessStepLines");
+        stepLine.Property(l => l.MaKhau).HasMaxLength(255).IsRequired();
+        stepLine.HasIndex(l => new { l.ProductionProcessId, l.ThuTu });
+        stepLine.IsMultiTenant();
+
+        var subSupplier = builder.Entity<SubSupplier>();
+        subSupplier.ToTable("SubSuppliers");
+        subSupplier.Property(s => s.MaNccDauVao).HasMaxLength(255).IsRequired();
+        subSupplier.Property(s => s.Ten).HasMaxLength(255).IsRequired();
+        subSupplier.Property(s => s.MaSoThue).HasMaxLength(20);
+        subSupplier.Property(s => s.DiaChi).HasMaxLength(500);
+        subSupplier.Property(s => s.DienThoai).HasMaxLength(20);
+        subSupplier.Property(s => s.AttpSoGiay).HasMaxLength(255);
+        subSupplier.Property(s => s.HopDongSo).HasMaxLength(255);
+        subSupplier.Ignore(s => s.CoGiayChungNhanAttp);
+        subSupplier.Ignore(s => s.CoHopDong);
+        subSupplier.HasMany(s => s.NhomThucPham)
+                   .WithOne(g => g.SubSupplier!)
+                   .HasForeignKey(g => g.SubSupplierId)
+                   .OnDelete(DeleteBehavior.Cascade);
+        subSupplier.HasIndex(s => s.MaNccDauVao).IsUnique();
+        subSupplier.IsMultiTenant().AdjustUniqueIndexes();
+
+        var foodGroup = builder.Entity<SubSupplierFoodGroup>();
+        foodGroup.ToTable("SubSupplierFoodGroups");
+        foodGroup.Property(g => g.MaNhom).HasMaxLength(100).IsRequired();
+        foodGroup.HasIndex(g => new { g.SubSupplierId, g.MaNhom }).IsUnique();
+        foodGroup.IsMultiTenant().AdjustUniqueIndexes();
+
+        // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
+        var standardFood = builder.Entity<StandardFoodCategory>();
+        standardFood.ToTable("StandardFoodCategories");
+        standardFood.Property(c => c.Code).HasMaxLength(100).IsRequired();
+        standardFood.Property(c => c.Name).HasMaxLength(255).IsRequired();
+        standardFood.Property(c => c.MeasureName).HasMaxLength(100);
+        standardFood.HasIndex(c => c.Code).IsUnique();
 
         // Áp dụng cấu hình multi-tenant cho các entity đã đánh dấu .IsMultiTenant().
         builder.ConfigureMultiTenant();
