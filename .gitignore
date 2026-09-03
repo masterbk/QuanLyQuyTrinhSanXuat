@@ -1,0 +1,25 @@
+# Build
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+
+# Secrets - KHÔNG commit credential HanoiCheck hoặc chuỗi kết nối thật
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.Local.json
+*.pfx
+
+# Uploads (giấy tờ, hình ảnh minh chứng của các cơ sở)
+src/HCP.Web/wwwroot/uploads/
+
+# Logs
+logs/
+*.log
