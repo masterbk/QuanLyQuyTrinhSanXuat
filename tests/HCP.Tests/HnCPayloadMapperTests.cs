@@ -97,6 +97,75 @@ public class HnCPayloadMapperTests
     }
 
     [Fact]
+    public void LoSanXuat_Long_Kho_Khau_File_Dung_Dinh_Dang()
+    {
+        var b = new Batch
+        {
+            MaSanPham = "SP001", MaLo = "LO202607", TenLo = "Lô tháng 7",
+            NgayNhap = new DateOnly(2026, 7, 20),
+            HanSuDung = new DateOnly(2026, 7, 27),
+            DanhSachKho = { new BatchWarehouse { MaKho = "KHO01" } },
+            DanhSachKhau =
+            {
+                new BatchStep
+                {
+                    MaBuocSx = "BSX002", MaKhau = "SO_CHE", ThuTu = 2
+                },
+                new BatchStep
+                {
+                    MaBuocSx = "BSX001", MaKhau = "GIET_MO", ThuTu = 1,
+                    ThoiGian = new DateTime(2026, 7, 19, 4, 30, 0),
+                    TrangThai = "HOAN_THANH", NguoiThucHienCsv = "NV001,NV003"
+                }
+            },
+            DanhSachFile =
+            {
+                new BatchFile { MaFile = "F001", TenFile = "Giấy kiểm dịch",
+                                DuongDan = "uploads/kd.pdf", Loai = "GIAY_KIEM_DICH", MaKhau = "GIET_MO" }
+            }
+        };
+        var e = Ser(HnCPayloadMapper.LoSanXuat(b));
+
+        Assert.Equal("SP001", e.GetProperty("ma_san_pham").GetString());
+        Assert.Equal("2026-07-20", e.GetProperty("ngay_nhap").GetString());
+        Assert.False(e.TryGetProperty("ngay_san_xuat", out _)); // null -> bỏ
+
+        // Kho: mảng object { ma_kho }.
+        Assert.Equal("KHO01", e.GetProperty("danh_sach_kho")[0].GetProperty("ma_kho").GetString());
+
+        // Khâu: sắp theo thu_tu tăng dần, thời gian dạng datetime, người thực hiện là mảng.
+        var khau = e.GetProperty("danh_sach_khau");
+        Assert.Equal("BSX001", khau[0].GetProperty("ma_buoc_sx").GetString());
+        Assert.Equal("2026-07-19 04:30:00", khau[0].GetProperty("thoi_gian").GetString());
+        var nguoi = khau[0].GetProperty("danh_sach_nguoi_thuc_hien");
+        Assert.Equal(2, nguoi.GetArrayLength());
+        Assert.Equal("NV001", nguoi[0].GetString());
+        // Khâu thứ 2 không có người thực hiện -> bỏ hẳn field đó.
+        Assert.False(khau[1].TryGetProperty("danh_sach_nguoi_thuc_hien", out _));
+
+        // File.
+        var file = e.GetProperty("danh_sach_file")[0];
+        Assert.Equal("F001", file.GetProperty("ma_file").GetString());
+        Assert.Equal("GIAY_KIEM_DICH", file.GetProperty("loai").GetString());
+    }
+
+    [Fact]
+    public void LoSanXuat_Khong_Khau_Khong_File_Thi_Bo_Han_Mang()
+    {
+        var b = new Batch
+        {
+            MaSanPham = "SP001", MaLo = "LO01", TenLo = "Lô",
+            NgayNhap = new DateOnly(2026, 7, 20),
+            DanhSachKho = { new BatchWarehouse { MaKho = "KHO01" } }
+        };
+        var e = Ser(HnCPayloadMapper.LoSanXuat(b));
+
+        Assert.True(e.TryGetProperty("danh_sach_kho", out _));       // bắt buộc, luôn có
+        Assert.False(e.TryGetProperty("danh_sach_khau", out _));     // rỗng -> bỏ
+        Assert.False(e.TryGetProperty("danh_sach_file", out _));     // rỗng -> bỏ
+    }
+
+    [Fact]
     public void ThucPham_Dung_Field_Va_Bo_Field_Null()
     {
         var e = Ser(HnCPayloadMapper.ThucPham(new Product

@@ -194,6 +194,32 @@ public class DanhMucIsolationTests
     }
 
     [Fact]
+    public void Lo_San_Xuat_Va_Bang_Con_Bi_Loc_Theo_Co_So()
+    {
+        foreach (var tenant in new[] { CoSoA, CoSoB })
+        {
+            using var db = OpenAs(tenant);
+            db.Batches.Add(new Batch
+            {
+                MaSanPham = "SP001", MaLo = "LO01", TenLo = $"Lô ({tenant})",
+                NgayNhap = new DateOnly(2026, 7, 20),
+                DanhSachKho = { new BatchWarehouse { MaKho = "KHO01" } },
+                DanhSachKhau = { new BatchStep { MaBuocSx = "BSX01", MaKhau = "SO_CHE", ThuTu = 1 } }
+            });
+            db.SaveChanges();
+        }
+
+        using var dbA = OpenAs(CoSoA);
+        Assert.Single(dbA.Batches.ToList());
+        Assert.Equal(CoSoA, dbA.Batches.Single().TenantId);
+
+        // Truy vấn TRỰC TIẾP bảng con (mã bước trùng nhau giữa các cơ sở) vẫn phải bị lọc.
+        var buoc = dbA.BatchSteps.Where(s => s.MaBuocSx == "BSX01").ToList();
+        Assert.Single(buoc);
+        Assert.Equal(CoSoA, buoc[0].TenantId);
+    }
+
+    [Fact]
     public void Thuc_Pham_Bi_Loc_Theo_Co_So()
     {
         foreach (var tenant in new[] { CoSoA, CoSoB })

@@ -99,6 +99,60 @@ public static class HnCPayloadMapper
         }
     };
 
+    public static object LoSanXuat(Batch b) => new[]
+    {
+        new
+        {
+            ma_san_pham = b.MaSanPham,
+            ma_lo = b.MaLo,
+            ten_lo = b.TenLo,
+            ngay_nhap = Ngay(b.NgayNhap),
+            ngay_san_xuat = Ngay(b.NgaySanXuat),
+            han_su_dung = Ngay(b.HanSuDung),
+            dia_chi_thu_mua = b.DiaChiThuMua,
+            ma_co_so = b.MaCoSo,
+            ma_ncc_dau_vao = b.MaNccDauVao,
+            ghi_chu = b.GhiChu,
+
+            // danh_sach_kho bắt buộc ≥1 (service đã kiểm tra), luôn gửi.
+            danh_sach_kho = b.DanhSachKho.Select(w => new { ma_kho = w.MaKho }).ToArray(),
+
+            // Các mảng tuỳ chọn: rỗng thì bỏ hẳn thay vì gửi [].
+            danh_sach_khau = b.DanhSachKhau.Count == 0 ? null : b.DanhSachKhau
+                .OrderBy(s => s.ThuTu)
+                .Select(s => new
+                {
+                    ma_buoc_sx = s.MaBuocSx,
+                    ma_khau = s.MaKhau,
+                    thu_tu = s.ThuTu,
+                    ma_lo_nhap = s.MaLoNhap,
+                    ma_lo_nguyen_lieu = s.MaLoNguyenLieu,
+                    ma_lo_san_xuat = s.MaLoSanXuat,
+                    thoi_gian = s.ThoiGian?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    danh_sach_nguoi_thuc_hien = s.NguoiThucHien.Count == 0 ? null : s.NguoiThucHien.ToArray(),
+                    dia_chi = s.DiaChi,
+                    trang_thai = s.TrangThai,
+                    ma_qr_truy_vet = s.MaQrTruyVet,
+                    ghi_chu = s.GhiChu,
+                    ma_co_so = s.MaCoSo,
+                    ma_ncc_dau_vao = s.MaNccDauVao
+                })
+                .ToArray(),
+
+            danh_sach_file = b.DanhSachFile.Count == 0 ? null : b.DanhSachFile
+                .Select(f => new
+                {
+                    ma_file = f.MaFile,
+                    ma_khau = f.MaKhau,
+                    ma_buoc_sx = f.MaBuocSx,
+                    ten_file = f.TenFile,
+                    duong_dan = f.DuongDan,
+                    loai = f.Loai
+                })
+                .ToArray()
+        }
+    };
+
     public static object NhanSu(Staff s) => new[]
     {
         new

@@ -82,6 +82,7 @@ builder.Services.AddScoped<IDanhMucService<ProductionProcess>, QuyTrinhSanXuatSe
 builder.Services.AddScoped<IDanhMucService<SubSupplier>, NccDauVaoService>();
 builder.Services.AddScoped<IDanhMucService<Staff>, NhanSuService>();
 builder.Services.AddScoped<IDanhMucService<Product>, ThucPhamService>();
+builder.Services.AddScoped<IDanhMucService<Batch>, LoSanXuatService>();
 builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
 builder.Services.AddScoped<ISyncNhatKyService, SyncNhatKyService>();
 

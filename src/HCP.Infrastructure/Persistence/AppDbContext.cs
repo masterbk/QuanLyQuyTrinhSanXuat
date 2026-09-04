@@ -72,6 +72,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<SubSupplierFoodGroup> SubSupplierFoodGroups => Set<SubSupplierFoodGroup>();
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<Batch> Batches => Set<Batch>();
+    public DbSet<BatchWarehouse> BatchWarehouses => Set<BatchWarehouse>();
+    public DbSet<BatchStep> BatchSteps => Set<BatchStep>();
+    public DbSet<BatchFile> BatchFiles => Set<BatchFile>();
 
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
@@ -253,6 +257,60 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         product.Property(p => p.MaQuyTrinh).HasMaxLength(255);
         product.HasIndex(p => p.MaSanPham).IsUnique();
         product.IsMultiTenant().AdjustUniqueIndexes();
+
+        // --- Lô sản xuất và các bảng con ---
+        var batch = builder.Entity<Batch>();
+        batch.ToTable("Batches");
+        batch.Property(b => b.MaSanPham).HasMaxLength(255).IsRequired();
+        batch.Property(b => b.MaLo).HasMaxLength(255).IsRequired();
+        batch.Property(b => b.TenLo).HasMaxLength(255).IsRequired();
+        batch.Property(b => b.DiaChiThuMua).HasMaxLength(2000);
+        batch.Property(b => b.MaCoSo).HasMaxLength(255);
+        batch.Property(b => b.MaNccDauVao).HasMaxLength(255);
+        batch.Property(b => b.GhiChu).HasMaxLength(2000);
+        batch.HasMany(b => b.DanhSachKho).WithOne(w => w.Batch!)
+             .HasForeignKey(w => w.BatchId).OnDelete(DeleteBehavior.Cascade);
+        batch.HasMany(b => b.DanhSachKhau).WithOne(s => s.Batch!)
+             .HasForeignKey(s => s.BatchId).OnDelete(DeleteBehavior.Cascade);
+        batch.HasMany(b => b.DanhSachFile).WithOne(f => f.Batch!)
+             .HasForeignKey(f => f.BatchId).OnDelete(DeleteBehavior.Cascade);
+        batch.HasIndex(b => b.MaLo).IsUnique();
+        batch.IsMultiTenant().AdjustUniqueIndexes();
+
+        var batchKho = builder.Entity<BatchWarehouse>();
+        batchKho.ToTable("BatchWarehouses");
+        batchKho.Property(w => w.MaKho).HasMaxLength(255).IsRequired();
+        batchKho.HasIndex(w => new { w.BatchId, w.MaKho }).IsUnique();
+        batchKho.IsMultiTenant().AdjustUniqueIndexes();
+
+        var batchStep = builder.Entity<BatchStep>();
+        batchStep.ToTable("BatchSteps");
+        batchStep.Property(s => s.MaBuocSx).HasMaxLength(255).IsRequired();
+        batchStep.Property(s => s.MaKhau).HasMaxLength(255).IsRequired();
+        batchStep.Property(s => s.MaLoNhap).HasMaxLength(255);
+        batchStep.Property(s => s.MaLoNguyenLieu).HasMaxLength(255);
+        batchStep.Property(s => s.MaLoSanXuat).HasMaxLength(255);
+        batchStep.Property(s => s.NguoiThucHienCsv).HasMaxLength(1000);
+        batchStep.Property(s => s.DiaChi).HasMaxLength(500);
+        batchStep.Property(s => s.TrangThai).HasMaxLength(100);
+        batchStep.Property(s => s.MaQrTruyVet).HasMaxLength(255);
+        batchStep.Property(s => s.GhiChu).HasMaxLength(1000);
+        batchStep.Property(s => s.MaCoSo).HasMaxLength(255);
+        batchStep.Property(s => s.MaNccDauVao).HasMaxLength(255);
+        batchStep.Ignore(s => s.NguoiThucHien);
+        batchStep.HasIndex(s => new { s.BatchId, s.MaBuocSx }).IsUnique();
+        batchStep.IsMultiTenant().AdjustUniqueIndexes();
+
+        var batchFile = builder.Entity<BatchFile>();
+        batchFile.ToTable("BatchFiles");
+        batchFile.Property(f => f.MaFile).HasMaxLength(255).IsRequired();
+        batchFile.Property(f => f.TenFile).HasMaxLength(255).IsRequired();
+        batchFile.Property(f => f.DuongDan).HasMaxLength(1000).IsRequired();
+        batchFile.Property(f => f.Loai).HasMaxLength(100).IsRequired();
+        batchFile.Property(f => f.MaKhau).HasMaxLength(255);
+        batchFile.Property(f => f.MaBuocSx).HasMaxLength(255);
+        batchFile.HasIndex(f => new { f.BatchId, f.MaFile }).IsUnique();
+        batchFile.IsMultiTenant().AdjustUniqueIndexes();
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
         var standardFood = builder.Entity<StandardFoodCategory>();
