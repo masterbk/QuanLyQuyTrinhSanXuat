@@ -1,5 +1,7 @@
 using HCP.Domain.Entities.Business;
+using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.DanhMuc;
@@ -11,8 +13,13 @@ namespace HCP.Infrastructure.Services.DanhMuc;
 public class CoSoSanXuatService : IDanhMucService<Facility>
 {
     private readonly AppDbContext _db;
+    private readonly ISyncOutboxWriter _outbox;
 
-    public CoSoSanXuatService(AppDbContext db) => _db = db;
+    public CoSoSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<IReadOnlyList<Facility>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.Facilities.AsNoTracking().OrderBy(f => f.MaCoSo).ToListAsync(ct);
@@ -35,6 +42,8 @@ public class CoSoSanXuatService : IDanhMucService<Facility>
         _db.Facilities.Add(entity);
         await _db.SaveChangesAsync(ct);
 
+        await _outbox.ThemAsync("Facility", entity.MaCoSo, HnCPayloadMapper.CoSo(entity), ct);
+
         return KetQuaThaoTac.Ok($"Đã thêm cơ sở \"{entity.TenCoSo}\".");
     }
 
@@ -56,6 +65,8 @@ public class CoSoSanXuatService : IDanhMucService<Facility>
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
+
+        await _outbox.ThemAsync("Facility", hienTai.MaCoSo, HnCPayloadMapper.CoSo(hienTai), ct);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật cơ sở \"{hienTai.TenCoSo}\".");
     }

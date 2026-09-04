@@ -1,13 +1,16 @@
 using Finbuckle.MultiTenant;
+using Hangfire;
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Infrastructure;
 using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Identity;
+using HCP.Infrastructure.Logging;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Security;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.DanhMuc;
+using HCP.Infrastructure.Sync;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -76,12 +79,40 @@ builder.Services.AddScoped<IDanhMucService<Facility>, CoSoSanXuatService>();
 builder.Services.AddScoped<IDanhMucService<ProductionStep>, KhauSanXuatService>();
 builder.Services.AddScoped<IDanhMucService<ProductionProcess>, QuyTrinhSanXuatService>();
 builder.Services.AddScoped<IDanhMucService<SubSupplier>, NccDauVaoService>();
+builder.Services.AddScoped<IDanhMucService<Staff>, NhanSuService>();
 builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
 
 builder.Services.AddHttpClient<IHanoiCheckTokenClient, HanoiCheckTokenClient>(http =>
 {
     http.Timeout = TimeSpan.FromSeconds(30);
 });
+
+// --- Engine đồng bộ HanoiCheck (Giai đoạn 3) ---
+// HmacSigner không giữ trạng thái -> singleton. Nguồn thời gian tách riêng để kiểm thử được.
+builder.Services.AddSingleton<IHmacSigner, HmacSigner>();
+builder.Services.AddSingleton(TimeProvider.System);
+// Các dịch vụ dưới đây dùng AppDbContext (scoped) nên phải scoped.
+builder.Services.AddScoped<ITenantTokenManager, TenantTokenManager>();
+builder.Services.AddScoped<IHanoiCheckSyncClient, HanoiCheckSyncClient>();
+builder.Services.AddScoped<IHanoiCheckStandardFoodsClient, HanoiCheckStandardFoodsClient>();
+builder.Services.AddScoped<ISystemLogWriter, SystemLogWriter>();
+builder.Services.AddScoped<ISyncOutboxProcessor, SyncOutboxProcessor>();
+builder.Services.AddScoped<ISyncOutboxWriter, SyncOutboxWriter>();
+builder.Services.AddScoped<IStandardFoodsSyncJob, StandardFoodsSyncJob>();
+
+// HttpClient riêng cho việc gửi dữ liệu merge (khác client lấy token).
+builder.Services.AddHttpClient(HanoiCheckSyncClient.HttpClientName, http =>
+{
+    http.Timeout = TimeSpan.FromSeconds(30);
+});
+
+// Hangfire: job nền đọc SyncOutbox và đẩy dữ liệu đi. Lưu trạng thái job trong chính SQL Server.
+builder.Services.AddHangfire(cfg => cfg
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString));
+builder.Services.AddHangfireServer();
 
 // --- Phân quyền ---
 builder.Services.AddAuthorization(options =>
@@ -129,5 +160,24 @@ app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
 await DbSeeder.SeedAsync(app.Services);
+
+// Job nền quét hàng đợi đồng bộ mỗi phút. Chạy tự động, không cần thao tác thủ công.
+// Dùng IRecurringJobManager (theo DI) thay cho API tĩnh RecurringJob - API tĩnh cần
+// JobStorage.Current vốn chưa được set khi cấu hình Hangfire bằng AddHangfire.
+// CancellationToken.None sẽ được Hangfire thay bằng token thật khi shutdown.
+using (var scope = app.Services.CreateScope())
+{
+    var recurringJobs = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+    recurringJobs.AddOrUpdate<ISyncOutboxProcessor>(
+        "dong-bo-hanoicheck",
+        p => p.XuLyCacBanGhiDenHanAsync(50, CancellationToken.None),
+        Cron.Minutely);
+
+    // Danh mục thực phẩm chuẩn đổi rất chậm - cập nhật mỗi ngày một lần là đủ.
+    recurringJobs.AddOrUpdate<IStandardFoodsSyncJob>(
+        "cap-nhat-danh-muc-chuan",
+        j => j.DongBoAsync(CancellationToken.None),
+        Cron.Daily);
+}
 
 app.Run();

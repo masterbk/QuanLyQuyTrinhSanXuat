@@ -1,5 +1,7 @@
 using HCP.Domain.Entities.Business;
+using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.DanhMuc;
@@ -11,8 +13,13 @@ namespace HCP.Infrastructure.Services.DanhMuc;
 public class NccDauVaoService : IDanhMucService<SubSupplier>
 {
     private readonly AppDbContext _db;
+    private readonly ISyncOutboxWriter _outbox;
 
-    public NccDauVaoService(AppDbContext db) => _db = db;
+    public NccDauVaoService(AppDbContext db, ISyncOutboxWriter outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<IReadOnlyList<SubSupplier>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.SubSuppliers
@@ -42,6 +49,8 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
 
         _db.SubSuppliers.Add(entity);
         await _db.SaveChangesAsync(ct);
+
+        await _outbox.ThemAsync("SubSupplier", entity.MaNccDauVao, HnCPayloadMapper.NccDauVao(entity), ct);
 
         return KetQuaThaoTac.Ok($"Đã thêm nhà cung ứng \"{entity.Ten}\".");
     }
@@ -85,6 +94,8 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
             .ToList();
 
         await _db.SaveChangesAsync(ct);
+
+        await _outbox.ThemAsync("SubSupplier", hienTai.MaNccDauVao, HnCPayloadMapper.NccDauVao(hienTai), ct);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật nhà cung ứng \"{hienTai.Ten}\".");
     }

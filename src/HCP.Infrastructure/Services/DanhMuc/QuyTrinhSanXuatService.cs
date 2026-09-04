@@ -1,5 +1,7 @@
 using HCP.Domain.Entities.Business;
+using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.DanhMuc;
@@ -11,8 +13,13 @@ namespace HCP.Infrastructure.Services.DanhMuc;
 public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
 {
     private readonly AppDbContext _db;
+    private readonly ISyncOutboxWriter _outbox;
 
-    public QuyTrinhSanXuatService(AppDbContext db) => _db = db;
+    public QuyTrinhSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<IReadOnlyList<ProductionProcess>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.ProductionProcesses
@@ -43,6 +50,8 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
 
         _db.ProductionProcesses.Add(entity);
         await _db.SaveChangesAsync(ct);
+
+        await _outbox.ThemAsync("ProductionProcess", entity.MaQuyTrinh, HnCPayloadMapper.QuyTrinh(entity), ct);
 
         return KetQuaThaoTac.Ok($"Đã thêm quy trình \"{entity.TenQuyTrinh}\".");
     }
@@ -79,6 +88,8 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
         hienTai.DanhSachKhau = danhSachMoi;
 
         await _db.SaveChangesAsync(ct);
+
+        await _outbox.ThemAsync("ProductionProcess", hienTai.MaQuyTrinh, HnCPayloadMapper.QuyTrinh(hienTai), ct);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật quy trình \"{hienTai.TenQuyTrinh}\".");
     }

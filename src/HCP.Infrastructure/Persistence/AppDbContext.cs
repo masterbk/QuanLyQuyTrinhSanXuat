@@ -70,6 +70,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<ProcessStepLine> ProcessStepLines => Set<ProcessStepLine>();
     public DbSet<SubSupplier> SubSuppliers => Set<SubSupplier>();
     public DbSet<SubSupplierFoodGroup> SubSupplierFoodGroups => Set<SubSupplierFoodGroup>();
+    public DbSet<Staff> Staff => Set<Staff>();
 
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
@@ -217,6 +218,27 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         foodGroup.Property(g => g.MaNhom).HasMaxLength(100).IsRequired();
         foodGroup.HasIndex(g => new { g.SubSupplierId, g.MaNhom }).IsUnique();
         foodGroup.IsMultiTenant().AdjustUniqueIndexes();
+
+        var staff = builder.Entity<Staff>();
+        staff.ToTable("Staff");
+        staff.Property(s => s.MaNhanSu).HasMaxLength(255).IsRequired();
+        staff.Property(s => s.HoTen).HasMaxLength(255).IsRequired();
+        staff.Property(s => s.ViTri).HasMaxLength(255);
+        staff.Property(s => s.DiaChi).HasMaxLength(500);
+        staff.Property(s => s.DienThoai).HasMaxLength(20);
+        // CccdEncrypted giữ bản mã hoá; Cccd (plaintext) chỉ ở bộ nhớ, không map DB.
+        staff.Property(s => s.CccdEncrypted).HasMaxLength(2000);
+        staff.Ignore(s => s.Cccd);
+        staff.Ignore(s => s.CoGiayKhamSucKhoe);
+        staff.Ignore(s => s.CoChungNhanAttp);
+        staff.Property(s => s.PhuongTien).HasMaxLength(255);
+        staff.Property(s => s.BienSo).HasMaxLength(50);
+        staff.Property(s => s.KskSoGiay).HasMaxLength(255);
+        staff.Property(s => s.KskNoiKham).HasMaxLength(255);
+        staff.Property(s => s.AttpSoChungNhan).HasMaxLength(255);
+        staff.Property(s => s.AttpCoQuanCap).HasMaxLength(255);
+        staff.HasIndex(s => s.MaNhanSu).IsUnique();
+        staff.IsMultiTenant().AdjustUniqueIndexes();
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
         var standardFood = builder.Entity<StandardFoodCategory>();

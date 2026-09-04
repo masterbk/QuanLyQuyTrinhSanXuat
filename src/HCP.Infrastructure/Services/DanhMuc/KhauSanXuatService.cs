@@ -1,5 +1,7 @@
 using HCP.Domain.Entities.Business;
+using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.DanhMuc;
@@ -11,8 +13,13 @@ namespace HCP.Infrastructure.Services.DanhMuc;
 public class KhauSanXuatService : IDanhMucService<ProductionStep>
 {
     private readonly AppDbContext _db;
+    private readonly ISyncOutboxWriter _outbox;
 
-    public KhauSanXuatService(AppDbContext db) => _db = db;
+    public KhauSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<IReadOnlyList<ProductionStep>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.ProductionSteps.AsNoTracking().OrderBy(s => s.MaKhau).ToListAsync(ct);
@@ -35,6 +42,8 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
         _db.ProductionSteps.Add(entity);
         await _db.SaveChangesAsync(ct);
 
+        await _outbox.ThemAsync("ProductionStep", entity.MaKhau, HnCPayloadMapper.Khau(entity), ct);
+
         return KetQuaThaoTac.Ok($"Đã thêm khâu \"{entity.TenKhau}\".");
     }
 
@@ -52,6 +61,7 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
 
         // Đổi mã khâu sẽ làm các quy trình đang tham chiếu mã cũ trở nên sai.
         // Cập nhật đồng thời để không gửi sang HanoiCheck mã khâu không tồn tại (lỗi 422).
+        var idQuyTrinhAnhHuong = new List<int>();
         if (!string.Equals(hienTai.MaKhau, maMoi, StringComparison.Ordinal))
         {
             var maCu = hienTai.MaKhau;
@@ -60,6 +70,7 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
                 .ToListAsync(ct);
 
             foreach (var dong in dongLienQuan) dong.MaKhau = maMoi;
+            idQuyTrinhAnhHuong = dongLienQuan.Select(l => l.ProductionProcessId).Distinct().ToList();
         }
 
         hienTai.MaKhau = maMoi;
@@ -68,6 +79,21 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
+
+        await _outbox.ThemAsync("ProductionStep", hienTai.MaKhau, HnCPayloadMapper.Khau(hienTai), ct);
+
+        // Mã khâu đổi -> các quy trình đang dùng nó cũng phải đồng bộ lại, nếu không dữ liệu
+        // quy trình phía HanoiCheck sẽ giữ mã khâu cũ (sai âm thầm).
+        if (idQuyTrinhAnhHuong.Count > 0)
+        {
+            var quyTrinhLienQuan = await _db.ProductionProcesses
+                .Include(p => p.DanhSachKhau)
+                .Where(p => idQuyTrinhAnhHuong.Contains(p.Id))
+                .ToListAsync(ct);
+
+            foreach (var qt in quyTrinhLienQuan)
+                await _outbox.ThemAsync("ProductionProcess", qt.MaQuyTrinh, HnCPayloadMapper.QuyTrinh(qt), ct);
+        }
 
         return KetQuaThaoTac.Ok($"Đã cập nhật khâu \"{hienTai.TenKhau}\".");
     }

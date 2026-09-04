@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.DanhMuc;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
@@ -30,6 +31,13 @@ public class DanhMucIsolationTests
             .Options;
 
         return new AppDbContext(accessor, options);
+    }
+
+    /// <summary>Ghi hàng đợi đồng bộ không cần thiết cho test cách ly - dùng bản rỗng.</summary>
+    private sealed class NoOpOutbox : ISyncOutboxWriter
+    {
+        public Task ThemAsync(string entityType, string entityKey, object payload, CancellationToken ct = default)
+            => Task.CompletedTask;
     }
 
     /// <summary>Tạo sẵn cho mỗi cơ sở một khâu cùng mã và một quy trình dùng khâu đó.</summary>
@@ -80,7 +88,7 @@ public class DanhMucIsolationTests
 
         using (var db = OpenAs(CoSoA))
         {
-            var service = new KhauSanXuatService(db);
+            var service = new KhauSanXuatService(db, new NoOpOutbox());
             var khau = await db.ProductionSteps.FirstAsync();
 
             var ketQua = await service.CapNhatAsync(new ProductionStep
@@ -132,7 +140,7 @@ public class DanhMucIsolationTests
 
         using (var db = OpenAs(CoSoA))
         {
-            var service = new KhauSanXuatService(db);
+            var service = new KhauSanXuatService(db, new NoOpOutbox());
             var khau = await db.ProductionSteps.FirstAsync();
 
             var ketQua = await service.XoaAsync(khau.Id);
@@ -164,6 +172,25 @@ public class DanhMucIsolationTests
 
         Assert.Single(nhom);
         Assert.Equal(CoSoA, nhom[0].TenantId);
+    }
+
+    [Fact]
+    public void Nhan_Su_Bi_Loc_Theo_Co_So()
+    {
+        // Mã nhân sự trùng nhau giữa 2 cơ sở là hợp lệ (chỉ duy nhất trong từng cơ sở).
+        foreach (var tenant in new[] { CoSoA, CoSoB })
+        {
+            using var db = OpenAs(tenant);
+            db.Staff.Add(new Staff { MaNhanSu = "NV001", HoTen = $"Nhân viên ({tenant})" });
+            db.SaveChanges();
+        }
+
+        using var dbA = OpenAs(CoSoA);
+        var ds = dbA.Staff.ToList();
+
+        Assert.Single(ds);
+        Assert.Equal(CoSoA, ds[0].TenantId);
+        Assert.Equal("Nhân viên (coso-a)", ds[0].HoTen);
     }
 
     [Fact]

@@ -1,5 +1,7 @@
 using HCP.Domain.Entities.Business;
+using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.DanhMuc;
@@ -11,8 +13,13 @@ namespace HCP.Infrastructure.Services.DanhMuc;
 public class KhoService : IDanhMucService<Warehouse>
 {
     private readonly AppDbContext _db;
+    private readonly ISyncOutboxWriter _outbox;
 
-    public KhoService(AppDbContext db) => _db = db;
+    public KhoService(AppDbContext db, ISyncOutboxWriter outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<IReadOnlyList<Warehouse>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.Warehouses.AsNoTracking().OrderBy(w => w.MaKho).ToListAsync(ct);
@@ -37,6 +44,9 @@ public class KhoService : IDanhMucService<Warehouse>
         _db.Warehouses.Add(entity);
         await _db.SaveChangesAsync(ct);
 
+        // Lưu xong thì đưa vào hàng đợi để job nền tự đồng bộ sang HanoiCheck.
+        await _outbox.ThemAsync("Warehouse", entity.MaKho, HnCPayloadMapper.Kho(entity), ct);
+
         return KetQuaThaoTac.Ok($"Đã thêm kho \"{entity.TenKho}\".");
     }
 
@@ -59,6 +69,9 @@ public class KhoService : IDanhMucService<Warehouse>
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
+
+        // merge của HnC là upsert theo ma_kho, nên sửa cũng gửi lại cả bản ghi.
+        await _outbox.ThemAsync("Warehouse", hienTai.MaKho, HnCPayloadMapper.Kho(hienTai), ct);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật kho \"{hienTai.TenKho}\".");
     }
