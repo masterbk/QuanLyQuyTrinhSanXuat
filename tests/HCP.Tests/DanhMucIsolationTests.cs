@@ -194,6 +194,24 @@ public class DanhMucIsolationTests
     }
 
     [Fact]
+    public void Thuc_Pham_Bi_Loc_Theo_Co_So()
+    {
+        foreach (var tenant in new[] { CoSoA, CoSoB })
+        {
+            using var db = OpenAs(tenant);
+            db.Products.Add(new Product { MaSanPham = "SP001", TenSanPham = $"Thịt ({tenant})", MaLoaiSp = "THIT" });
+            db.SaveChanges();
+        }
+
+        using var dbA = OpenAs(CoSoA);
+        var ds = dbA.Products.ToList();
+
+        Assert.Single(ds);
+        Assert.Equal(CoSoA, ds[0].TenantId);
+        Assert.Equal("Thịt (coso-a)", ds[0].TenSanPham);
+    }
+
+    [Fact]
     public async Task Danh_Muc_Chuan_Dung_Chung_Cho_Moi_Co_So()
     {
         // Danh mục do HanoiCheck ban hành - cố ý KHÔNG lọc theo tenant.

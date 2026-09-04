@@ -71,6 +71,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<SubSupplier> SubSuppliers => Set<SubSupplier>();
     public DbSet<SubSupplierFoodGroup> SubSupplierFoodGroups => Set<SubSupplierFoodGroup>();
     public DbSet<Staff> Staff => Set<Staff>();
+    public DbSet<Product> Products => Set<Product>();
 
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
@@ -239,6 +240,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         staff.Property(s => s.AttpCoQuanCap).HasMaxLength(255);
         staff.HasIndex(s => s.MaNhanSu).IsUnique();
         staff.IsMultiTenant().AdjustUniqueIndexes();
+
+        var product = builder.Entity<Product>();
+        product.ToTable("Products");
+        product.Property(p => p.MaSanPham).HasMaxLength(255).IsRequired();
+        product.Property(p => p.TenSanPham).HasMaxLength(255).IsRequired();
+        product.Property(p => p.MaLoaiSp).HasMaxLength(100).IsRequired();
+        product.Property(p => p.MaThucPhamChuan).HasMaxLength(100);
+        product.Property(p => p.Gtin).HasMaxLength(50);
+        product.Property(p => p.QuocGia).HasMaxLength(100);
+        product.Property(p => p.MoTa).HasMaxLength(2000);
+        product.Property(p => p.MaQuyTrinh).HasMaxLength(255);
+        product.HasIndex(p => p.MaSanPham).IsUnique();
+        product.IsMultiTenant().AdjustUniqueIndexes();
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
         var standardFood = builder.Entity<StandardFoodCategory>();

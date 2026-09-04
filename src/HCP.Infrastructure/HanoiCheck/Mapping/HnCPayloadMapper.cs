@@ -84,6 +84,21 @@ public static class HnCPayloadMapper
         }
     };
 
+    public static object ThucPham(Product p) => new[]
+    {
+        new
+        {
+            ma_san_pham = p.MaSanPham,
+            ten_san_pham = p.TenSanPham,
+            ma_loai_sp = p.MaLoaiSp,
+            ma_thuc_pham_chuan = p.MaThucPhamChuan,
+            gtin = p.Gtin,
+            quoc_gia = p.QuocGia,
+            mo_ta = p.MoTa,
+            ma_quy_trinh = p.MaQuyTrinh
+        }
+    };
+
     public static object NhanSu(Staff s) => new[]
     {
         new
