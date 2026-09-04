@@ -10,6 +10,7 @@ using HCP.Infrastructure.Security;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.DanhMuc;
+using HCP.Infrastructure.Services.NhatKyDongBo;
 using HCP.Infrastructure.Sync;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -81,6 +82,7 @@ builder.Services.AddScoped<IDanhMucService<ProductionProcess>, QuyTrinhSanXuatSe
 builder.Services.AddScoped<IDanhMucService<SubSupplier>, NccDauVaoService>();
 builder.Services.AddScoped<IDanhMucService<Staff>, NhanSuService>();
 builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
+builder.Services.AddScoped<ISyncNhatKyService, SyncNhatKyService>();
 
 builder.Services.AddHttpClient<IHanoiCheckTokenClient, HanoiCheckTokenClient>(http =>
 {

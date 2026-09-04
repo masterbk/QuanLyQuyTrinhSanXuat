@@ -1,0 +1,196 @@
+@page "/app/nhat-ky-dong-bo"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Infrastructure
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services.NhatKyDongBo
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject ISyncNhatKyService NhatKyService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Nhật ký đồng bộ</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Nhật ký đồng bộ HanoiCheck</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Dữ liệu tự đẩy sang HanoiCheck sau khi lưu. Bản ghi lỗi được tự thử lại; bạn cũng có
+            thể bấm "Gửi lại".
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
+               OnClick="TaiLaiAsync">Làm mới</MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        @foreach (var tt in _thuTuTrangThai)
+        {
+            var (nhan, mau) = MoTaTrangThai(tt);
+            var so = _thongKe.GetValueOrDefault(tt);
+            <MudChip T="string" Color="@mau"
+                     Variant="@(_loc == tt ? Variant.Filled : Variant.Outlined)"
+                     OnClick="@(() => LocTheo(tt))">
+                @nhan: <b class="ml-1">@so</b>
+            </MudChip>
+        }
+        @if (_loc is not null)
+        {
+            <MudChip T="string" Variant="Variant.Text" Color="Color.Default"
+                     OnClick="@(() => LocTheo(null))" Icon="@Icons.Material.Filled.Close">
+                Bỏ lọc
+            </MudChip>
+        }
+    </div>
+
+    @if (_danhSach.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">
+            @(_loc is null
+                ? "Chưa có bản ghi đồng bộ nào. Khi bạn thêm/sửa dữ liệu danh mục, bản ghi sẽ xuất hiện ở đây."
+                : "Không có bản ghi nào ở trạng thái đã chọn.")
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+            <HeaderContent>
+                <MudTh>Thời gian</MudTh>
+                <MudTh>Loại</MudTh>
+                <MudTh>Khoá</MudTh>
+                <MudTh>Trạng thái</MudTh>
+                <MudTh Style="text-align:center">Số lần thử</MudTh>
+                <MudTh>Kết quả gần nhất</MudTh>
+                <MudTh Style="width:170px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Thời gian">@context.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                <MudTd DataLabel="Loại">@TenLoai(context.EntityType)</MudTd>
+                <MudTd DataLabel="Khoá"><b>@context.EntityKey</b></MudTd>
+                <MudTd DataLabel="Trạng thái">
+                    @{
+                        var (nhan, mau) = MoTaTrangThai(context.Status);
+                    }
+                    <MudChip T="string" Size="Size.Small" Color="@mau">@nhan</MudChip>
+                    @if (context.Status == SyncOutboxStatus.Failed && context.NextRetryAtUtc is { } tt2)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                            Thử lại lúc @tt2.ToLocalTime().ToString("HH:mm dd/MM")
+                        </MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Số lần thử" Style="text-align:center">@context.Attempts</MudTd>
+                <MudTd DataLabel="Kết quả gần nhất">
+                    @if (context.LastHttpStatusCode is { } maHttp)
+                    {
+                        <span>HTTP @maHttp. </span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(context.LastError))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@Rutgon(context.LastError)</MudText>
+                    }
+                </MudTd>
+                <MudTd>
+                    <MudTooltip Text="Xem payload và lỗi đầy đủ">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
+                                       OnClick="@(() => XemChiTietAsync(context))" />
+                    </MudTooltip>
+                    @if (context.Status is SyncOutboxStatus.Failed or SyncOutboxStatus.NeedsManualReview)
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Text"
+                                   StartIcon="@Icons.Material.Filled.Send"
+                                   OnClick="@(() => GuiLaiAsync(context))">Gửi lại</MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    private List<SyncOutboxItem> _danhSach = new();
+    private IReadOnlyDictionary<SyncOutboxStatus, int> _thongKe =
+        new Dictionary<SyncOutboxStatus, int>();
+    private SyncOutboxStatus? _loc;
+    private bool _dangTai = true;
+
+    // Thứ tự hiển thị ưu tiên các trạng thái cần chú ý.
+    private readonly SyncOutboxStatus[] _thuTuTrangThai =
+    {
+        SyncOutboxStatus.NeedsManualReview,
+        SyncOutboxStatus.Failed,
+        SyncOutboxStatus.AwaitingCredential,
+        SyncOutboxStatus.Pending,
+        SyncOutboxStatus.Success
+    };
+
+    protected override async Task OnInitializedAsync() => await TaiLaiAsync();
+
+    private async Task TaiLaiAsync()
+    {
+        _dangTai = true;
+        _thongKe = await NhatKyService.DemTheoTrangThaiAsync();
+        _danhSach = (await NhatKyService.LayDanhSachAsync(_loc)).ToList();
+        _dangTai = false;
+    }
+
+    private async Task LocTheo(SyncOutboxStatus? tt)
+    {
+        _loc = _loc == tt ? null : tt;
+        await TaiLaiAsync();
+    }
+
+    private async Task GuiLaiAsync(SyncOutboxItem item)
+    {
+        var ketQua = await NhatKyService.GuiLaiAsync(item.Id);
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+        if (ketQua.ThanhCong) await TaiLaiAsync();
+    }
+
+    private async Task XemChiTietAsync(SyncOutboxItem item)
+    {
+        var noiDung = new List<string>();
+        if (!string.IsNullOrWhiteSpace(item.LastError))
+            noiDung.Add("LỖI GẦN NHẤT:\n" + item.LastError);
+        noiDung.Add("PAYLOAD GỬI HANOICHECK:\n" + item.PayloadJson);
+
+        await DialogService.ShowMessageBox(
+            $"{TenLoai(item.EntityType)} [{item.EntityKey}]",
+            (MarkupString)$"<pre style=\"white-space:pre-wrap;word-break:break-word;max-height:60vh;overflow:auto\">{System.Net.WebUtility.HtmlEncode(string.Join("\n\n", noiDung))}</pre>",
+            yesText: "Đóng");
+    }
+
+    private static (string, Color) MoTaTrangThai(SyncOutboxStatus tt) => tt switch
+    {
+        SyncOutboxStatus.Pending => ("Chờ gửi", Color.Info),
+        SyncOutboxStatus.AwaitingCredential => ("Chờ cấu hình kết nối", Color.Warning),
+        SyncOutboxStatus.Processing => ("Đang gửi", Color.Info),
+        SyncOutboxStatus.Success => ("Thành công", Color.Success),
+        SyncOutboxStatus.Failed => ("Lỗi, sẽ tự thử lại", Color.Warning),
+        SyncOutboxStatus.NeedsManualReview => ("Cần xử lý thủ công", Color.Error),
+        _ => (tt.ToString(), Color.Default)
+    };
+
+    private static string TenLoai(string entityType) => entityType switch
+    {
+        "Warehouse" => "Kho",
+        "Facility" => "Cơ sở",
+        "ProductionStep" => "Khâu sản xuất",
+        "ProductionProcess" => "Quy trình",
+        "Staff" => "Nhân sự",
+        "SubSupplier" => "NCC đầu vào",
+        "Product" => "Thực phẩm",
+        "Batch" => "Lô sản xuất",
+        "Dish" => "Món ăn",
+        "Order" => "Đơn hàng",
+        _ => entityType
+    };
+
+    private static string Rutgon(string s) => s.Length > 120 ? s[..120] + "…" : s;
+}
