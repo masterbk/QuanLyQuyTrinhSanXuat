@@ -81,9 +81,16 @@ builder.Services.ConfigureApplicationCookie(options =>
 var keysPath = builder.Configuration["DataProtection:KeysPath"];
 if (string.IsNullOrWhiteSpace(keysPath))
 {
+    // Mặc định: ngoài thư mục app (không bị xoá khi deploy lại).
     keysPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "HanoiCheckPlatform", "DataProtectionKeys");
+}
+else if (!Path.IsPathRooted(keysPath))
+{
+    // Đường dẫn tương đối -> tính từ thư mục app (cho phép lưu khoá NGAY TRONG thư mục build,
+    // vd đặt "DataProtectionKeys"). Lưu ý: deploy kiểu xoá-sạch-rồi-chép sẽ xoá mất thư mục này.
+    keysPath = Path.Combine(builder.Environment.ContentRootPath, keysPath);
 }
 Directory.CreateDirectory(keysPath);
 
