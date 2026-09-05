@@ -9,16 +9,29 @@
 
 <MudLayout>
     <MudAppBar Elevation="1" Color="Color.Primary">
-        <MudText Typo="Typo.h6">Quản lý quy trình sản xuất</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="ToggleDrawer" aria-label="Mở/đóng menu" />
+
+        @* Tiêu đề đầy đủ trên màn rộng, rút gọn trên mobile để không tràn. *@
+        <MudText Typo="Typo.h6" Class="d-none d-sm-flex">Quản lý quy trình sản xuất</MudText>
+        <MudText Typo="Typo.h6" Class="d-flex d-sm-none">HanoiCheck</MudText>
+
         <MudSpacer />
+
         <AuthorizeView>
             <Authorized>
-                <MudText Typo="Typo.body2" Class="mr-4">
+                @* Email chỉ hiện trên màn ≥ sm; mobile ẩn cho gọn. *@
+                <MudText Typo="Typo.body2" Class="mr-2 d-none d-sm-flex">
                     @context.User.Identity?.Name
                 </MudText>
-                <MudButton Href="/dang-xuat" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Logout">
+
+                @* Desktop: nút có chữ. Mobile: chỉ icon để tiết kiệm chỗ. *@
+                <MudButton Href="/dang-xuat" Color="Color.Inherit"
+                           StartIcon="@Icons.Material.Filled.Logout" Class="d-none d-sm-flex">
                     Đăng xuất
                 </MudButton>
+                <MudIconButton Href="/dang-xuat" Icon="@Icons.Material.Filled.Logout"
+                               Color="Color.Inherit" Class="d-flex d-sm-none" aria-label="Đăng xuất" />
             </Authorized>
             <NotAuthorized>
                 <MudButton Href="/dang-nhap" Color="Color.Inherit">Đăng nhập</MudButton>
@@ -26,14 +39,28 @@
         </AuthorizeView>
     </MudAppBar>
 
-    <MudDrawer Open="true" Elevation="1" Variant="DrawerVariant.Mini" OpenMiniOnHover="true">
+    @* Responsive: từ md trở lên là menu cố định đẩy nội dung; dưới md là overlay trượt ra
+       (đóng khi bấm ra ngoài hoặc chuyển trang). Bỏ mini+hover vì cảm ứng không có hover. *@
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2"
+               Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md"
+               ClipMode="DrawerClipMode.Never">
         <NavMenu />
     </MudDrawer>
 
-    @* Chỉ đặt padding hai bên và dưới. Dùng "pa-6" sẽ ghi đè luôn padding-top mà
-       MudMainContent tự tính để chừa chỗ cho AppBar cố định, khiến nội dung
-       (kể cả các nút thao tác) chui xuống dưới thanh tiêu đề. *@
-    <MudMainContent Class="px-6 pb-6">
-        @Body
+    @* pt-4 đặt trên div bọc trong (KHÔNG đặt trên MudMainContent) để thêm khoảng thở phía trên
+       tiêu đề mà vẫn giữ nguyên padding-top tự tính của MudMainContent dành cho AppBar cố định.
+       Padding hai bên nhỏ hơn trên mobile (px-4) và rộng hơn từ sm (px-sm-6). *@
+    <MudMainContent Class="px-4 px-sm-6 pb-6">
+        <div class="pt-4">
+            @Body
+        </div>
     </MudMainContent>
 </MudLayout>
+
+@code {
+    // Responsive: desktop mở sẵn (đẩy nội dung), mobile tự đóng khi màn hình hẹp hơn breakpoint;
+    // nút hamburger bật/tắt, chạm ra nền để đóng lớp phủ trên mobile.
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+}

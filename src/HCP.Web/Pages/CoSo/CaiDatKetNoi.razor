@@ -55,17 +55,21 @@ else
                                   Placeholder="@PlaceholderSecret"
                                   HelperText="@HelperHmacSecret" />
 
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               Disabled="_dangXuLy" OnClick="LuuAsync"
-                               StartIcon="@Icons.Material.Filled.Save">
-                        Lưu cấu hình
-                    </MudButton>
+                    <MudDivider Class="my-4" />
 
-                    <MudButton Variant="Variant.Outlined" Class="ml-2"
-                               Disabled="@(_dangXuLy || !_daCoCauHinh)" OnClick="KiemTraAsync"
-                               StartIcon="@Icons.Material.Filled.NetworkCheck">
-                        Kiểm tra kết nối
-                    </MudButton>
+                    <div class="d-flex flex-wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mr-3 mb-2"
+                                   Disabled="_dangXuLy" OnClick="LuuAsync"
+                                   StartIcon="@Icons.Material.Filled.Save">
+                            Lưu cấu hình
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mb-2"
+                                   Disabled="@(_dangXuLy || !_daCoCauHinh)" OnClick="KiemTraAsync"
+                                   StartIcon="@Icons.Material.Filled.NetworkCheck">
+                            Kiểm tra kết nối
+                        </MudButton>
+                    </div>
                 </MudForm>
             </MudPaper>
         </MudItem>

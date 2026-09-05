@@ -66,3 +66,26 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* --- Tinh chỉnh cho màn hình nhỏ (điện thoại) --- */
+@media (max-width: 600px) {
+    /* Bảng rộng: cuộn ngang gọn trong khung thay vì tràn ra ngoài trang.
+       (Các bảng có DataLabel đã tự xếp dạng thẻ, phần này là dự phòng.) */
+    .mud-table-container {
+        overflow-x: auto;
+    }
+
+    /* Giảm padding các khối giấy cho đỡ chật trên màn nhỏ. */
+    .mud-paper.pa-5 {
+        padding: 1rem !important;
+    }
+
+    .mud-paper.pa-4 {
+        padding: 0.75rem !important;
+    }
+
+    /* Tiêu đề trang nhỏ lại một chút để không chiếm quá nhiều chiều cao. */
+    .mud-typography-h5 {
+        font-size: 1.35rem;
+    }
+}
