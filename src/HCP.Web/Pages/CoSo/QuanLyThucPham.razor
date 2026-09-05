@@ -101,14 +101,14 @@ else
                 <MudItem xs="12" sm="6">
                     @if (_danhMucChuan.Count > 0)
                     {
-                        <MudSelect T="string" @bind-Value="_input.MaLoaiSp" Label="Loại thực phẩm"
-                                   Variant="Variant.Outlined" Required="true"
-                                   RequiredError="Vui lòng chọn loại thực phẩm">
-                            @foreach (var dm in _danhMucChuan)
-                            {
-                                <MudSelectItem T="string" Value="@dm.Code">@dm.Code — @dm.Name</MudSelectItem>
-                            }
-                        </MudSelect>
+                        @* Autocomplete thay cho Select: danh mục chuẩn có thể rất nhiều dòng,
+                           gõ để lọc và chỉ render tối đa vài chục kết quả -> mở nhanh. *@
+                        <MudAutocomplete T="string" @bind-Value="_input.MaLoaiSp" Label="Loại thực phẩm"
+                                         Variant="Variant.Outlined" Required="true"
+                                         RequiredError="Vui lòng chọn loại thực phẩm"
+                                         SearchFunc="TimLoaiThucPham" ToStringFunc="TenLoai"
+                                         MaxItems="50" Clearable="true"
+                                         HelperText="Gõ mã hoặc tên để tìm nhanh." />
                     }
                     else
                     {
@@ -212,10 +212,24 @@ else
         }
     }
 
-    private string TenLoai(string code)
+    private string TenLoai(string? code)
     {
+        if (string.IsNullOrEmpty(code)) return string.Empty;
         var dm = _danhMucChuan.FirstOrDefault(x => x.Code == code);
         return dm is null ? code : $"{code} — {dm.Name}";
+    }
+
+    /// <summary>Lọc danh mục chuẩn theo mã hoặc tên; chỉ trả tối đa 50 kết quả để dropdown nhẹ.</summary>
+    private Task<IEnumerable<string>> TimLoaiThucPham(string? value, CancellationToken ct)
+    {
+        IEnumerable<StandardFoodCategory> kq = _danhMucChuan;
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            kq = kq.Where(c =>
+                c.Code.Contains(value, StringComparison.OrdinalIgnoreCase)
+                || (c.Name ?? "").Contains(value, StringComparison.OrdinalIgnoreCase));
+        }
+        return Task.FromResult(kq.Take(50).Select(c => c.Code));
     }
 
     private void MoForm(Product? sp)
