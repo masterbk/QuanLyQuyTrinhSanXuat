@@ -101,13 +101,13 @@ else
                 <MudItem xs="12" sm="6">
                     @if (_danhMucChuan.Count > 0)
                     {
-                        @* Autocomplete thay cho Select: danh mục chuẩn có thể rất nhiều dòng,
-                           gõ để lọc và chỉ render tối đa vài chục kết quả -> mở nhanh. *@
+                        @* Danh mục chuẩn rất nhiều dòng (~600). Autocomplete mở tức thì và chọn
+                           chắc chắn: gõ mã/tên để lọc; để trống rồi bấm sẽ hiện danh sách cuộn được. *@
                         <MudAutocomplete T="string" @bind-Value="_input.MaLoaiSp" Label="Loại thực phẩm"
                                          Variant="Variant.Outlined" Required="true"
                                          RequiredError="Vui lòng chọn loại thực phẩm"
                                          SearchFunc="TimLoaiThucPham" ToStringFunc="TenLoai"
-                                         MaxItems="50" Clearable="true"
+                                         MaxItems="100" Clearable="true" ResetValueOnEmptyText="false"
                                          HelperText="Gõ mã hoặc tên để tìm nhanh." />
                     }
                     else
@@ -219,7 +219,7 @@ else
         return dm is null ? code : $"{code} — {dm.Name}";
     }
 
-    /// <summary>Lọc danh mục chuẩn theo mã hoặc tên; chỉ trả tối đa 50 kết quả để dropdown nhẹ.</summary>
+    /// <summary>Lọc danh mục chuẩn theo mã hoặc tên; giới hạn 100 kết quả để dropdown mở nhanh.</summary>
     private Task<IEnumerable<string>> TimLoaiThucPham(string? value, CancellationToken ct)
     {
         IEnumerable<StandardFoodCategory> kq = _danhMucChuan;
@@ -229,7 +229,7 @@ else
                 c.Code.Contains(value, StringComparison.OrdinalIgnoreCase)
                 || (c.Name ?? "").Contains(value, StringComparison.OrdinalIgnoreCase));
         }
-        return Task.FromResult(kq.Take(50).Select(c => c.Code));
+        return Task.FromResult(kq.Take(100).Select(c => c.Code));
     }
 
     private void MoForm(Product? sp)
