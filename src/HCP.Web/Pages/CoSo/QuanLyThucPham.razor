@@ -2,11 +2,13 @@
 @using HCP.Domain.Constants
 @using HCP.Domain.Entities.Business
 @using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Sync
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
 @inject IDanhMucService<Product> ThucPhamService
 @inject IDanhMucService<ProductionProcess> QuyTrinhService
 @inject IDanhMucChuanService DanhMucChuanService
+@inject IStandardFoodsSyncJob StandardFoodsSyncJob
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -20,11 +22,27 @@
             Đồng bộ sang HanoiCheck qua nghiệp vụ "Đồng bộ thực phẩm".
         </MudText>
     </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => MoForm(null))">
-        Thêm thực phẩm
-    </MudButton>
+    <div class="d-flex flex-wrap">
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mr-2 mb-2"
+                   StartIcon="@Icons.Material.Filled.CloudSync" Disabled="_dangDongBoDanhMuc"
+                   OnClick="CapNhatDanhMucChuanAsync">
+            Cập nhật danh mục chuẩn
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mb-2"
+                   StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => MoForm(null))">
+            Thêm thực phẩm
+        </MudButton>
+    </div>
 </div>
+
+@if (_danhMucChuan.Count == 0 && !_dangTai)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
+        Chưa có danh mục thực phẩm chuẩn từ HanoiCheck. Ô "Loại thực phẩm" đang phải nhập tay và
+        dễ sai mã (HnC sẽ báo lỗi 422). Hãy bấm <b>"Cập nhật danh mục chuẩn"</b> để tải về, sau đó
+        chọn loại từ danh sách.
+    </MudAlert>
+}
 
 @if (_dangTai)
 {
@@ -147,6 +165,7 @@ else
 
     private bool _dangTai = true;
     private bool _dangLuu;
+    private bool _dangDongBoDanhMuc;
 
     private MudForm? _form;
     private bool _hienForm;
@@ -164,6 +183,33 @@ else
         _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
         _quyTrinh = (await QuyTrinhService.LayTatCaAsync()).ToList();
         _dangTai = false;
+    }
+
+    private async Task CapNhatDanhMucChuanAsync()
+    {
+        _dangDongBoDanhMuc = true;
+        try
+        {
+            var soLuong = await StandardFoodsSyncJob.DongBoAsync();
+            if (soLuong > 0)
+            {
+                Snackbar.Add($"Đã cập nhật {soLuong} danh mục thực phẩm chuẩn từ HanoiCheck.", Severity.Success);
+                _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
+            }
+            else
+            {
+                Snackbar.Add("Chưa lấy được danh mục. Kiểm tra lại kết nối HanoiCheck ở màn Cài đặt kết nối "
+                           + "(cần đã cấu hình và xác thực thành công).", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Lỗi khi cập nhật danh mục: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _dangDongBoDanhMuc = false;
+        }
     }
 
     private string TenLoai(string code)
