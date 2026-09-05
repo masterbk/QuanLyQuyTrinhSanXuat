@@ -1,5 +1,6 @@
 using Finbuckle.MultiTenant;
 using Hangfire;
+using Microsoft.AspNetCore.DataProtection;
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Infrastructure;
 using HCP.Infrastructure.HanoiCheck;
@@ -70,7 +71,26 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 // --- Dịch vụ nghiệp vụ ---
-builder.Services.AddDataProtection();
+// Data Protection dùng để mã hoá client_secret / hmac_secret / CCCD trước khi lưu DB.
+// PHẢI lưu khoá vào thư mục CỐ ĐỊNH: nếu để mặc định, mỗi lần Application Pool tái chạy /
+// app khởi động lại (nhất là trên IIS) sẽ sinh khoá mới -> không giải mã lại được dữ liệu đã
+// lưu, gây lỗi "Không giải mã được client_secret".
+//   - SetApplicationName cố định để đổi thư mục deploy cũng không làm lệch khoá.
+//   - Đặt DataProtection:KeysPath trong cấu hình để trỏ tới thư mục ổn định, ghi được bởi tài
+//     khoản chạy app pool, và KHÔNG bị xoá khi deploy lại. Mặc định dùng ProgramData.
+var keysPath = builder.Configuration["DataProtection:KeysPath"];
+if (string.IsNullOrWhiteSpace(keysPath))
+{
+    keysPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "HanoiCheckPlatform", "DataProtectionKeys");
+}
+Directory.CreateDirectory(keysPath);
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("HanoiCheckPlatform")
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+
 builder.Services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
 builder.Services.AddScoped<ICoSoService, CoSoService>();
 builder.Services.AddScoped<IKetNoiHnCService, KetNoiHnCService>();
