@@ -2,6 +2,9 @@
 
 <MudNavMenu>
     <AuthorizeView Roles="@AppRoles.PlatformSuperAdmin">
+        <MudNavLink Href="/admin/dashboard" Icon="@Icons.Material.Filled.Dashboard">
+            Giám sát hệ thống
+        </MudNavLink>
         <MudNavLink Href="/admin/duyet-dang-ky" Icon="@Icons.Material.Filled.FactCheck">
             Duyệt đăng ký
         </MudNavLink>
@@ -11,6 +14,9 @@
     </AuthorizeView>
 
     <AuthorizeView Roles="@(AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)">
+        <MudNavLink Href="/app/dashboard" Icon="@Icons.Material.Filled.Dashboard">
+            Tổng quan
+        </MudNavLink>
         <MudNavGroup Title="Danh mục" Icon="@Icons.Material.Filled.ListAlt" Expanded="true">
             <MudNavLink Href="/app/kho" Icon="@Icons.Material.Filled.Warehouse">
                 Kho

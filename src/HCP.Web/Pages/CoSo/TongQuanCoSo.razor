@@ -1,0 +1,99 @@
+@page "/app/dashboard"
+@using HCP.Domain.Constants
+@using HCP.Infrastructure.Services.Dashboard
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDashboardCoSoService DashboardService
+
+<PageTitle>Tổng quan cơ sở</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Tổng quan cơ sở</MudText>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Đã đồng bộ</MudText>
+                <MudText Typo="Typo.h4" Color="Color.Success">@_data.SoThanhCong</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Đang chờ gửi</MudText>
+                <MudText Typo="Typo.h4" Color="Color.Info">@_data.SoDangCho</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Lỗi cần xử lý</MudText>
+                <MudText Typo="Typo.h4" Color="@(_data.SoLoi > 0 ? Color.Error : Color.Default)">@_data.SoLoi</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Giấy tờ cần chú ý</MudText>
+                <MudText Typo="Typo.h4" Color="@(_data.CanhBaoGiayTo.Count > 0 ? Color.Warning : Color.Default)">
+                    @_data.CanhBaoGiayTo.Count
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_data.SoLoi > 0)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">
+            Có @_data.SoLoi bản ghi đồng bộ đang lỗi.
+            <MudLink Href="/app/nhat-ky-dong-bo">Xem nhật ký đồng bộ</MudLink> để gửi lại.
+        </MudAlert>
+    }
+
+    <MudText Typo="Typo.h6" Class="mb-2">Giấy tờ sắp/đã hết hạn (trong 30 ngày)</MudText>
+    @if (_data.CanhBaoGiayTo.Count == 0)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true">Không có giấy tờ nào sắp hết hạn.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_data.CanhBaoGiayTo" Hover="true" Elevation="1" Dense="true">
+            <HeaderContent>
+                <MudTh>Nhóm</MudTh>
+                <MudTh>Đối tượng</MudTh>
+                <MudTh>Loại giấy tờ</MudTh>
+                <MudTh>Ngày hết hạn</MudTh>
+                <MudTh>Tình trạng</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nhóm">@context.NhomDoiTuong</MudTd>
+                <MudTd DataLabel="Đối tượng">@context.TenDoiTuong <span class="mud-text-secondary">(@context.Ma)</span></MudTd>
+                <MudTd DataLabel="Loại giấy tờ">@context.LoaiGiayTo</MudTd>
+                <MudTd DataLabel="Ngày hết hạn">@context.NgayHetHan.ToString("dd/MM/yyyy")</MudTd>
+                <MudTd DataLabel="Tình trạng">
+                    @if (context.DaHetHan)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error">Đã hết hạn</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">Sắp hết hạn</MudChip>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    private DashboardCoSo _data = null!;
+    private bool _dangTai = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _data = await DashboardService.LayAsync();
+        _dangTai = false;
+    }
+}

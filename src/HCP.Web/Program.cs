@@ -9,6 +9,7 @@ using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Security;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services;
+using HCP.Infrastructure.Services.Dashboard;
 using HCP.Infrastructure.Services.DanhMuc;
 using HCP.Infrastructure.Services.NhatKyDongBo;
 using HCP.Infrastructure.Sync;
@@ -87,6 +88,8 @@ builder.Services.AddScoped<IDanhMucService<Dish>, MonAnService>();
 builder.Services.AddScoped<IDanhMucService<Order>, DonHangService>();
 builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
 builder.Services.AddScoped<ISyncNhatKyService, SyncNhatKyService>();
+builder.Services.AddScoped<IDashboardCoSoService, DashboardCoSoService>();
+builder.Services.AddScoped<IDashboardNenTangService, DashboardNenTangService>();
 
 builder.Services.AddHttpClient<IHanoiCheckTokenClient, HanoiCheckTokenClient>(http =>
 {
