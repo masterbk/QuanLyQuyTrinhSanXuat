@@ -166,6 +166,42 @@ public class HnCPayloadMapperTests
     }
 
     [Fact]
+    public void MonAn_Cong_Thuc_Va_Khau_Dung_Dinh_Dang()
+    {
+        var d = new Dish
+        {
+            MaMonAn = "MON001", TenMonAn = "Thịt heo kho trứng", NhomTuoiId = 1,
+            MoTa = "Món mặn",
+            DanhSachNguyenLieu =
+            {
+                new DishIngredient { MaNguyenLieu = "SP001", DinhLuong = 0.06m, DonViTinhId = 3 },
+                new DishIngredient { MaNguyenLieu = "SP002", DinhLuong = 0.05m } // không đơn vị
+            },
+            DanhSachKhau =
+            {
+                new DishStep { MaKhau = "SO_CHE", ThuTu = 1,
+                               ThoiGian = new DateTime(2026, 7, 26, 5, 0, 0),
+                               NguoiThucHienCsv = "NV001" }
+            }
+        };
+        var e = Ser(HnCPayloadMapper.MonAn(d));
+
+        Assert.Equal("MON001", e.GetProperty("ma_mon_an").GetString());
+        Assert.Equal(1, e.GetProperty("nhom_tuoi_id").GetInt32());
+
+        var nl = e.GetProperty("danh_sach_nguyen_lieu");
+        Assert.Equal(2, nl.GetArrayLength());
+        Assert.Equal("SP001", nl[0].GetProperty("ma_nguyen_lieu").GetString());
+        Assert.Equal(3, nl[0].GetProperty("don_vi_tinh_id").GetInt32());
+        Assert.False(nl[1].TryGetProperty("don_vi_tinh_id", out _)); // null -> bỏ
+
+        var khau = e.GetProperty("danh_sach_khau")[0];
+        Assert.Equal("SO_CHE", khau.GetProperty("ma_khau").GetString());
+        Assert.Equal("2026-07-26 05:00:00", khau.GetProperty("thoi_gian").GetString());
+        Assert.Equal("NV001", khau.GetProperty("danh_sach_nguoi_thuc_hien")[0].GetString());
+    }
+
+    [Fact]
     public void ThucPham_Dung_Field_Va_Bo_Field_Null()
     {
         var e = Ser(HnCPayloadMapper.ThucPham(new Product

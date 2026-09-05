@@ -153,6 +153,57 @@ public static class HnCPayloadMapper
         }
     };
 
+    public static object MonAn(Dish d) => new[]
+    {
+        new
+        {
+            ma_mon_an = d.MaMonAn,
+            ten_mon_an = d.TenMonAn,
+            nhom_tuoi_id = d.NhomTuoiId,
+            mo_ta = d.MoTa,
+            ma_co_so = d.MaCoSo,
+            ma_quy_trinh = d.MaQuyTrinh,
+
+            // Công thức bắt buộc ≥1 (service đã kiểm tra), luôn gửi.
+            danh_sach_nguyen_lieu = d.DanhSachNguyenLieu.Select(i => new
+            {
+                ma_nguyen_lieu = i.MaNguyenLieu,
+                dinh_luong = i.DinhLuong,
+                don_vi_tinh_id = i.DonViTinhId
+            }).ToArray(),
+
+            danh_sach_khau = d.DanhSachKhau.Count == 0 ? null : d.DanhSachKhau
+                .OrderBy(s => s.ThuTu)
+                .Select(s => new
+                {
+                    ma_buoc_sx = s.MaBuocSx,
+                    ma_khau = s.MaKhau,
+                    thu_tu = s.ThuTu,
+                    thoi_gian = s.ThoiGian?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    danh_sach_nguoi_thuc_hien = s.NguoiThucHien.Count == 0 ? null : s.NguoiThucHien.ToArray(),
+                    dia_chi = s.DiaChi,
+                    trang_thai = s.TrangThai,
+                    ma_qr_truy_vet = s.MaQrTruyVet,
+                    ghi_chu = s.GhiChu,
+                    ma_co_so = s.MaCoSo,
+                    ma_ncc_dau_vao = s.MaNccDauVao
+                })
+                .ToArray(),
+
+            danh_sach_file = d.DanhSachFile.Count == 0 ? null : d.DanhSachFile
+                .Select(f => new
+                {
+                    ma_file = f.MaFile,
+                    ma_khau = f.MaKhau,
+                    ma_buoc_sx = f.MaBuocSx,
+                    ten_file = f.TenFile,
+                    duong_dan = f.DuongDan,
+                    loai = f.Loai
+                })
+                .ToArray()
+        }
+    };
+
     public static object NhanSu(Staff s) => new[]
     {
         new

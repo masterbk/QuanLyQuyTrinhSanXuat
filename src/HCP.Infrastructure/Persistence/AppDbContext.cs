@@ -76,6 +76,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<BatchWarehouse> BatchWarehouses => Set<BatchWarehouse>();
     public DbSet<BatchStep> BatchSteps => Set<BatchStep>();
     public DbSet<BatchFile> BatchFiles => Set<BatchFile>();
+    public DbSet<Dish> Dishes => Set<Dish>();
+    public DbSet<DishIngredient> DishIngredients => Set<DishIngredient>();
+    public DbSet<DishStep> DishSteps => Set<DishStep>();
+    public DbSet<DishFile> DishFiles => Set<DishFile>();
 
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
@@ -311,6 +315,56 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         batchFile.Property(f => f.MaBuocSx).HasMaxLength(255);
         batchFile.HasIndex(f => new { f.BatchId, f.MaFile }).IsUnique();
         batchFile.IsMultiTenant().AdjustUniqueIndexes();
+
+        // --- Món ăn và các bảng con ---
+        var dish = builder.Entity<Dish>();
+        dish.ToTable("Dishes");
+        dish.Property(d => d.MaMonAn).HasMaxLength(255).IsRequired();
+        dish.Property(d => d.TenMonAn).HasMaxLength(255).IsRequired();
+        dish.Property(d => d.MoTa).HasMaxLength(2000);
+        dish.Property(d => d.MaCoSo).HasMaxLength(255);
+        dish.Property(d => d.MaQuyTrinh).HasMaxLength(255);
+        dish.HasMany(d => d.DanhSachNguyenLieu).WithOne(i => i.Dish!)
+            .HasForeignKey(i => i.DishId).OnDelete(DeleteBehavior.Cascade);
+        dish.HasMany(d => d.DanhSachKhau).WithOne(s => s.Dish!)
+            .HasForeignKey(s => s.DishId).OnDelete(DeleteBehavior.Cascade);
+        dish.HasMany(d => d.DanhSachFile).WithOne(f => f.Dish!)
+            .HasForeignKey(f => f.DishId).OnDelete(DeleteBehavior.Cascade);
+        dish.HasIndex(d => d.MaMonAn).IsUnique();
+        dish.IsMultiTenant().AdjustUniqueIndexes();
+
+        var dishNL = builder.Entity<DishIngredient>();
+        dishNL.ToTable("DishIngredients");
+        dishNL.Property(i => i.MaNguyenLieu).HasMaxLength(255).IsRequired();
+        dishNL.Property(i => i.DinhLuong).HasPrecision(18, 4);
+        dishNL.HasIndex(i => new { i.DishId, i.MaNguyenLieu }).IsUnique();
+        dishNL.IsMultiTenant().AdjustUniqueIndexes();
+
+        var dishStep = builder.Entity<DishStep>();
+        dishStep.ToTable("DishSteps");
+        dishStep.Property(s => s.MaBuocSx).HasMaxLength(255);
+        dishStep.Property(s => s.MaKhau).HasMaxLength(255).IsRequired();
+        dishStep.Property(s => s.NguoiThucHienCsv).HasMaxLength(1000);
+        dishStep.Property(s => s.DiaChi).HasMaxLength(500);
+        dishStep.Property(s => s.TrangThai).HasMaxLength(100);
+        dishStep.Property(s => s.MaQrTruyVet).HasMaxLength(255);
+        dishStep.Property(s => s.GhiChu).HasMaxLength(1000);
+        dishStep.Property(s => s.MaCoSo).HasMaxLength(255);
+        dishStep.Property(s => s.MaNccDauVao).HasMaxLength(255);
+        dishStep.Ignore(s => s.NguoiThucHien);
+        dishStep.HasIndex(s => new { s.DishId, s.ThuTu });
+        dishStep.IsMultiTenant().AdjustUniqueIndexes();
+
+        var dishFile = builder.Entity<DishFile>();
+        dishFile.ToTable("DishFiles");
+        dishFile.Property(f => f.MaFile).HasMaxLength(255).IsRequired();
+        dishFile.Property(f => f.TenFile).HasMaxLength(255).IsRequired();
+        dishFile.Property(f => f.DuongDan).HasMaxLength(1000).IsRequired();
+        dishFile.Property(f => f.Loai).HasMaxLength(100).IsRequired();
+        dishFile.Property(f => f.MaKhau).HasMaxLength(255);
+        dishFile.Property(f => f.MaBuocSx).HasMaxLength(255);
+        dishFile.HasIndex(f => new { f.DishId, f.MaFile }).IsUnique();
+        dishFile.IsMultiTenant().AdjustUniqueIndexes();
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
         var standardFood = builder.Entity<StandardFoodCategory>();

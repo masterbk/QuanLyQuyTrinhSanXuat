@@ -220,6 +220,31 @@ public class DanhMucIsolationTests
     }
 
     [Fact]
+    public void Mon_An_Va_Bang_Con_Bi_Loc_Theo_Co_So()
+    {
+        foreach (var tenant in new[] { CoSoA, CoSoB })
+        {
+            using var db = OpenAs(tenant);
+            db.Dishes.Add(new Dish
+            {
+                MaMonAn = "MON001", TenMonAn = $"Món ({tenant})", NhomTuoiId = 1,
+                DanhSachNguyenLieu = { new DishIngredient { MaNguyenLieu = "SP001", DinhLuong = 0.1m } },
+                DanhSachKhau = { new DishStep { MaKhau = "SO_CHE", ThuTu = 1 } }
+            });
+            db.SaveChanges();
+        }
+
+        using var dbA = OpenAs(CoSoA);
+        Assert.Single(dbA.Dishes.ToList());
+        Assert.Equal(CoSoA, dbA.Dishes.Single().TenantId);
+
+        // Bảng con nguyên liệu: mã nguyên liệu trùng nhau giữa cơ sở nhưng phải bị lọc.
+        var nl = dbA.DishIngredients.Where(i => i.MaNguyenLieu == "SP001").ToList();
+        Assert.Single(nl);
+        Assert.Equal(CoSoA, nl[0].TenantId);
+    }
+
+    [Fact]
     public void Thuc_Pham_Bi_Loc_Theo_Co_So()
     {
         foreach (var tenant in new[] { CoSoA, CoSoB })
