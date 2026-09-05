@@ -166,6 +166,47 @@ public class HnCPayloadMapperTests
     }
 
     [Fact]
+    public void DonHang_Food_Co_ChiTiet_Va_XuatKho()
+    {
+        var o = new Order
+        {
+            MaDonHang = "DH001", LoaiDonHang = "food", MaTruong = "TH_A",
+            TrangThai = "DANG_GIAO", NgayDonHang = new DateOnly(2026, 7, 26),
+            ChiTiet = { new OrderLine { MaLoaiSp = "THIT", SoLuong = 50 } },
+            XuatKho = { new OrderExport { MaSanPham = "SP001", MaKho = "KHO01", MaLo = "LO01", SoLuong = 50 } },
+            Images = { new OrderImage { PathFile = "a.jpg", SortOrder = 1 } }
+        };
+        var e = Ser(HnCPayloadMapper.DonHang(o));
+
+        Assert.Equal("food", e.GetProperty("loai_don_hang").GetString());
+        Assert.Equal("DANG_GIAO", e.GetProperty("trang_thai").GetString());
+        var ct = e.GetProperty("chi_tiet")[0];
+        Assert.Equal("THIT", ct.GetProperty("ma_loai_sp").GetString());
+        Assert.False(ct.TryGetProperty("ma_mon_an", out _)); // đơn food không mang ma_mon_an
+        Assert.Equal("SP001", e.GetProperty("xuat_kho")[0].GetProperty("ma_san_pham").GetString());
+        Assert.Equal(1, e.GetProperty("images")[0].GetProperty("sort_order").GetInt32());
+    }
+
+    [Fact]
+    public void DonHang_Dish_ChiTiet_Ma_Mon_An_Va_Khong_XuatKho()
+    {
+        var o = new Order
+        {
+            MaDonHang = "DH002", LoaiDonHang = "dish", MaTruong = "TH_A",
+            TrangThai = "DANG_CHUAN_BI",
+            ChiTiet = { new OrderLine { MaMonAn = "MON001", SoLuong = 320 } }
+            // đơn dish không có xuat_kho
+        };
+        var e = Ser(HnCPayloadMapper.DonHang(o));
+
+        var ct = e.GetProperty("chi_tiet")[0];
+        Assert.Equal("MON001", ct.GetProperty("ma_mon_an").GetString());
+        Assert.False(ct.TryGetProperty("ma_loai_sp", out _));
+        Assert.False(e.TryGetProperty("xuat_kho", out _));  // rỗng -> bỏ
+        Assert.False(e.TryGetProperty("images", out _));
+    }
+
+    [Fact]
     public void MonAn_Cong_Thuc_Va_Khau_Dung_Dinh_Dang()
     {
         var d = new Dish

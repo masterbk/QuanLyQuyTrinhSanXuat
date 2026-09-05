@@ -80,6 +80,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<DishIngredient> DishIngredients => Set<DishIngredient>();
     public DbSet<DishStep> DishSteps => Set<DishStep>();
     public DbSet<DishFile> DishFiles => Set<DishFile>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderImage> OrderImages => Set<OrderImage>();
+    public DbSet<OrderLine> OrderLines => Set<OrderLine>();
+    public DbSet<OrderExport> OrderExports => Set<OrderExport>();
 
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
@@ -365,6 +369,52 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dishFile.Property(f => f.MaBuocSx).HasMaxLength(255);
         dishFile.HasIndex(f => new { f.DishId, f.MaFile }).IsUnique();
         dishFile.IsMultiTenant().AdjustUniqueIndexes();
+
+        // --- Đơn hàng và các bảng con ---
+        var order = builder.Entity<Order>();
+        order.ToTable("Orders");
+        order.Property(o => o.MaDonHang).HasMaxLength(255).IsRequired();
+        order.Property(o => o.LoaiDonHang).HasMaxLength(20).IsRequired();
+        order.Property(o => o.MaTruong).HasMaxLength(255).IsRequired();
+        order.Property(o => o.DiaChiNhan).HasMaxLength(500);
+        order.Property(o => o.DiemGiao).HasMaxLength(255);
+        order.Property(o => o.MaNguoiGiao).HasMaxLength(255);
+        order.Property(o => o.TrangThai).HasMaxLength(30).IsRequired();
+        order.Property(o => o.GhiChu).HasMaxLength(2000);
+        order.HasMany(o => o.Images).WithOne(i => i.Order!)
+             .HasForeignKey(i => i.OrderId).OnDelete(DeleteBehavior.Cascade);
+        order.HasMany(o => o.ChiTiet).WithOne(l => l.Order!)
+             .HasForeignKey(l => l.OrderId).OnDelete(DeleteBehavior.Cascade);
+        order.HasMany(o => o.XuatKho).WithOne(x => x.Order!)
+             .HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+        order.HasIndex(o => o.MaDonHang).IsUnique();
+        order.IsMultiTenant().AdjustUniqueIndexes();
+
+        var orderImg = builder.Entity<OrderImage>();
+        orderImg.ToTable("OrderImages");
+        orderImg.Property(i => i.PathFile).HasMaxLength(1000).IsRequired();
+        orderImg.HasIndex(i => new { i.OrderId, i.SortOrder }).IsUnique();
+        orderImg.IsMultiTenant().AdjustUniqueIndexes();
+
+        var orderLine = builder.Entity<OrderLine>();
+        orderLine.ToTable("OrderLines");
+        orderLine.Property(l => l.MaLoaiSp).HasMaxLength(100);
+        orderLine.Property(l => l.MaMonAn).HasMaxLength(255);
+        orderLine.Property(l => l.SoLuong).HasPrecision(18, 3);
+        orderLine.Property(l => l.PathFile).HasMaxLength(1000);
+        orderLine.HasIndex(l => l.OrderId);
+        orderLine.IsMultiTenant().AdjustUniqueIndexes();
+
+        var orderExport = builder.Entity<OrderExport>();
+        orderExport.ToTable("OrderExports");
+        orderExport.Property(x => x.MaXuatKho).HasMaxLength(255);
+        orderExport.Property(x => x.MaLoaiSp).HasMaxLength(100);
+        orderExport.Property(x => x.MaSanPham).HasMaxLength(255).IsRequired();
+        orderExport.Property(x => x.MaKho).HasMaxLength(255).IsRequired();
+        orderExport.Property(x => x.MaLo).HasMaxLength(255).IsRequired();
+        orderExport.Property(x => x.SoLuong).HasPrecision(18, 3);
+        orderExport.HasIndex(x => x.OrderId);
+        orderExport.IsMultiTenant().AdjustUniqueIndexes();
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
         var standardFood = builder.Entity<StandardFoodCategory>();

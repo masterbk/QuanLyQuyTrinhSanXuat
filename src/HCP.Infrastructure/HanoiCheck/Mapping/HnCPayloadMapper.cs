@@ -153,6 +153,50 @@ public static class HnCPayloadMapper
         }
     };
 
+    public static object DonHang(Order o) => new[]
+    {
+        new
+        {
+            ma_don_hang = o.MaDonHang,
+            loai_don_hang = o.LoaiDonHang,
+            ma_truong = o.MaTruong,
+            dia_chi_nhan = o.DiaChiNhan,
+            diem_giao = o.DiemGiao,
+            ma_nguoi_giao = o.MaNguoiGiao,
+            trang_thai = o.TrangThai,
+            ngay_don_hang = Ngay(o.NgayDonHang),
+            ghi_chu = o.GhiChu,
+
+            images = o.Images.Count == 0 ? null : o.Images
+                .OrderBy(i => i.SortOrder)
+                .Select(i => new { path_file = i.PathFile, sort_order = i.SortOrder })
+                .ToArray(),
+
+            // chi_tiet bắt buộc ≥1 (service đã kiểm tra). Đơn food gửi ma_loai_sp, đơn dish gửi
+            // ma_mon_an; trường null bị bỏ nên mỗi dòng chỉ mang đúng khoá theo loại đơn.
+            chi_tiet = o.ChiTiet.Select(l => new
+            {
+                ma_loai_sp = l.MaLoaiSp,
+                ma_mon_an = l.MaMonAn,
+                so_luong = l.SoLuong,
+                path_file = l.PathFile
+            }).ToArray(),
+
+            // xuat_kho chỉ gửi khi có (chỉ đơn food mới có - service chặn đơn dish).
+            xuat_kho = o.XuatKho.Count == 0 ? null : o.XuatKho
+                .Select(x => new
+                {
+                    ma_xuat_kho = x.MaXuatKho,
+                    ma_loai_sp = x.MaLoaiSp,
+                    ma_san_pham = x.MaSanPham,
+                    ma_kho = x.MaKho,
+                    ma_lo = x.MaLo,
+                    so_luong = x.SoLuong
+                })
+                .ToArray()
+        }
+    };
+
     public static object MonAn(Dish d) => new[]
     {
         new
