@@ -12,14 +12,17 @@ namespace HCP.Infrastructure.Services;
 public class CoSoService : ICoSoService
 {
     private readonly TenantStoreDbContext _tenantStore;
+    private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<CoSoService> _logger;
 
     public CoSoService(TenantStoreDbContext tenantStore,
+                       AppDbContext db,
                        UserManager<ApplicationUser> userManager,
                        ILogger<CoSoService> logger)
     {
         _tenantStore = tenantStore;
+        _db = db;
         _userManager = userManager;
         _logger = logger;
     }
@@ -149,6 +152,46 @@ public class CoSoService : ICoSoService
         _logger.LogInformation("Cơ sở {TenantId} bị từ chối bởi {NguoiDuyet}.", tenantId, nguoiDuyet);
 
         return KetQuaThaoTac.Ok($"Đã từ chối cơ sở \"{tenant.Name}\".");
+    }
+
+    public async Task<KetQuaThaoTac> KhoaAsync(string tenantId, string nguoiThucHien, CancellationToken ct = default)
+    {
+        var tenant = await LayTheoIdAsync(tenantId, ct);
+        if (tenant is null) return KetQuaThaoTac.Loi("Không tìm thấy cơ sở.");
+        if (tenant.TrangThai != TenantStatus.Active)
+            return KetQuaThaoTac.Loi("Chỉ khoá được cơ sở đang hoạt động.");
+
+        tenant.TrangThai = TenantStatus.Suspended;
+        tenant.NguoiDuyet = nguoiThucHien;
+        await _tenantStore.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Cơ sở {TenantId} bị khoá bởi {NguoiThucHien}.", tenantId, nguoiThucHien);
+        return KetQuaThaoTac.Ok($"Đã khoá cơ sở \"{tenant.Name}\". Cơ sở này tạm thời không đăng nhập được.");
+    }
+
+    public async Task<KetQuaThaoTac> MoKhoaAsync(string tenantId, string nguoiThucHien, CancellationToken ct = default)
+    {
+        var tenant = await LayTheoIdAsync(tenantId, ct);
+        if (tenant is null) return KetQuaThaoTac.Loi("Không tìm thấy cơ sở.");
+        if (tenant.TrangThai != TenantStatus.Suspended)
+            return KetQuaThaoTac.Loi("Chỉ mở khoá được cơ sở đang bị khoá.");
+
+        tenant.TrangThai = TenantStatus.Active;
+        tenant.NguoiDuyet = nguoiThucHien;
+        await _tenantStore.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Cơ sở {TenantId} được mở khoá bởi {NguoiThucHien}.", tenantId, nguoiThucHien);
+        return KetQuaThaoTac.Ok($"Đã mở khoá cơ sở \"{tenant.Name}\".");
+    }
+
+    public async Task<IReadOnlyDictionary<string, bool>> LayTrangThaiKetNoiAsync(CancellationToken ct = default)
+    {
+        // TenantHnCCredentials là bảng hạ tầng (không lọc theo tenant) nên quản trị nền tảng
+        // đọc được của mọi cơ sở. DaXacThuc = đã bấm "Kiểm tra kết nối" thành công ít nhất 1 lần.
+        var ds = await _db.TenantHnCCredentials.AsNoTracking()
+            .Select(c => new { c.TenantId, c.DaXacThuc })
+            .ToListAsync(ct);
+        return ds.ToDictionary(x => x.TenantId, x => x.DaXacThuc);
     }
 
     /// <summary>Sinh identifier dạng slug, đảm bảo không trùng (cột này có unique index).</summary>

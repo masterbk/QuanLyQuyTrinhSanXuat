@@ -1,0 +1,162 @@
+@page "/admin/co-so"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Infrastructure
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.PlatformSuperAdmin)]
+@inject ICoSoService CoSoService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Danh sách cơ sở</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Danh sách cơ sở</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Toàn bộ cơ sở trên nền tảng, tình trạng kết nối HanoiCheck và khoá/mở tài khoản.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
+               OnClick="TaiDanhSachAsync">Làm mới</MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Chưa có cơ sở nào đăng ký.</MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh>Tên cơ sở</MudTh>
+            <MudTh>Mã số thuế</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh>Kết nối HnC</MudTh>
+            <MudTh Style="width:140px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Tên cơ sở">
+                <b>@context.Name</b>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.DiaChi</MudText>
+            </MudTd>
+            <MudTd DataLabel="Mã số thuế">@context.MaSoThue</MudTd>
+            <MudTd DataLabel="Email">@context.EmailLienHe</MudTd>
+            <MudTd DataLabel="Trạng thái">
+                <MudChip T="string" Size="Size.Small" Color="@MauTrangThai(context.TrangThai)">
+                    @NhanTrangThai(context.TrangThai)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Kết nối HnC">
+                @if (_ketNoi.TryGetValue(context.Id!, out var daXacThuc))
+                {
+                    @if (daXacThuc)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success"
+                                 Icon="@Icons.Material.Filled.CheckCircle">Đã kết nối</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">Chưa xác thực</MudChip>
+                    }
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Chưa cấu hình</MudText>
+                }
+            </MudTd>
+            <MudTd>
+                @if (context.TrangThai == TenantStatus.Active)
+                {
+                    <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Lock" Disabled="_dangXuLy"
+                               OnClick="@(() => KhoaAsync(context))">Khoá</MudButton>
+                }
+                else if (context.TrangThai == TenantStatus.Suspended)
+                {
+                    <MudButton Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.LockOpen" Disabled="_dangXuLy"
+                               OnClick="@(() => MoKhoaAsync(context))">Mở khoá</MudButton>
+                }
+                else if (context.TrangThai == TenantStatus.PendingApproval)
+                {
+                    <MudButton Size="Size.Small" Href="/admin/duyet-dang-ky" Variant="Variant.Text">Đi duyệt</MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Tenant> _danhSach = new();
+    private IReadOnlyDictionary<string, bool> _ketNoi = new Dictionary<string, bool>();
+    private bool _dangTai = true;
+    private bool _dangXuLy;
+
+    protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
+
+    private async Task TaiDanhSachAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await CoSoService.LayDanhSachAsync()).ToList();
+        _ketNoi = await CoSoService.LayTrangThaiKetNoiAsync();
+        _dangTai = false;
+    }
+
+    private static string NhanTrangThai(TenantStatus tt) => tt switch
+    {
+        TenantStatus.PendingApproval => "Chờ duyệt",
+        TenantStatus.Active => "Đang hoạt động",
+        TenantStatus.Suspended => "Đã khoá",
+        TenantStatus.Rejected => "Đã từ chối",
+        _ => tt.ToString()
+    };
+
+    private static Color MauTrangThai(TenantStatus tt) => tt switch
+    {
+        TenantStatus.Active => Color.Success,
+        TenantStatus.PendingApproval => Color.Info,
+        TenantStatus.Suspended => Color.Error,
+        TenantStatus.Rejected => Color.Default,
+        _ => Color.Default
+    };
+
+    private async Task<string> LayTenNguoiThucHienAsync()
+    {
+        if (AuthState is null) return "unknown";
+        var state = await AuthState;
+        return state.User.Identity?.Name ?? "unknown";
+    }
+
+    private async Task KhoaAsync(Tenant coSo)
+    {
+        var dongY = await DialogService.ShowMessageBox(
+            "Xác nhận khoá",
+            $"Khoá cơ sở \"{coSo.Name}\"? Cơ sở sẽ không đăng nhập được cho tới khi mở lại.",
+            yesText: "Khoá", cancelText: "Huỷ");
+        if (dongY != true) return;
+
+        _dangXuLy = true;
+        var kq = await CoSoService.KhoaAsync(coSo.Id!, await LayTenNguoiThucHienAsync());
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) await TaiDanhSachAsync();
+    }
+
+    private async Task MoKhoaAsync(Tenant coSo)
+    {
+        _dangXuLy = true;
+        var kq = await CoSoService.MoKhoaAsync(coSo.Id!, await LayTenNguoiThucHienAsync());
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) await TaiDanhSachAsync();
+    }
+}
