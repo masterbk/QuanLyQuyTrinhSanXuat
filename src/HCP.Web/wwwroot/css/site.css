@@ -67,6 +67,22 @@ a, .btn-link {
         content: "An error has occurred."
     }
 
+/* MudTabs trong MudDialog đo sai bề rộng tab lúc dialog mới mở (tab còn ẩn) -> thanh slider
+   gạch chân bị lệch/ngắn. Bỏ slider JS, dùng gạch chân CSS thuần trên tab active: luôn khớp
+   đúng bề rộng tab, không phụ thuộc thời điểm đo. Viền trong suốt cho tab không active để
+   không bị nhảy layout 2px khi chuyển tab. */
+.mud-tabs .mud-tab-slider {
+    display: none !important;
+}
+
+.mud-tabs .mud-tab {
+    border-bottom: 2px solid transparent;
+}
+
+    .mud-tabs .mud-tab.mud-tab-active {
+        border-bottom-color: var(--mud-palette-primary);
+    }
+
 /* --- Tinh chỉnh cho màn hình nhỏ (điện thoại) --- */
 @media (max-width: 600px) {
     /* Bảng rộng: cuộn ngang gọn trong khung thay vì tràn ra ngoài trang.
