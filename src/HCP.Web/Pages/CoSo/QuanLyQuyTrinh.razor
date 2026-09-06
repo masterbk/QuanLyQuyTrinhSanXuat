@@ -6,6 +6,7 @@
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
 @inject IDanhMucService<ProductionProcess> QuyTrinhService
 @inject IDanhMucService<ProductionStep> KhauService
+@inject IDanhMucChuanService DanhMucChuanService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -89,18 +90,24 @@ else
                           Variant="Variant.Outlined" MaxLength="255"
                           Required="true" RequiredError="Vui lòng nhập tên quy trình" />
 
-            <MudNumericField @bind-Value="_input.MaDanhMucThucPham" Label="Mã danh mục thực phẩm"
-                             Variant="Variant.Outlined" Class="mb-2" Min="0"
-                             HelperText="Đặc tả yêu cầu một số nguyên. Xem lưu ý bên dưới." />
+            @if (_danhMucChuan.Count > 0)
+            {
+                <MudAutocomplete T="string" @bind-Value="_maDanhMucChon" Label="Danh mục thực phẩm"
+                                 Class="mb-3" Variant="Variant.Outlined" Clearable="true"
+                                 SearchFunc="TimDanhMuc" ToStringFunc="TenDanhMuc" MaxItems="100"
+                                 HelperText="Chọn từ danh mục chuẩn HanoiCheck (không bắt buộc). Gõ để tìm." />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    <MudText Typo="Typo.caption">
+                        Chưa có danh mục thực phẩm chuẩn. Vào màn
+                        <MudLink Href="/app/thuc-pham">Thực phẩm</MudLink> bấm "Cập nhật danh mục chuẩn"
+                        để tải về, sau đó quay lại chọn ở đây.
+                    </MudText>
+                </MudAlert>
+            }
         </MudForm>
-
-        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
-            <MudText Typo="Typo.caption">
-                Đặc tả ghi trường này kiểu số nguyên (ví dụ gửi giá trị 1), nhưng danh mục thực phẩm
-                chuẩn mà HanoiCheck trả về chỉ có mã chữ (THIT, RAU_CU...) chứ không có id số.
-                Cần hỏi lại đơn vị vận hành khi kiểm thử tích hợp. Tạm thời để trống nếu chưa rõ.
-            </MudText>
-        </MudAlert>
 
         <MudDivider Class="my-3" />
 
@@ -162,6 +169,8 @@ else
 @code {
     private List<ProductionProcess> _danhSach = new();
     private List<ProductionStep> _danhSachKhau = new();
+    private List<StandardFoodCategory> _danhMucChuan = new();
+    private string? _maDanhMucChon;
 
     private bool _dangTai = true;
     private bool _dangLuu;
@@ -184,11 +193,32 @@ else
         _dangTai = true;
         _danhSach = (await QuyTrinhService.LayTatCaAsync()).ToList();
         _danhSachKhau = (await KhauService.LayTatCaAsync()).ToList();
+        _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
         _dangTai = false;
     }
 
     private string TenKhauTheoMa(string maKhau) =>
         _danhSachKhau.FirstOrDefault(k => k.MaKhau == maKhau)?.TenKhau ?? "(không còn trong danh mục)";
+
+    // code = id danh mục (HnC trả code=null, ta lưu id vào Code). Hiển thị TÊN cho dễ đọc.
+    private string TenDanhMuc(string? code)
+    {
+        if (string.IsNullOrEmpty(code)) return string.Empty;
+        var dm = _danhMucChuan.FirstOrDefault(x => x.Code == code);
+        return dm is null ? code : dm.Name;
+    }
+
+    private Task<IEnumerable<string>> TimDanhMuc(string? value, CancellationToken ct)
+    {
+        IEnumerable<StandardFoodCategory> kq = _danhMucChuan;
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            kq = kq.Where(c =>
+                c.Code.Contains(value, StringComparison.OrdinalIgnoreCase)
+                || (c.Name ?? "").Contains(value, StringComparison.OrdinalIgnoreCase));
+        }
+        return Task.FromResult(kq.Take(100).Select(c => c.Code));
+    }
 
     private void MoForm(ProductionProcess? quyTrinh)
     {
@@ -199,6 +229,7 @@ else
         {
             _input = new ProductionProcess();
             _khauDaChon = new List<string>();
+            _maDanhMucChon = null;
         }
         else
         {
@@ -209,6 +240,7 @@ else
                 TenQuyTrinh = quyTrinh.TenQuyTrinh,
                 MaDanhMucThucPham = quyTrinh.MaDanhMucThucPham
             };
+            _maDanhMucChon = quyTrinh.MaDanhMucThucPham?.ToString();
 
             _khauDaChon = quyTrinh.DanhSachKhau
                 .OrderBy(k => k.ThuTu)
@@ -243,6 +275,9 @@ else
             await _form.Validate();
             if (!_form.IsValid) return;
         }
+
+        // Danh mục thực phẩm: giá trị chọn là id (chuỗi) -> lưu vào trường số int? của quy trình.
+        _input.MaDanhMucThucPham = int.TryParse(_maDanhMucChon, out var idDanhMuc) ? idDanhMuc : null;
 
         // Thứ tự trong danh sách chính là thứ tự thực hiện; service đánh lại số 1..n.
         _input.DanhSachKhau = _khauDaChon
