@@ -74,6 +74,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<Product> Products => Set<Product>();
     public DbSet<KhoGiaoDich> KhoGiaoDichs => Set<KhoGiaoDich>();
     public DbSet<DinhMucNguyenLieu> DinhMucNguyenLieus => Set<DinhMucNguyenLieu>();
+    public DbSet<LenhSanXuat> LenhSanXuats => Set<LenhSanXuat>();
+    public DbSet<LenhSanXuatTieuHao> LenhSanXuatTieuHaos => Set<LenhSanXuatTieuHao>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<BatchWarehouse> BatchWarehouses => Set<BatchWarehouse>();
     public DbSet<BatchStep> BatchSteps => Set<BatchStep>();
@@ -277,6 +279,26 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dinhMuc.Property(d => d.SoLuong).HasPrecision(18, 4);
         dinhMuc.HasIndex(d => new { d.ProductId, d.MaNguyenLieu }).IsUnique();
         dinhMuc.IsMultiTenant().AdjustUniqueIndexes();
+
+        var lenhSX = builder.Entity<LenhSanXuat>();
+        lenhSX.ToTable("LenhSanXuat");
+        lenhSX.Property(l => l.MaLenh).HasMaxLength(255).IsRequired();
+        lenhSX.Property(l => l.MaThanhPham).HasMaxLength(255).IsRequired();
+        lenhSX.Property(l => l.MaKho).HasMaxLength(255).IsRequired();
+        lenhSX.Property(l => l.MaLoThanhPham).HasMaxLength(255).IsRequired();
+        lenhSX.Property(l => l.SoLuong).HasPrecision(18, 3);
+        lenhSX.Property(l => l.GhiChu).HasMaxLength(1000);
+        lenhSX.HasMany(l => l.TieuHao).WithOne(t => t.LenhSanXuat!)
+              .HasForeignKey(t => t.LenhSanXuatId).OnDelete(DeleteBehavior.Cascade);
+        lenhSX.HasIndex(l => l.MaLenh).IsUnique();
+        lenhSX.IsMultiTenant().AdjustUniqueIndexes();
+
+        var tieuHao = builder.Entity<LenhSanXuatTieuHao>();
+        tieuHao.ToTable("LenhSanXuatTieuHao");
+        tieuHao.Property(t => t.MaNguyenLieu).HasMaxLength(255).IsRequired();
+        tieuHao.Property(t => t.MaLo).HasMaxLength(255).IsRequired();
+        tieuHao.Property(t => t.SoLuong).HasPrecision(18, 4);
+        tieuHao.IsMultiTenant();
 
         // --- Sổ kho nội bộ ---
         var khoGd = builder.Entity<KhoGiaoDich>();

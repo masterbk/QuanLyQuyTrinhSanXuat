@@ -1,0 +1,288 @@
+@page "/app/lenh-san-xuat"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Services.Kho
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject ILenhSanXuatService LenhService
+@inject IDinhMucService DinhMucService
+@inject IDanhMucService<Product> ThucPhamService
+@inject IDanhMucService<Warehouse> KhoDanhMucService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Lệnh sản xuất</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Lệnh sản xuất</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Sản xuất thành phẩm theo định mức - tự trừ nguyên liệu (lô hết hạn trước xuất trước) và
+            nhập thành phẩm vào kho.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="MoForm" Disabled="@(_thanhPham.Count == 0 || _kho.Count == 0)">
+        Tạo lệnh
+    </MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    @if (_thanhPham.Count == 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Chưa có thành phẩm nào có định mức. Khai <MudLink Href="/app/dinh-muc">Định mức</MudLink> trước.
+        </MudAlert>
+    }
+
+    @if (_danhSach.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">Chưa có lệnh sản xuất nào.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_danhSach" Hover="true" Dense="true" Elevation="1">
+            <HeaderContent>
+                <MudTh>Mã lệnh</MudTh>
+                <MudTh>Thành phẩm</MudTh>
+                <MudTh Style="text-align:right">Số lượng</MudTh>
+                <MudTh>Kho</MudTh>
+                <MudTh>Lô TP</MudTh>
+                <MudTh>Ngày SX</MudTh>
+                <MudTh>Trạng thái</MudTh>
+                <MudTh Style="width:170px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Mã lệnh"><b>@context.MaLenh</b></MudTd>
+                <MudTd DataLabel="Thành phẩm">@context.MaThanhPham</MudTd>
+                <MudTd DataLabel="Số lượng" Style="text-align:right">@context.SoLuong.ToString("0.###")</MudTd>
+                <MudTd DataLabel="Kho">@context.MaKho</MudTd>
+                <MudTd DataLabel="Lô TP">@context.MaLoThanhPham</MudTd>
+                <MudTd DataLabel="Ngày SX">@context.NgaySanXuat.ToString("dd/MM/yyyy")</MudTd>
+                <MudTd DataLabel="Trạng thái">
+                    @if (context.TrangThai == TrangThaiLenhSX.HoanThanh)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">Hoàn thành</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info">Mới tạo</MudChip>
+                    }
+                </MudTd>
+                <MudTd>
+                    @if (context.TrangThai == TrangThaiLenhSX.MoiTao)
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                   StartIcon="@Icons.Material.Filled.PlayArrow" Disabled="_dangXuLy"
+                                   OnClick="@(() => ThucHienAsync(context))">Thực hiện</MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => XoaAsync(context))" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @context.ThoiGianHoanThanhUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                        </MudText>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent><MudText Typo="Typo.h6">Tạo lệnh sản xuất</MudText></TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.MaLenh" Label="Mã lệnh" Variant="Variant.Outlined"
+                                  MaxLength="255" Required="true" RequiredError="Nhập mã lệnh"
+                                  HelperText="vd LSX-001." />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="_input.MaThanhPham" Label="Thành phẩm"
+                               Variant="Variant.Outlined" Required="true" RequiredError="Chọn thành phẩm">
+                        @foreach (var tp in _thanhPham)
+                        {
+                            <MudSelectItem T="string" Value="@tp.MaSanPham">@tp.TenSanPham (@tp.MaSanPham)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudNumericField @bind-Value="_input.SoLuong" Label="Số lượng" Variant="Variant.Outlined" Min="0m" />
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudSelect T="string" @bind-Value="_input.MaKho" Label="Kho" Variant="Variant.Outlined"
+                               Required="true" RequiredError="Chọn kho">
+                        @foreach (var k in _kho)
+                        {
+                            <MudSelectItem T="string" Value="@k.MaKho">@k.TenKho (@k.MaKho)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudDatePicker @bind-Date="_ngaySanXuat" Label="Ngày sản xuất"
+                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.MaLoThanhPham" Label="Mã lô thành phẩm"
+                                  Variant="Variant.Outlined" MaxLength="255"
+                                  Required="true" RequiredError="Nhập mã lô thành phẩm" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_hsdThanhPham" Label="Hạn dùng thành phẩm"
+                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Variant="Variant.Outlined" MaxLength="1000" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+
+        <div class="d-flex justify-space-between align-center mt-3 mb-1">
+            <MudText Typo="Typo.subtitle2">Nguyên liệu cần</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Calculate"
+                       OnClick="TinhNguyenLieuAsync">Tính nguyên liệu</MudButton>
+        </div>
+        @if (_preview.Count > 0)
+        {
+            <MudTable Items="_preview" Dense="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Nguyên liệu</MudTh>
+                    <MudTh Style="text-align:right">Cần</MudTh>
+                    <MudTh Style="text-align:right">Tồn</MudTh>
+                    <MudTh>Đủ?</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.TenNguyenLieu</MudTd>
+                    <MudTd Style="text-align:right">@context.Can.ToString("0.###") @context.DonViTinh</MudTd>
+                    <MudTd Style="text-align:right">@context.Ton.ToString("0.###")</MudTd>
+                    <MudTd>
+                        @if (context.Du)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success">Đủ</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error">Thiếu</MudChip>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangLuu" OnClick="LuuAsync">
+            Tạo lệnh
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<LenhSanXuat> _danhSach = new();
+    private List<Product> _thanhPham = new();   // chỉ thành phẩm CÓ định mức
+    private List<Warehouse> _kho = new();
+    private List<NguyenLieuCanDto> _preview = new();
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+    private bool _dangXuLy;
+
+    private MudForm? _form;
+    private bool _hienForm;
+    private LenhSanXuat _input = new();
+    private DateTime? _ngaySanXuat;
+    private DateTime? _hsdThanhPham;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiAsync();
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await LenhService.LayTatCaAsync()).ToList();
+        _kho = (await KhoDanhMucService.LayTatCaAsync()).ToList();
+
+        var tp = (await ThucPhamService.LayTatCaAsync())
+            .Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham).ToList();
+        _thanhPham = new List<Product>();
+        foreach (var p in tp)
+        {
+            var dm = await DinhMucService.LayTheoThanhPhamAsync(p.Id);
+            if (dm.Count > 0) _thanhPham.Add(p);   // chỉ hiện thành phẩm đã có định mức
+        }
+        _dangTai = false;
+    }
+
+    private void MoForm()
+    {
+        _input = new LenhSanXuat { SoLuong = 1 };
+        _ngaySanXuat = DateTime.Today;
+        _hsdThanhPham = null;
+        _preview = new List<NguyenLieuCanDto>();
+        _hienForm = true;
+    }
+
+    private async Task TinhNguyenLieuAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_input.MaThanhPham) || string.IsNullOrWhiteSpace(_input.MaKho)
+            || _input.SoLuong <= 0)
+        {
+            Snackbar.Add("Chọn thành phẩm, kho và số lượng trước.", Severity.Info);
+            return;
+        }
+        _preview = (await LenhService.TinhNguyenLieuCanAsync(_input.MaThanhPham, _input.SoLuong, _input.MaKho)).ToList();
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+        _input.NgaySanXuat = _ngaySanXuat is { } d ? DateOnly.FromDateTime(d) : DateOnly.FromDateTime(DateTime.Today);
+        _input.HanSuDungThanhPham = _hsdThanhPham is { } h ? DateOnly.FromDateTime(h) : null;
+
+        _dangLuu = true;
+        var kq = await LenhService.TaoAsync(_input);
+        _dangLuu = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) { _hienForm = false; await TaiAsync(); }
+    }
+
+    private async Task ThucHienAsync(LenhSanXuat lenh)
+    {
+        var dongY = await DialogService.ShowMessageBox("Xác nhận thực hiện",
+            $"Thực hiện lệnh \"{lenh.MaLenh}\"? Hệ thống sẽ trừ nguyên liệu và nhập thành phẩm vào kho.",
+            yesText: "Thực hiện", cancelText: "Huỷ");
+        if (dongY != true) return;
+
+        _dangXuLy = true;
+        var kq = await LenhService.ThucHienAsync(lenh.Id);
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) await TaiAsync();
+    }
+
+    private async Task XoaAsync(LenhSanXuat lenh)
+    {
+        var dongY = await DialogService.ShowMessageBox("Xác nhận xoá",
+            $"Xoá lệnh \"{lenh.MaLenh}\"?", yesText: "Xoá", cancelText: "Huỷ");
+        if (dongY != true) return;
+
+        var kq = await LenhService.XoaAsync(lenh.Id);
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) await TaiAsync();
+    }
+}

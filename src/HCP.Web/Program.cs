@@ -118,6 +118,7 @@ builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
 builder.Services.AddScoped<ISyncNhatKyService, SyncNhatKyService>();
 builder.Services.AddScoped<IKhoNoiBoService, KhoNoiBoService>();
 builder.Services.AddScoped<IDinhMucService, DinhMucService>();
+builder.Services.AddScoped<ILenhSanXuatService, LenhSanXuatService>();
 builder.Services.AddScoped<IDashboardCoSoService, DashboardCoSoService>();
 builder.Services.AddScoped<IDashboardNenTangService, DashboardNenTangService>();
 
