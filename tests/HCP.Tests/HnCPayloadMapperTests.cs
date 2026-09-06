@@ -247,14 +247,16 @@ public class HnCPayloadMapperTests
     {
         var e = Ser(HnCPayloadMapper.ThucPham(new Product
         {
-            MaSanPham = "SP001", TenSanPham = "Thịt heo ba chỉ", MaLoaiSp = "THIT",
+            MaSanPham = "SP001", TenSanPham = "Thịt heo ba chỉ", MaLoaiSp = "50662",
             Gtin = "8938505974194", MaQuyTrinh = "QT001"
             // MaThucPhamChuan, QuocGia, MoTa để null
         }));
 
         Assert.Equal("SP001", e.GetProperty("ma_san_pham").GetString());
         Assert.Equal("Thịt heo ba chỉ", e.GetProperty("ten_san_pham").GetString());
-        Assert.Equal("THIT", e.GetProperty("ma_loai_sp").GetString());
+        // ma_loai_sp = id danh mục HnC, gửi dạng SỐ (không phải chuỗi).
+        Assert.Equal(JsonValueKind.Number, e.GetProperty("ma_loai_sp").ValueKind);
+        Assert.Equal(50662, e.GetProperty("ma_loai_sp").GetInt32());
         Assert.Equal("8938505974194", e.GetProperty("gtin").GetString());
         Assert.Equal("QT001", e.GetProperty("ma_quy_trinh").GetString());
         // Các trường không khai bị bỏ hẳn.

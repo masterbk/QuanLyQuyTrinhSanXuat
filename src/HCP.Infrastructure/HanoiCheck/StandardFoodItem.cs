@@ -5,6 +5,10 @@ namespace HCP.Infrastructure.HanoiCheck;
 /// <summary>Một dòng danh mục thực phẩm chuẩn trả về từ GET /supplier/standard-foods.</summary>
 public sealed class StandardFoodItem
 {
+    /// <summary>id (số) - định danh thật của danh mục. HnC dùng id này làm ma_loai_sp khi merge
+    /// thực phẩm (trường code thường trả null).</summary>
+    [JsonPropertyName("id")] public int? Id { get; set; }
+
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("code")] public string? Code { get; set; }
     [JsonPropertyName("measure_name")] public string? MeasureName { get; set; }

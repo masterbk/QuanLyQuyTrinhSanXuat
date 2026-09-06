@@ -212,11 +212,12 @@ else
         }
     }
 
+    // code ở đây là id danh mục (HnC trả code=null, ta lưu id vào Code). Hiển thị TÊN cho dễ đọc.
     private string TenLoai(string? code)
     {
         if (string.IsNullOrEmpty(code)) return string.Empty;
         var dm = _danhMucChuan.FirstOrDefault(x => x.Code == code);
-        return dm is null ? code : $"{code} — {dm.Name}";
+        return dm is null ? code : dm.Name;
     }
 
     /// <summary>Lọc danh mục chuẩn theo mã hoặc tên; giới hạn 100 kết quả để dropdown mở nhanh.</summary>

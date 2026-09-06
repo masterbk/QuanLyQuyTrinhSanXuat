@@ -68,17 +68,20 @@ public sealed class StandardFoodsSyncJob : IStandardFoodsSyncJob
             return 0;
         }
 
+        // HnC trả code thường null, định danh thật là id (số). Lưu id (dạng chuỗi) vào cột Code
+        // của danh mục nội bộ để dùng làm ma_loai_sp khi đồng bộ thực phẩm.
         var danhMuc = ketQua.Items
-            .Where(i => !string.IsNullOrWhiteSpace(i.Code))
+            .Where(i => i.Id.HasValue)
             .Select(i => new StandardFoodCategory
             {
-                Code = i.Code!.Trim(),
+                Code = i.Id!.Value.ToString(),
                 Name = (i.Name ?? string.Empty).Trim(),
                 MeasureName = i.MeasureName?.Trim()
             });
 
         await _danhMucChuan.CapNhatTuHnCAsync(danhMuc, ct);
-        _logger.LogInformation("Đã cập nhật {SoLuong} danh mục thực phẩm chuẩn từ HnC.", ketQua.Items.Count);
-        return ketQua.Items.Count;
+        var soLuong = ketQua.Items.Count(i => i.Id.HasValue);
+        _logger.LogInformation("Đã cập nhật {SoLuong} danh mục thực phẩm chuẩn từ HnC.", soLuong);
+        return soLuong;
     }
 }
