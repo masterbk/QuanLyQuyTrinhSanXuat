@@ -288,6 +288,35 @@ public class DanhMucIsolationTests
     }
 
     [Fact]
+    public async Task Cap_Nhat_Danh_Muc_Chuan_Thay_The_Toan_Bo()
+    {
+        // Có sẵn một mã cũ (slug); cập nhật danh mục mới (theo id) phải XOÁ hết bản cũ.
+        using (var db = OpenAs(CoSoA))
+        {
+            db.StandardFoodCategories.Add(new StandardFoodCategory { Code = "ba_chi_que", Name = "Thịt ba chỉ (cũ)" });
+            db.SaveChanges();
+        }
+
+        using (var db = OpenAs(CoSoA))
+        {
+            var svc = new DanhMucChuanService(db);
+            await svc.CapNhatTuHnCAsync(new[]
+            {
+                new StandardFoodCategory { Code = "48533", Name = "Thịt ba chỉ" },
+                new StandardFoodCategory { Code = "52795", Name = "AJINOMOTO Giấm gạo lên men" }
+            });
+        }
+
+        using (var db = OpenAs(CoSoA))
+        {
+            var ds = await new DanhMucChuanService(db).LayTatCaAsync();
+            Assert.Equal(2, ds.Count);
+            Assert.DoesNotContain(ds, c => c.Code == "ba_chi_que"); // bản slug cũ đã bị thay thế
+            Assert.Contains(ds, c => c.Code == "48533");
+        }
+    }
+
+    [Fact]
     public async Task Danh_Muc_Chuan_Dung_Chung_Cho_Moi_Co_So()
     {
         // Danh mục do HanoiCheck ban hành - cố ý KHÔNG lọc theo tenant.

@@ -42,37 +42,27 @@ public class DanhMucChuanService : IDanhMucChuanService
             .Select(g => g.First())
             .ToList();
 
+        // Chốt an toàn: HnC trả rỗng (hoặc lỗi tạm) thì KHÔNG xoá danh mục hiện có.
         if (dsMoi.Count == 0)
         {
             return KetQuaThaoTac.Loi("HanoiCheck không trả về danh mục nào.");
         }
 
-        var hienCo = await _db.StandardFoodCategories.ToDictionaryAsync(c => c.Code, ct);
+        // THAY THẾ TOÀN BỘ: xoá hết rồi nạp lại theo đúng danh mục HnC trả về. Đây chỉ là bảng
+        // tra cứu (cache) để đổ dropdown - sản phẩm lưu bản sao giá trị ma_loai_sp nên xoá an toàn,
+        // không có khoá ngoại. Cách này tránh lẫn bản cũ khi HnC đổi/bỏ mã (vd khoá đổi từ slug -> id).
+        var hienCo = await _db.StandardFoodCategories.ToListAsync(ct);
+        _db.StandardFoodCategories.RemoveRange(hienCo);
 
-        foreach (var moi in dsMoi)
+        _db.StandardFoodCategories.AddRange(dsMoi.Select(moi => new StandardFoodCategory
         {
-            var code = moi.Code.Trim();
+            Code = moi.Code.Trim(),
+            Name = moi.Name.Trim(),
+            MeasureName = moi.MeasureName?.Trim(),
+            CapNhatLucUtc = DateTime.UtcNow
+        }));
 
-            if (hienCo.TryGetValue(code, out var cu))
-            {
-                cu.Name = moi.Name.Trim();
-                cu.MeasureName = moi.MeasureName?.Trim();
-                cu.CapNhatLucUtc = DateTime.UtcNow;
-            }
-            else
-            {
-                _db.StandardFoodCategories.Add(new StandardFoodCategory
-                {
-                    Code = code,
-                    Name = moi.Name.Trim(),
-                    MeasureName = moi.MeasureName?.Trim(),
-                    CapNhatLucUtc = DateTime.UtcNow
-                });
-            }
-        }
-
-        // KHÔNG xoá mã cũ không còn trong danh sách: dữ liệu nghiệp vụ của cơ sở có thể
-        // đang tham chiếu tới chúng. Tài liệu HnC cũng nêu nguyên tắc không xoá dữ liệu gốc.
+        // Xoá + thêm trong một SaveChanges -> EF bọc trong transaction (toàn bộ hoặc không gì).
         await _db.SaveChangesAsync(ct);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} danh mục thực phẩm chuẩn.");
