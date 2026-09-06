@@ -90,7 +90,8 @@ public static class HnCPayloadMapper
         {
             ma_san_pham = p.MaSanPham,
             ten_san_pham = p.TenSanPham,
-            ma_loai_sp = MaLoaiSp(p.MaLoaiSp),
+            // HnC yêu cầu ma_loai_sp là CHUỖI (dù giá trị là id số của danh mục) - gửi nguyên chuỗi.
+            ma_loai_sp = p.MaLoaiSp,
             ma_thuc_pham_chuan = p.MaThucPhamChuan,
             gtin = p.Gtin,
             quoc_gia = p.QuocGia,
@@ -285,14 +286,6 @@ public static class HnCPayloadMapper
                 : null
         }
     };
-
-    /// <summary>
-    /// ma_loai_sp = id (số) của danh mục thực phẩm chuẩn HnC. Gửi dạng SỐ nếu là id; nếu vì lý do
-    /// nào đó là chuỗi (dữ liệu cũ) thì gửi nguyên chuỗi. Rỗng thì bỏ (WhenWritingNull).
-    /// </summary>
-    private static object? MaLoaiSp(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null
-        : int.TryParse(value, out var id) ? id : value;
 
     /// <summary>Định dạng ngày theo ISO yyyy-MM-dd đúng như ví dụ trong đặc tả.</summary>
     private static string? Ngay(DateOnly? d) => d?.ToString("yyyy-MM-dd");
