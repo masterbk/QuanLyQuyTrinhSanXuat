@@ -73,6 +73,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<KhoGiaoDich> KhoGiaoDichs => Set<KhoGiaoDich>();
+    public DbSet<DinhMucNguyenLieu> DinhMucNguyenLieus => Set<DinhMucNguyenLieu>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<BatchWarehouse> BatchWarehouses => Set<BatchWarehouse>();
     public DbSet<BatchStep> BatchSteps => Set<BatchStep>();
@@ -265,8 +266,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         product.Property(p => p.MoTa).HasMaxLength(2000);
         product.Property(p => p.MaQuyTrinh).HasMaxLength(255);
         product.Property(p => p.DonViTinh).HasMaxLength(50);
+        product.HasMany(p => p.DanhSachDinhMuc).WithOne(d => d.Product!)
+               .HasForeignKey(d => d.ProductId).OnDelete(DeleteBehavior.Cascade);
         product.HasIndex(p => p.MaSanPham).IsUnique();
         product.IsMultiTenant().AdjustUniqueIndexes();
+
+        var dinhMuc = builder.Entity<DinhMucNguyenLieu>();
+        dinhMuc.ToTable("DinhMucNguyenLieu");
+        dinhMuc.Property(d => d.MaNguyenLieu).HasMaxLength(255).IsRequired();
+        dinhMuc.Property(d => d.SoLuong).HasPrecision(18, 4);
+        dinhMuc.HasIndex(d => new { d.ProductId, d.MaNguyenLieu }).IsUnique();
+        dinhMuc.IsMultiTenant().AdjustUniqueIndexes();
 
         // --- Sổ kho nội bộ ---
         var khoGd = builder.Entity<KhoGiaoDich>();

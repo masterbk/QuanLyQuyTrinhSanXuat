@@ -1,0 +1,170 @@
+@page "/app/dinh-muc"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Services.Kho
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDanhMucService<Product> ThucPhamService
+@inject IDinhMucService DinhMucService
+@inject ISnackbar Snackbar
+
+<PageTitle>Định mức sản xuất</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Định mức sản xuất (công thức)</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Khai lượng nguyên liệu cần cho MỘT đơn vị thành phẩm. Lệnh sản xuất sẽ dựa vào đây để tự trừ
+    nguyên liệu.
+</MudText>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_thanhPham.Count == 0)
+{
+    <MudAlert Severity="Severity.Warning">
+        Chưa có thành phẩm nào. Vào màn <MudLink Href="/app/thuc-pham">Thực phẩm/SKU</MudLink> thêm
+        sản phẩm loại "Thành phẩm" trước.
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_thanhPham" Hover="true" Dense="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>Mã</MudTh>
+            <MudTh>Thành phẩm</MudTh>
+            <MudTh>ĐVT</MudTh>
+            <MudTh Style="text-align:center">Số nguyên liệu</MudTh>
+            <MudTh Style="width:120px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã"><b>@context.MaSanPham</b></MudTd>
+            <MudTd DataLabel="Thành phẩm">@context.TenSanPham</MudTd>
+            <MudTd DataLabel="ĐVT">@context.DonViTinh</MudTd>
+            <MudTd DataLabel="Số nguyên liệu" Style="text-align:center">
+                @(_soDinhMuc.GetValueOrDefault(context.Id))
+            </MudTd>
+            <MudTd>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@(() => MoDinhMucAsync(context))">Định mức</MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Định mức: @_thanhPhamChon?.TenSanPham</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex justify-space-between align-center mb-2">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Lượng nguyên liệu cho 1 @(_thanhPhamChon?.DonViTinh ?? "đơn vị") thành phẩm.
+            </MudText>
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="ThemDong" Disabled="@(_nguyenLieu.Count == 0)">Thêm nguyên liệu</MudButton>
+        </div>
+
+        @if (_nguyenLieu.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">
+                Chưa có nguyên liệu. Vào màn Thực phẩm/SKU thêm sản phẩm loại "Nguyên liệu".
+            </MudAlert>
+        }
+        else if (_dong.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Chưa có nguyên liệu nào trong công thức.</MudText>
+        }
+        else
+        {
+            @foreach (var d in _dong)
+            {
+                <MudGrid Class="align-center mb-1">
+                    <MudItem xs="7">
+                        <MudSelect T="string" @bind-Value="d.MaNguyenLieu" Label="Nguyên liệu"
+                                   Variant="Variant.Outlined" Dense="true">
+                            @foreach (var nl in _nguyenLieu)
+                            {
+                                <MudSelectItem T="string" Value="@nl.MaSanPham">
+                                    @nl.TenSanPham (@nl.DonViTinh)
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="4">
+                        <MudNumericField @bind-Value="d.SoLuong" Label="Định lượng"
+                                         Variant="Variant.Outlined" Dense="true" Min="0m" />
+                    </MudItem>
+                    <MudItem xs="1">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                       Size="Size.Small" OnClick="@(() => _dong.Remove(d))" />
+                    </MudItem>
+                </MudGrid>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangLuu"
+                   OnClick="LuuAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Product> _thanhPham = new();
+    private List<Product> _nguyenLieu = new();
+    private Dictionary<int, int> _soDinhMuc = new();
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+    private bool _hienForm;
+    private Product? _thanhPhamChon;
+    private List<DinhMucNguyenLieu> _dong = new();
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiAsync();
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        var tatCa = await ThucPhamService.LayTatCaAsync();
+        _thanhPham = tatCa.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham).ToList();
+        _nguyenLieu = tatCa.Where(p => p.LoaiSanPham == LoaiSanPham.NguyenLieu).ToList();
+
+        _soDinhMuc = new Dictionary<int, int>();
+        foreach (var tp in _thanhPham)
+        {
+            var dm = await DinhMucService.LayTheoThanhPhamAsync(tp.Id);
+            _soDinhMuc[tp.Id] = dm.Count;
+        }
+        _dangTai = false;
+    }
+
+    private async Task MoDinhMucAsync(Product tp)
+    {
+        _thanhPhamChon = tp;
+        var dm = await DinhMucService.LayTheoThanhPhamAsync(tp.Id);
+        _dong = dm.Select(x => new DinhMucNguyenLieu { MaNguyenLieu = x.MaNguyenLieu, SoLuong = x.SoLuong }).ToList();
+        _hienForm = true;
+    }
+
+    private void ThemDong() => _dong.Add(new DinhMucNguyenLieu());
+
+    private async Task LuuAsync()
+    {
+        if (_thanhPhamChon is null) return;
+        _dangLuu = true;
+        var kq = await DinhMucService.LuuAsync(_thanhPhamChon.Id, _dong);
+        _dangLuu = false;
+
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong)
+        {
+            _hienForm = false;
+            await TaiAsync();
+        }
+    }
+}
