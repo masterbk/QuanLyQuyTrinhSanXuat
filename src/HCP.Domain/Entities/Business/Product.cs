@@ -1,4 +1,5 @@
 using HCP.Domain.Entities.Common;
+using HCP.Domain.Enums;
 
 namespace HCP.Domain.Entities.Business;
 
@@ -33,4 +34,12 @@ public class Product : TenantEntity
 
     /// <summary>ma_quy_trinh - mã quy trình sản xuất áp dụng (nếu có).</summary>
     public string? MaQuyTrinh { get; set; }
+
+    // --- Phục vụ quản lý kho + sản xuất nội bộ (KHÔNG gửi sang HanoiCheck) ---
+
+    /// <summary>Phân loại nguyên liệu / thành phẩm.</summary>
+    public LoaiSanPham LoaiSanPham { get; set; } = LoaiSanPham.ThanhPham;
+
+    /// <summary>Đơn vị tính dùng cho tồn kho (vd kg, cái, quả).</summary>
+    public string? DonViTinh { get; set; }
 }

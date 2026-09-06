@@ -72,6 +72,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<SubSupplierFoodGroup> SubSupplierFoodGroups => Set<SubSupplierFoodGroup>();
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<KhoGiaoDich> KhoGiaoDichs => Set<KhoGiaoDich>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<BatchWarehouse> BatchWarehouses => Set<BatchWarehouse>();
     public DbSet<BatchStep> BatchSteps => Set<BatchStep>();
@@ -263,8 +264,22 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         product.Property(p => p.QuocGia).HasMaxLength(100);
         product.Property(p => p.MoTa).HasMaxLength(2000);
         product.Property(p => p.MaQuyTrinh).HasMaxLength(255);
+        product.Property(p => p.DonViTinh).HasMaxLength(50);
         product.HasIndex(p => p.MaSanPham).IsUnique();
         product.IsMultiTenant().AdjustUniqueIndexes();
+
+        // --- Sổ kho nội bộ ---
+        var khoGd = builder.Entity<KhoGiaoDich>();
+        khoGd.ToTable("KhoGiaoDich");
+        khoGd.Property(x => x.MaSanPham).HasMaxLength(255).IsRequired();
+        khoGd.Property(x => x.MaKho).HasMaxLength(255).IsRequired();
+        khoGd.Property(x => x.MaLo).HasMaxLength(255).IsRequired();
+        khoGd.Property(x => x.SoLuong).HasPrecision(18, 3);
+        khoGd.Property(x => x.ChungTu).HasMaxLength(255);
+        khoGd.Property(x => x.MaNccDauVao).HasMaxLength(255);
+        khoGd.Property(x => x.GhiChu).HasMaxLength(1000);
+        khoGd.HasIndex(x => new { x.MaSanPham, x.MaKho, x.MaLo });
+        khoGd.IsMultiTenant();
 
         // --- Lô sản xuất và các bảng con ---
         var batch = builder.Entity<Batch>();

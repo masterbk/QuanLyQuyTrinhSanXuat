@@ -1,0 +1,251 @@
+@page "/app/kho-noi-bo"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Services.Kho
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IKhoNoiBoService KhoService
+@inject IDanhMucService<Product> ThucPhamService
+@inject IDanhMucService<Warehouse> KhoDanhMucService
+@inject IDanhMucService<SubSupplier> NccService
+@inject ISnackbar Snackbar
+
+<PageTitle>Quản lý kho</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Quản lý kho (nội bộ)</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Nhập nguyên liệu, theo dõi tồn kho theo lô và hạn dùng. Phần này phục vụ vận hành nội bộ,
+    không đồng bộ sang HanoiCheck.
+</MudText>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Class="mb-4">
+        <MudTabPanel Text="@($"Tồn kho ({_ton.Count})")">
+            @if (_ton.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info">Chưa có tồn kho. Hãy nhập nguyên liệu ở tab bên cạnh.</MudAlert>
+            }
+            else
+            {
+                <MudTable Items="_ton" Hover="true" Dense="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Sản phẩm</MudTh>
+                        <MudTh>Phân loại</MudTh>
+                        <MudTh>Kho</MudTh>
+                        <MudTh>Lô</MudTh>
+                        <MudTh>Hạn dùng</MudTh>
+                        <MudTh Style="text-align:right">Tồn</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Sản phẩm">
+                            <b>@context.TenSanPham</b>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.MaSanPham</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Phân loại">
+                            @if (context.LoaiSanPham == LoaiSanPham.NguyenLieu)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">Nguyên liệu</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">Thành phẩm</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Kho">@context.TenKho</MudTd>
+                        <MudTd DataLabel="Lô">@context.MaLo</MudTd>
+                        <MudTd DataLabel="Hạn dùng">
+                            @if (context.HanSuDung is { } hsd)
+                            {
+                                <span>@hsd.ToString("dd/MM/yyyy")</span>
+                                @if (CanhBaoHsd(hsd) is { } cb)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-1">@cb</MudChip>
+                                }
+                            }
+                            else { <span>-</span> }
+                        </MudTd>
+                        <MudTd DataLabel="Tồn" Style="text-align:right">
+                            <b>@context.SoLuongTon.ToString("0.###")</b> @context.DonViTinh
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Nhập nguyên liệu">
+            @if (_nguyenLieu.Count == 0 || _kho.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning">
+                    Cần có ít nhất một <b>Nguyên liệu</b> (khai ở màn Thực phẩm/SKU, chọn phân loại
+                    "Nguyên liệu") và một <b>Kho</b> trước khi nhập.
+                </MudAlert>
+            }
+            else
+            {
+                <MudForm @ref="_form" Model="_nhap">
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="string" @bind-Value="_nhap.MaSanPham" Label="Nguyên liệu"
+                                       Variant="Variant.Outlined" Required="true"
+                                       RequiredError="Chọn nguyên liệu">
+                                @foreach (var nl in _nguyenLieu)
+                                {
+                                    <MudSelectItem T="string" Value="@nl.MaSanPham">
+                                        @nl.TenSanPham (@nl.MaSanPham)
+                                    </MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="string" @bind-Value="_nhap.MaKho" Label="Kho nhập"
+                                       Variant="Variant.Outlined" Required="true" RequiredError="Chọn kho">
+                                @foreach (var k in _kho)
+                                {
+                                    <MudSelectItem T="string" Value="@k.MaKho">@k.TenKho (@k.MaKho)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudTextField @bind-Value="_nhap.MaLo" Label="Mã lô"
+                                          Variant="Variant.Outlined" MaxLength="255"
+                                          Required="true" RequiredError="Nhập mã lô" />
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudNumericField @bind-Value="_nhap.SoLuong" Label="Số lượng"
+                                             Variant="Variant.Outlined" Min="0m" />
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudDatePicker @bind-Date="_hanSuDung" Label="Hạn sử dụng"
+                                           Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="string" @bind-Value="_nhap.MaNccDauVao" Label="Nhà cung ứng"
+                                       Variant="Variant.Outlined" Clearable="true" HelperText="Không bắt buộc.">
+                                @foreach (var ncc in _ncc)
+                                {
+                                    <MudSelectItem T="string" Value="@ncc.MaNccDauVao">@ncc.Ten (@ncc.MaNccDauVao)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="_nhap.GhiChu" Label="Ghi chú"
+                                          Variant="Variant.Outlined" MaxLength="1000" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <div class="d-flex justify-end mt-3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangLuu"
+                                   StartIcon="@Icons.Material.Filled.AddBox" OnClick="NhapAsync">
+                            Nhập kho
+                        </MudButton>
+                    </div>
+                </MudForm>
+
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Nhập gần đây</MudText>
+                @if (_lichSu.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Chưa có giao dịch.</MudText>
+                }
+                else
+                {
+                    <MudTable Items="_lichSu" Dense="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>Thời gian</MudTh>
+                            <MudTh>Loại</MudTh>
+                            <MudTh>Sản phẩm</MudTh>
+                            <MudTh>Kho</MudTh>
+                            <MudTh>Lô</MudTh>
+                            <MudTh Style="text-align:right">Số lượng</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Thời gian">@context.ThoiGianUtc.ToLocalTime().ToString("dd/MM HH:mm")</MudTd>
+                            <MudTd DataLabel="Loại">@MoTaLoai(context.Loai)</MudTd>
+                            <MudTd DataLabel="Sản phẩm">@context.MaSanPham</MudTd>
+                            <MudTd DataLabel="Kho">@context.MaKho</MudTd>
+                            <MudTd DataLabel="Lô">@context.MaLo</MudTd>
+                            <MudTd DataLabel="Số lượng" Style="text-align:right">@context.SoLuong.ToString("0.###")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private List<TonKhoDto> _ton = new();
+    private List<KhoGiaoDich> _lichSu = new();
+    private List<Product> _nguyenLieu = new();
+    private List<Warehouse> _kho = new();
+    private List<SubSupplier> _ncc = new();
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private MudForm? _form;
+    private NhapKhoRequest _nhap = new();
+    private DateTime? _hanSuDung;
+
+    protected override async Task OnInitializedAsync() => await TaiAsync();
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        _ton = (await KhoService.LayTonAsync()).ToList();
+        _lichSu = (await KhoService.LayLichSuAsync()).ToList();
+        _nguyenLieu = (await ThucPhamService.LayTatCaAsync())
+            .Where(p => p.LoaiSanPham == LoaiSanPham.NguyenLieu).ToList();
+        _kho = (await KhoDanhMucService.LayTatCaAsync()).ToList();
+        _ncc = (await NccService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    private static string? CanhBaoHsd(DateOnly hsd)
+    {
+        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        if (hsd < homNay) return "Đã hết hạn";
+        if (hsd <= homNay.AddDays(30)) return "Sắp hết hạn";
+        return null;
+    }
+
+    private static string MoTaLoai(LoaiGiaoDichKho l) => l switch
+    {
+        LoaiGiaoDichKho.NhapNguyenLieu => "Nhập NL",
+        LoaiGiaoDichKho.XuatSanXuat => "Xuất SX",
+        LoaiGiaoDichKho.NhapThanhPham => "Nhập TP",
+        LoaiGiaoDichKho.XuatBan => "Xuất bán",
+        LoaiGiaoDichKho.DieuChinh => "Điều chỉnh",
+        _ => l.ToString()
+    };
+
+    private async Task NhapAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        _nhap.HanSuDung = _hanSuDung is { } d ? DateOnly.FromDateTime(d) : null;
+
+        _dangLuu = true;
+        var kq = await KhoService.NhapNguyenLieuAsync(_nhap);
+        _dangLuu = false;
+
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong)
+        {
+            _nhap = new NhapKhoRequest();
+            _hanSuDung = null;
+            await TaiAsync();
+        }
+    }
+}

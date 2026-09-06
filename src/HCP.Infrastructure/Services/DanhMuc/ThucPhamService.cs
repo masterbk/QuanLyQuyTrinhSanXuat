@@ -1,4 +1,5 @@
 using HCP.Domain.Entities.Business;
+using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Sync;
@@ -44,9 +45,11 @@ public class ThucPhamService : IDanhMucService<Product>
         _db.Products.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Product", entity.MaSanPham, HnCPayloadMapper.ThucPham(entity), ct);
+        // Chỉ thành phẩm mới đồng bộ sang HanoiCheck (foods/merge); nguyên liệu quản lý nội bộ.
+        if (entity.LoaiSanPham == LoaiSanPham.ThanhPham)
+            await _outbox.ThemAsync("Product", entity.MaSanPham, HnCPayloadMapper.ThucPham(entity), ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm thực phẩm \"{entity.TenSanPham}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm \"{entity.TenSanPham}\".");
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(Product entity, CancellationToken ct = default)
@@ -74,13 +77,16 @@ public class ThucPhamService : IDanhMucService<Product>
         hienTai.QuocGia = entity.QuocGia;
         hienTai.MoTa = entity.MoTa;
         hienTai.MaQuyTrinh = entity.MaQuyTrinh;
+        hienTai.LoaiSanPham = entity.LoaiSanPham;
+        hienTai.DonViTinh = entity.DonViTinh;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Product", hienTai.MaSanPham, HnCPayloadMapper.ThucPham(hienTai), ct);
+        if (hienTai.LoaiSanPham == LoaiSanPham.ThanhPham)
+            await _outbox.ThemAsync("Product", hienTai.MaSanPham, HnCPayloadMapper.ThucPham(hienTai), ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật thực phẩm \"{hienTai.TenSanPham}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật \"{hienTai.TenSanPham}\".");
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)
@@ -100,7 +106,9 @@ public class ThucPhamService : IDanhMucService<Product>
     /// </summary>
     private async Task<string?> KiemTraAsync(Product p, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(p.MaLoaiSp))
+        // Mã loại (danh mục thực phẩm chuẩn) chỉ bắt buộc với THÀNH PHẨM (gửi HnC). Nguyên liệu
+        // quản lý nội bộ nên không cần.
+        if (p.LoaiSanPham == LoaiSanPham.ThanhPham && string.IsNullOrWhiteSpace(p.MaLoaiSp))
         {
             return "Vui lòng chọn loại thực phẩm (mã danh mục thực phẩm chuẩn).";
         }
