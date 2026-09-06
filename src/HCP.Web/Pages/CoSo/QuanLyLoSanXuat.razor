@@ -9,6 +9,8 @@
 @inject IDanhMucService<Warehouse> KhoService
 @inject IDanhMucService<ProductionStep> KhauService
 @inject IDanhMucService<Staff> NhanSuService
+@inject IDanhMucService<Facility> CoSoService
+@inject IDanhMucService<SubSupplier> NccService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -125,12 +127,24 @@ else
                                           Variant="Variant.Outlined" MaxLength="2000" Lines="2" />
                         </MudItem>
                         <MudItem xs="12" sm="6">
-                            <MudTextField @bind-Value="_input.MaCoSo" Label="Mã cơ sở (cấp lô)"
-                                          Variant="Variant.Outlined" MaxLength="255" />
+                            <MudSelect T="string" @bind-Value="_input.MaCoSo" Label="Cơ sở sản xuất (cấp lô)"
+                                       Variant="Variant.Outlined" Clearable="true"
+                                       HelperText="Không bắt buộc.">
+                                @foreach (var cs in _coSo)
+                                {
+                                    <MudSelectItem T="string" Value="@cs.MaCoSo">@cs.MaCoSo — @cs.TenCoSo</MudSelectItem>
+                                }
+                            </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6">
-                            <MudTextField @bind-Value="_input.MaNccDauVao" Label="Mã NCC đầu vào"
-                                          Variant="Variant.Outlined" MaxLength="255" />
+                            <MudSelect T="string" @bind-Value="_input.MaNccDauVao" Label="Nhà cung ứng đầu vào"
+                                       Variant="Variant.Outlined" Clearable="true"
+                                       HelperText="Không bắt buộc.">
+                                @foreach (var ncc in _ncc)
+                                {
+                                    <MudSelectItem T="string" Value="@ncc.MaNccDauVao">@ncc.MaNccDauVao — @ncc.Ten</MudSelectItem>
+                                }
+                            </MudSelect>
                         </MudItem>
                         <MudItem xs="12">
                             <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú"
@@ -300,6 +314,8 @@ else
     private List<Warehouse> _kho = new();
     private List<ProductionStep> _khau = new();
     private List<Staff> _nhanSu = new();
+    private List<Facility> _coSo = new();
+    private List<SubSupplier> _ncc = new();
 
     private bool _dangTai = true;
     private bool _dangLuu;
@@ -328,6 +344,8 @@ else
         _kho = (await KhoService.LayTatCaAsync()).ToList();
         _khau = (await KhauService.LayTatCaAsync()).ToList();
         _nhanSu = (await NhanSuService.LayTatCaAsync()).ToList();
+        _coSo = (await CoSoService.LayTatCaAsync()).ToList();
+        _ncc = (await NccService.LayTatCaAsync()).ToList();
         _thieuDieuKien = _sanPham.Count == 0 || _kho.Count == 0;
         _dangTai = false;
     }
