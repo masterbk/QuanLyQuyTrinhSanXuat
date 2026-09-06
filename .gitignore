@@ -23,3 +23,6 @@ src/HCP.Web/wwwroot/uploads/
 # Logs
 logs/
 *.log
+
+# File tạm của Word/Office
+~$*
