@@ -1,0 +1,182 @@
+@page "/app/khach-hang"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services.Kho
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IKhachHangService KhachHangService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Khách hàng</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Khách hàng</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Danh mục khách hàng mua thành phẩm (cửa hàng, đại lý, khách lẻ...). Dùng khi lập phiếu xuất bán.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => MoForm(null))">Thêm khách hàng</MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Chưa có khách hàng nào.</MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh>Mã KH</MudTh>
+            <MudTh>Tên khách hàng</MudTh>
+            <MudTh>Phân loại</MudTh>
+            <MudTh>Điện thoại</MudTh>
+            <MudTh>Địa chỉ</MudTh>
+            <MudTh Style="width:120px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã KH"><b>@context.MaKhachHang</b></MudTd>
+            <MudTd DataLabel="Tên">@context.TenKhachHang</MudTd>
+            <MudTd DataLabel="Phân loại">@TenLoai(context.Loai)</MudTd>
+            <MudTd DataLabel="Điện thoại">@context.DienThoai</MudTd>
+            <MudTd DataLabel="Địa chỉ">@context.DiaChi</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => MoForm(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => XacNhanXoaAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_dangSua ? "Sửa khách hàng" : "Thêm khách hàng")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.MaKhachHang" Label="Mã khách hàng"
+                                  Variant="Variant.Outlined" MaxLength="255"
+                                  HelperText="Khoá nghiệp vụ, vd KH001."
+                                  Required="true" RequiredError="Vui lòng nhập mã khách hàng" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.TenKhachHang" Label="Tên khách hàng"
+                                  Variant="Variant.Outlined" MaxLength="255"
+                                  Required="true" RequiredError="Vui lòng nhập tên" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="LoaiKhachHang" @bind-Value="_input.Loai" Label="Phân loại"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem T="LoaiKhachHang" Value="LoaiKhachHang.CuaHang">Cửa hàng</MudSelectItem>
+                        <MudSelectItem T="LoaiKhachHang" Value="LoaiKhachHang.DaiLy">Đại lý</MudSelectItem>
+                        <MudSelectItem T="LoaiKhachHang" Value="LoaiKhachHang.KhachLe">Khách lẻ</MudSelectItem>
+                        <MudSelectItem T="LoaiKhachHang" Value="LoaiKhachHang.Khac">Khác</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.DienThoai" Label="Điện thoại"
+                                  Variant="Variant.Outlined" MaxLength="20" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_input.DiaChi" Label="Địa chỉ"
+                                  Variant="Variant.Outlined" MaxLength="500" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú"
+                                  Variant="Variant.Outlined" MaxLength="1000" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="_dangLuu" OnClick="LuuAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<KhachHang> _danhSach = new();
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private MudForm? _form;
+    private bool _hienForm;
+    private bool _dangSua;
+    private KhachHang _input = new();
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await TaiAsync();
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await KhachHangService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    private static string TenLoai(LoaiKhachHang loai) => loai switch
+    {
+        LoaiKhachHang.CuaHang => "Cửa hàng",
+        LoaiKhachHang.DaiLy => "Đại lý",
+        LoaiKhachHang.KhachLe => "Khách lẻ",
+        _ => "Khác"
+    };
+
+    private void MoForm(KhachHang? kh)
+    {
+        _dangSua = kh is not null;
+        _input = kh is null
+            ? new KhachHang()
+            : new KhachHang
+            {
+                Id = kh.Id,
+                MaKhachHang = kh.MaKhachHang,
+                TenKhachHang = kh.TenKhachHang,
+                Loai = kh.Loai,
+                DienThoai = kh.DienThoai,
+                DiaChi = kh.DiaChi,
+                GhiChu = kh.GhiChu
+            };
+        _hienForm = true;
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        _dangLuu = true;
+        var kq = await KhachHangService.LuuAsync(_input);
+        _dangLuu = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) { _hienForm = false; await TaiAsync(); }
+    }
+
+    private async Task XacNhanXoaAsync(KhachHang kh)
+    {
+        var dongY = await DialogService.ShowMessageBox("Xác nhận xoá",
+            $"Xoá khách hàng \"{kh.TenKhachHang}\" ({kh.MaKhachHang})?",
+            yesText: "Xoá", cancelText: "Huỷ");
+        if (dongY != true) return;
+
+        var kq = await KhachHangService.XoaAsync(kh.Id);
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) await TaiAsync();
+    }
+}

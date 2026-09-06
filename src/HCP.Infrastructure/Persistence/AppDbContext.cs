@@ -76,6 +76,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<DinhMucNguyenLieu> DinhMucNguyenLieus => Set<DinhMucNguyenLieu>();
     public DbSet<LenhSanXuat> LenhSanXuats => Set<LenhSanXuat>();
     public DbSet<LenhSanXuatTieuHao> LenhSanXuatTieuHaos => Set<LenhSanXuatTieuHao>();
+    public DbSet<KhachHang> KhachHangs => Set<KhachHang>();
+    public DbSet<PhieuXuatBan> PhieuXuatBans => Set<PhieuXuatBan>();
+    public DbSet<PhieuXuatBanChiTiet> PhieuXuatBanChiTiets => Set<PhieuXuatBanChiTiet>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<BatchWarehouse> BatchWarehouses => Set<BatchWarehouse>();
     public DbSet<BatchStep> BatchSteps => Set<BatchStep>();
@@ -268,6 +271,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         product.Property(p => p.MoTa).HasMaxLength(2000);
         product.Property(p => p.MaQuyTrinh).HasMaxLength(255);
         product.Property(p => p.DonViTinh).HasMaxLength(50);
+        product.Property(p => p.TonToiThieu).HasPrecision(18, 3);
         product.HasMany(p => p.DanhSachDinhMuc).WithOne(d => d.Product!)
                .HasForeignKey(d => d.ProductId).OnDelete(DeleteBehavior.Cascade);
         product.HasIndex(p => p.MaSanPham).IsUnique();
@@ -299,6 +303,35 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         tieuHao.Property(t => t.MaLo).HasMaxLength(255).IsRequired();
         tieuHao.Property(t => t.SoLuong).HasPrecision(18, 4);
         tieuHao.IsMultiTenant();
+
+        // --- Bán hàng: khách hàng + phiếu xuất bán ---
+        var khachHang = builder.Entity<KhachHang>();
+        khachHang.ToTable("KhachHangs");
+        khachHang.Property(k => k.MaKhachHang).HasMaxLength(255).IsRequired();
+        khachHang.Property(k => k.TenKhachHang).HasMaxLength(255).IsRequired();
+        khachHang.Property(k => k.DienThoai).HasMaxLength(20);
+        khachHang.Property(k => k.DiaChi).HasMaxLength(500);
+        khachHang.Property(k => k.GhiChu).HasMaxLength(1000);
+        khachHang.HasIndex(k => k.MaKhachHang).IsUnique();
+        khachHang.IsMultiTenant().AdjustUniqueIndexes();
+
+        var phieuXuat = builder.Entity<PhieuXuatBan>();
+        phieuXuat.ToTable("PhieuXuatBan");
+        phieuXuat.Property(p => p.MaPhieu).HasMaxLength(255).IsRequired();
+        phieuXuat.Property(p => p.MaKhachHang).HasMaxLength(255).IsRequired();
+        phieuXuat.Property(p => p.MaKho).HasMaxLength(255).IsRequired();
+        phieuXuat.Property(p => p.GhiChu).HasMaxLength(1000);
+        phieuXuat.HasMany(p => p.ChiTiet).WithOne(c => c.PhieuXuatBan!)
+                 .HasForeignKey(c => c.PhieuXuatBanId).OnDelete(DeleteBehavior.Cascade);
+        phieuXuat.HasIndex(p => p.MaPhieu).IsUnique();
+        phieuXuat.IsMultiTenant().AdjustUniqueIndexes();
+
+        var phieuChiTiet = builder.Entity<PhieuXuatBanChiTiet>();
+        phieuChiTiet.ToTable("PhieuXuatBanChiTiet");
+        phieuChiTiet.Property(c => c.MaThanhPham).HasMaxLength(255).IsRequired();
+        phieuChiTiet.Property(c => c.SoLuong).HasPrecision(18, 3);
+        phieuChiTiet.HasIndex(c => new { c.PhieuXuatBanId, c.MaThanhPham }).IsUnique();
+        phieuChiTiet.IsMultiTenant().AdjustUniqueIndexes();
 
         // --- Sổ kho nội bộ ---
         var khoGd = builder.Entity<KhoGiaoDich>();

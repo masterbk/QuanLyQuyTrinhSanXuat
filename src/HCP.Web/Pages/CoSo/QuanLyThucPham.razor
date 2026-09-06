@@ -122,6 +122,11 @@ else
                                   Variant="Variant.Outlined" MaxLength="50"
                                   HelperText="vd kg, cái, quả. Dùng cho tồn kho." />
                 </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_input.TonToiThieu" Label="Tồn tối thiểu"
+                                     Variant="Variant.Outlined" Min="0m" Clearable="true"
+                                     HelperText="Cảnh báo trên tổng quan khi tồn dưới mức này. Để trống nếu không cần." />
+                </MudItem>
 
                 @* Mã loại (danh mục chuẩn HnC) chỉ áp dụng cho THÀNH PHẨM. Không render với nguyên
                    liệu để khỏi vướng validation Required. *@
@@ -279,7 +284,8 @@ else
                 MoTa = sp.MoTa,
                 MaQuyTrinh = sp.MaQuyTrinh,
                 LoaiSanPham = sp.LoaiSanPham,
-                DonViTinh = sp.DonViTinh
+                DonViTinh = sp.DonViTinh,
+                TonToiThieu = sp.TonToiThieu
             };
 
         _hienForm = true;

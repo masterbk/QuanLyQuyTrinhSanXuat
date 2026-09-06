@@ -25,6 +25,7 @@ public sealed class DashboardCoSoService : IDashboardCoSoService
         int Dem(params SyncOutboxStatus[] tt) => tt.Sum(t => outbox.GetValueOrDefault(t));
 
         var canhBao = await LayCanhBaoGiayToAsync(soNgayCanhBao, ct);
+        var canhBaoKho = await LayCanhBaoTonKhoAsync(soNgayCanhBao, ct);
 
         return new DashboardCoSo(
             OutboxTheoTrangThai: outbox,
@@ -32,7 +33,83 @@ public sealed class DashboardCoSoService : IDashboardCoSoService
             SoDangCho: Dem(SyncOutboxStatus.Pending, SyncOutboxStatus.AwaitingCredential),
             SoLoi: Dem(SyncOutboxStatus.Failed, SyncOutboxStatus.NeedsManualReview),
             SoThanhCong: Dem(SyncOutboxStatus.Success),
-            CanhBaoGiayTo: canhBao);
+            CanhBaoGiayTo: canhBao,
+            CanhBaoTonKho: canhBaoKho);
+    }
+
+    /// <summary>
+    /// Cảnh báo tồn kho của cơ sở: lô sắp/đã hết hạn (trong <paramref name="soNgay"/> ngày) và
+    /// sản phẩm có tổng tồn dưới mức tối thiểu đã khai. KhoGiaoDich và Products đều lọc theo tenant.
+    /// </summary>
+    private async Task<IReadOnlyList<CanhBaoTonKho>> LayCanhBaoTonKhoAsync(int soNgay, CancellationToken ct)
+    {
+        var giaoDich = await _db.KhoGiaoDichs.AsNoTracking().ToListAsync(ct);
+        if (giaoDich.Count == 0) return Array.Empty<CanhBaoTonKho>();
+
+        var sanPham = await _db.Products.AsNoTracking().ToListAsync(ct);
+        var spTheoMa = sanPham.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First());
+
+        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        var nguong = homNay.AddDays(soNgay);
+        var ds = new List<CanhBaoTonKho>();
+
+        // Tồn theo (sản phẩm, kho, lô).
+        var tonTheoLo = giaoDich
+            .GroupBy(g => new { g.MaSanPham, g.MaKho, g.MaLo })
+            .Select(g => new
+            {
+                g.Key.MaSanPham,
+                g.Key.MaKho,
+                g.Key.MaLo,
+                Hsd = g.Where(x => x.HanSuDung.HasValue).Max(x => x.HanSuDung),
+                Ton = g.Sum(x => x.SoLuong)
+            })
+            .Where(x => x.Ton > 0)
+            .ToList();
+
+        // 1) Cảnh báo hạn dùng theo lô.
+        foreach (var t in tonTheoLo.Where(x => x.Hsd.HasValue && x.Hsd.Value <= nguong))
+        {
+            var p = spTheoMa.GetValueOrDefault(t.MaSanPham);
+            ds.Add(new CanhBaoTonKho(
+                Loai: t.Hsd!.Value < homNay ? "Đã hết hạn" : "Sắp hết hạn",
+                MaSanPham: t.MaSanPham,
+                TenSanPham: p?.TenSanPham ?? t.MaSanPham,
+                MaKho: t.MaKho,
+                MaLo: t.MaLo,
+                HanSuDung: t.Hsd,
+                SoLuongTon: t.Ton,
+                DonViTinh: p?.DonViTinh));
+        }
+
+        // 2) Cảnh báo tồn thấp: tổng tồn theo (sản phẩm, kho) < mức tối thiểu đã khai.
+        var tonTheoSpKho = tonTheoLo
+            .GroupBy(x => new { x.MaSanPham, x.MaKho })
+            .Select(g => new { g.Key.MaSanPham, g.Key.MaKho, Ton = g.Sum(x => x.Ton) });
+
+        foreach (var t in tonTheoSpKho)
+        {
+            var p = spTheoMa.GetValueOrDefault(t.MaSanPham);
+            if (p?.TonToiThieu is not { } min || min <= 0) continue;
+            if (t.Ton >= min) continue;
+            ds.Add(new CanhBaoTonKho(
+                Loai: "Tồn thấp",
+                MaSanPham: t.MaSanPham,
+                TenSanPham: p.TenSanPham,
+                MaKho: t.MaKho,
+                MaLo: null,
+                HanSuDung: null,
+                SoLuongTon: t.Ton,
+                DonViTinh: p.DonViTinh));
+        }
+
+        // Ưu tiên hiển thị: đã hết hạn -> tồn thấp -> sắp hết hạn; trong nhóm hạn dùng, hạn gần nhất trước.
+        int Uu(string loai) => loai switch { "Đã hết hạn" => 0, "Tồn thấp" => 1, _ => 2 };
+        return ds
+            .OrderBy(c => Uu(c.Loai))
+            .ThenBy(c => c.HanSuDung ?? DateOnly.MaxValue)
+            .ThenBy(c => c.TenSanPham)
+            .ToList();
     }
 
     /// <summary>

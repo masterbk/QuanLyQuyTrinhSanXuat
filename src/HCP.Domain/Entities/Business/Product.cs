@@ -43,6 +43,9 @@ public class Product : TenantEntity
     /// <summary>Đơn vị tính dùng cho tồn kho (vd kg, cái, quả).</summary>
     public string? DonViTinh { get; set; }
 
+    /// <summary>Mức tồn tối thiểu để cảnh báo "sắp hết" trên dashboard (null = không cảnh báo).</summary>
+    public decimal? TonToiThieu { get; set; }
+
     /// <summary>Định mức (công thức) - chỉ có ý nghĩa với thành phẩm.</summary>
     public List<DinhMucNguyenLieu> DanhSachDinhMuc { get; set; } = new();
 }

@@ -79,6 +79,7 @@ public class ThucPhamService : IDanhMucService<Product>
         hienTai.MaQuyTrinh = entity.MaQuyTrinh;
         hienTai.LoaiSanPham = entity.LoaiSanPham;
         hienTai.DonViTinh = entity.DonViTinh;
+        hienTai.TonToiThieu = entity.TonToiThieu;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
