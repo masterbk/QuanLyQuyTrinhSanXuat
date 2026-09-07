@@ -61,6 +61,7 @@ else
     {
         <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
             <HeaderContent>
+                <MudTh Style="width:56px">STT</MudTh>
                 <MudTh>Thời gian</MudTh>
                 <MudTh>Loại</MudTh>
                 <MudTh>Khoá</MudTh>
@@ -70,6 +71,7 @@ else
                 <MudTh Style="width:170px"></MudTh>
             </HeaderContent>
             <RowTemplate>
+                <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
                 <MudTd DataLabel="Thời gian">@context.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
                 <MudTd DataLabel="Loại">@TenLoai(context.EntityType)</MudTd>
                 <MudTd DataLabel="Khoá"><b>@context.EntityKey</b></MudTd>

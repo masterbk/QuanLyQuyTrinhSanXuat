@@ -36,6 +36,7 @@ else
             {
                 <MudTable Items="_ton" Hover="true" Dense="true" Elevation="0">
                     <HeaderContent>
+                        <MudTh Style="width:56px">STT</MudTh>
                         <MudTh>Sản phẩm</MudTh>
                         <MudTh>Phân loại</MudTh>
                         <MudTh>Kho</MudTh>
@@ -45,6 +46,7 @@ else
                         <MudTh Style="width:60px"></MudTh>
                     </HeaderContent>
                     <RowTemplate>
+                        <MudTd DataLabel="STT">@(_ton.IndexOf(context)+1)</MudTd>
                         <MudTd DataLabel="Sản phẩm">
                             <b>@context.TenSanPham</b>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.MaSanPham</MudText>
@@ -165,6 +167,7 @@ else
                 {
                     <MudTable Items="_lichSu" Dense="true" Elevation="0">
                         <HeaderContent>
+                            <MudTh Style="width:56px">STT</MudTh>
                             <MudTh>Thời gian</MudTh>
                             <MudTh>Loại</MudTh>
                             <MudTh>Sản phẩm</MudTh>
@@ -173,6 +176,7 @@ else
                             <MudTh Style="text-align:right">Số lượng</MudTh>
                         </HeaderContent>
                         <RowTemplate>
+                            <MudTd DataLabel="STT">@(_lichSu.IndexOf(context)+1)</MudTd>
                             <MudTd DataLabel="Thời gian">@context.ThoiGianUtc.ToLocalTime().ToString("dd/MM HH:mm")</MudTd>
                             <MudTd DataLabel="Loại">@MoTaLoai(context.Loai)</MudTd>
                             <MudTd DataLabel="Sản phẩm">@context.MaSanPham</MudTd>

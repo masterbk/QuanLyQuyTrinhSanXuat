@@ -34,6 +34,7 @@ else
 {
     <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
         <HeaderContent>
+            <MudTh Style="width:56px">STT</MudTh>
             <MudTh>Tên cơ sở</MudTh>
             <MudTh>Mã số thuế</MudTh>
             <MudTh>Email</MudTh>
@@ -42,6 +43,7 @@ else
             <MudTh Style="width:140px"></MudTh>
         </HeaderContent>
         <RowTemplate>
+            <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
             <MudTd DataLabel="Tên cơ sở">
                 <b>@context.Name</b>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.DiaChi</MudText>

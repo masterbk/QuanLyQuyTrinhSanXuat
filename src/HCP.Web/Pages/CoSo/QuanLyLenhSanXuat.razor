@@ -50,6 +50,7 @@ else
     {
         <MudTable Items="_danhSach" Hover="true" Dense="true" Elevation="1">
             <HeaderContent>
+                <MudTh Style="width:56px">STT</MudTh>
                 <MudTh>Mã lệnh</MudTh>
                 <MudTh>Thành phẩm</MudTh>
                 <MudTh Style="text-align:right">Số lượng</MudTh>
@@ -60,6 +61,7 @@ else
                 <MudTh Style="width:170px"></MudTh>
             </HeaderContent>
             <RowTemplate>
+                <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
                 <MudTd DataLabel="Mã lệnh"><b>@context.MaLenh</b></MudTd>
                 <MudTd DataLabel="Thành phẩm">@context.MaThanhPham</MudTd>
                 <MudTd DataLabel="Số lượng" Style="text-align:right">@context.SoLuong.ToString("0.###")</MudTd>
