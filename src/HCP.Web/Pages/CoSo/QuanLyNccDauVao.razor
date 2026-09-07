@@ -56,7 +56,7 @@ else
             <MudTd DataLabel="Nhóm thực phẩm">
                 @foreach (var nhom in context.NhomThucPham)
                 {
-                    <MudChip T="string" Size="Size.Small" Class="ma-1">@nhom.MaNhom</MudChip>
+                    <MudChip T="string" Size="Size.Small" Class="ma-1">@TenNhom(nhom.MaNhom)</MudChip>
                 }
             </MudTd>
             <MudTd DataLabel="Giấy tờ">
@@ -128,13 +128,29 @@ else
 
         @if (_danhMucChuan.Count > 0)
         {
-            <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_nhomDaChon"
-                       Label="Chọn nhóm thực phẩm" Variant="Variant.Outlined" Dense="true">
-                @foreach (var dm in _danhMucChuan)
-                {
-                    <MudSelectItem T="string" Value="@dm.Code">@dm.Code — @dm.Name</MudSelectItem>
-                }
-            </MudSelect>
+            <MudAutocomplete T="string" @ref="_autoNhom" Label="Chọn nhóm thực phẩm"
+                             Variant="Variant.Outlined" Dense="true"
+                             SearchFunc="TimNhom" ToStringFunc="TenNhom" MaxItems="100"
+                             Value="_nhomChon" ValueChanged="ChonNhom" Clearable="true"
+                             ResetValueOnEmptyText="true" CoerceText="false"
+                             HelperText="Gõ mã hoặc tên để tìm nhanh; chọn để thêm vào danh sách bên dưới." />
+
+            @if (_nhomDaChon.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Class="mud-error-text mt-1 d-block">
+                    Chưa chọn nhóm thực phẩm nào.
+                </MudText>
+            }
+            else
+            {
+                <div class="mt-2">
+                    @foreach (var m in _nhomDaChon)
+                    {
+                        <MudChip T="string" Size="Size.Small" Class="ma-1" Color="Color.Primary"
+                                 OnClose="@(() => BoNhom(m))">@TenNhom(m)</MudChip>
+                    }
+                </div>
+            }
         }
         else
         {
@@ -205,7 +221,9 @@ else
     private bool _dangSua;
     private SubSupplier _input = new();
 
-    private IEnumerable<string> _nhomDaChon = new HashSet<string>();
+    private HashSet<string> _nhomDaChon = new();
+    private string? _nhomChon;               // ô autocomplete tạm; chọn xong đẩy vào _nhomDaChon
+    private MudAutocomplete<string>? _autoNhom;
     private string _nhomNhapTay = string.Empty;
 
     // MudDatePicker dùng DateTime?, còn entity dùng DateOnly? theo đúng kiểu date của đặc tả.
@@ -225,6 +243,38 @@ else
         _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
         _dangTai = false;
     }
+
+    /// <summary>Lọc danh mục chuẩn theo mã hoặc tên (bỏ nhóm đã chọn); giới hạn 100 để mở nhanh.</summary>
+    private Task<IEnumerable<string>> TimNhom(string? value, CancellationToken ct)
+    {
+        IEnumerable<StandardFoodCategory> kq = _danhMucChuan.Where(c => !_nhomDaChon.Contains(c.Code));
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            kq = kq.Where(c =>
+                c.Code.Contains(value, StringComparison.OrdinalIgnoreCase)
+                || (c.Name ?? "").Contains(value, StringComparison.OrdinalIgnoreCase));
+        }
+        return Task.FromResult(kq.Take(100).Select(c => c.Code));
+    }
+
+    // Hiển thị TÊN cho dễ đọc (Code là id danh mục chuẩn của HnC).
+    private string TenNhom(string? code)
+    {
+        if (string.IsNullOrEmpty(code)) return string.Empty;
+        var dm = _danhMucChuan.FirstOrDefault(x => x.Code == code);
+        return dm is null ? code : dm.Name;
+    }
+
+    /// <summary>Chọn một nhóm từ autocomplete -> thêm vào danh sách rồi xoá ô để chọn tiếp.</summary>
+    private async Task ChonNhom(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) { _nhomChon = null; return; }
+        _nhomDaChon.Add(code);
+        _nhomChon = null;
+        if (_autoNhom is not null) await _autoNhom.ClearAsync();   // xoá ô để chọn nhóm tiếp theo
+    }
+
+    private void BoNhom(string code) => _nhomDaChon.Remove(code);
 
     /// <summary>Cảnh báo giấy tờ đã hết hạn hoặc sắp hết hạn trong 30 ngày.</summary>
     private static string? CanhBaoHetHan(SubSupplier ncc)
@@ -251,6 +301,8 @@ else
     {
         _dangSua = ncc is not null;
         _nhomNhapTay = string.Empty;
+
+        _nhomChon = null;
 
         if (ncc is null)
         {
@@ -297,8 +349,8 @@ else
         _input.HopDongNgayKy = _hopDongNgayKy is { } c ? DateOnly.FromDateTime(c) : null;
         _input.HopDongNgayHetHan = _hopDongNgayHetHan is { } d ? DateOnly.FromDateTime(d) : null;
 
-        // Có danh mục chuẩn thì lấy từ ô chọn nhiều, chưa có thì lấy từ ô nhập tay.
-        var maNhom = _danhMucChuan.Count > 0
+        // Có danh mục chuẩn thì lấy từ danh sách đã chọn, chưa có thì lấy từ ô nhập tay.
+        IEnumerable<string> maNhom = _danhMucChuan.Count > 0
             ? _nhomDaChon
             : _nhomNhapTay.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
