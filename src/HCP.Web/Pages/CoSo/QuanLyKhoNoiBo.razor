@@ -42,6 +42,7 @@ else
                         <MudTh>Lô</MudTh>
                         <MudTh>Hạn dùng</MudTh>
                         <MudTh Style="text-align:right">Tồn</MudTh>
+                        <MudTh Style="width:60px"></MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="Sản phẩm">
@@ -73,6 +74,12 @@ else
                         </MudTd>
                         <MudTd DataLabel="Tồn" Style="text-align:right">
                             <b>@context.SoLuongTon.ToString("0.###")</b> @context.DonViTinh
+                        </MudTd>
+                        <MudTd Style="text-align:right">
+                            <MudTooltip Text="Kiểm kê / Điều chỉnh tồn">
+                                <MudIconButton Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small"
+                                               Color="Color.Primary" OnClick="@(() => MoDieuChinh(context))" />
+                            </MudTooltip>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -180,6 +187,40 @@ else
     </MudTabs>
 }
 
+<MudDialog @bind-Visible="_hienDieuChinh" Options="_dialogOptions">
+    <TitleContent><MudText Typo="Typo.h6">Kiểm kê / Điều chỉnh tồn</MudText></TitleContent>
+    <DialogContent>
+        @if (_dcRow is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mb-1">
+                <b>@_dcRow.TenSanPham</b> (@_dcRow.MaSanPham) — Kho @_dcRow.TenKho — Lô <b>@_dcRow.MaLo</b>
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Tồn theo sổ hiện tại: <b>@_dcRow.SoLuongTon.ToString("0.###") @_dcRow.DonViTinh</b>
+            </MudText>
+            <MudNumericField @bind-Value="_soThucTe" Label="Số tồn thực tế đếm được"
+                             Variant="Variant.Outlined" Min="0m" Class="mb-3"
+                             HelperText="Nhập số đếm được trong kho. Hệ thống tự tính chênh lệch." />
+            <MudText Typo="Typo.body2" Class="mb-3">
+                Chênh lệch:
+                <b style="@(_chenh == 0 ? "" : (_chenh > 0 ? "color:#1E7E34" : "color:#B02A37"))">
+                    @(_chenh > 0 ? "+" : "")@_chenh.ToString("0.###") @_dcRow.DonViTinh
+                </b>
+                @if (_chenh < 0) { <span class="mud-text-secondary"> (hao hụt/giảm)</span> }
+                else if (_chenh > 0) { <span class="mud-text-secondary"> (thừa/tăng)</span> }
+            </MudText>
+            <MudTextField @bind-Value="_lyDo" Label="Lý do" Variant="Variant.Outlined" MaxLength="1000"
+                          HelperText="Vd: hao hụt sản xuất, vỡ hỏng, đếm lại." />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienDieuChinh = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangLuu" OnClick="DieuChinhAsync">
+            Lưu điều chỉnh
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private List<TonKhoDto> _ton = new();
     private List<KhoGiaoDich> _lichSu = new();
@@ -193,6 +234,13 @@ else
     private MudForm? _form;
     private NhapKhoRequest _nhap = new();
     private DateTime? _hanSuDung;
+
+    private bool _hienDieuChinh;
+    private TonKhoDto? _dcRow;
+    private decimal _soThucTe;
+    private string? _lyDo;
+    private decimal _chenh => _soThucTe - (_dcRow?.SoLuongTon ?? 0);
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
 
     protected override async Task OnInitializedAsync() => await TaiAsync();
 
@@ -225,6 +273,31 @@ else
         LoaiGiaoDichKho.DieuChinh => "Điều chỉnh",
         _ => l.ToString()
     };
+
+    private void MoDieuChinh(TonKhoDto row)
+    {
+        _dcRow = row;
+        _soThucTe = row.SoLuongTon;   // mặc định = tồn sổ, người dùng sửa lại theo số đếm
+        _lyDo = null;
+        _hienDieuChinh = true;
+    }
+
+    private async Task DieuChinhAsync()
+    {
+        if (_dcRow is null) return;
+        _dangLuu = true;
+        var kq = await KhoService.DieuChinhTonAsync(new DieuChinhTonRequest
+        {
+            MaSanPham = _dcRow.MaSanPham,
+            MaKho = _dcRow.MaKho,
+            MaLo = _dcRow.MaLo,
+            SoLuongThucTe = _soThucTe,
+            LyDo = _lyDo
+        });
+        _dangLuu = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) { _hienDieuChinh = false; await TaiAsync(); }
+    }
 
     private async Task NhapAsync()
     {

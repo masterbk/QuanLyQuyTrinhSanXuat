@@ -80,6 +80,69 @@ public class KhoNoiBoServiceTests
         Assert.False((await new KhoNoiBoService(db).NhapNguyenLieuAsync(Req("LO1", -5))).ThanhCong);
     }
 
+    private static DieuChinhTonRequest DcReq(string lo, decimal thucTe, string? lyDo = null) => new()
+    {
+        MaSanPham = "BOT_MI", MaKho = "KHO01", MaLo = lo, SoLuongThucTe = thucTe, LyDo = lyDo
+    };
+
+    [Fact]
+    public async Task Dieu_Chinh_Giam_Ton_Ve_So_Thuc_Te()
+    {
+        Seed(CoSoA);
+        using (var db = MoDb(CoSoA)) await new KhoNoiBoService(db).NhapNguyenLieuAsync(Req("LO1", 10));
+
+        using (var db = MoDb(CoSoA))
+        {
+            var kq = await new KhoNoiBoService(db).DieuChinhTonAsync(DcReq("LO1", 8, "hao hụt"));
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        using (var db = MoDb(CoSoA))
+        {
+            var ton = await new KhoNoiBoService(db).LayTonAsync();
+            Assert.Equal(8, ton.Single(t => t.MaLo == "LO1").SoLuongTon);   // tồn đúng số đếm
+            // Có đúng 1 dòng điều chỉnh (−2).
+            var dc = await db.KhoGiaoDichs.Where(g => g.Loai == LoaiGiaoDichKho.DieuChinh).ToListAsync();
+            Assert.Single(dc);
+            Assert.Equal(-2, dc[0].SoLuong);
+            Assert.Equal("hao hụt", dc[0].GhiChu);
+        }
+    }
+
+    [Fact]
+    public async Task Dieu_Chinh_Tang_Ton()
+    {
+        Seed(CoSoA);
+        using (var db = MoDb(CoSoA)) await new KhoNoiBoService(db).NhapNguyenLieuAsync(Req("LO1", 5));
+        using (var db = MoDb(CoSoA))
+            Assert.True((await new KhoNoiBoService(db).DieuChinhTonAsync(DcReq("LO1", 7))).ThanhCong);
+        using (var db = MoDb(CoSoA))
+            Assert.Equal(7, (await new KhoNoiBoService(db).LayTonAsync()).Single().SoLuongTon);
+    }
+
+    [Fact]
+    public async Task Dieu_Chinh_Khong_Chenh_Lech_Thi_Khong_Ghi()
+    {
+        Seed(CoSoA);
+        using (var db = MoDb(CoSoA)) await new KhoNoiBoService(db).NhapNguyenLieuAsync(Req("LO1", 5));
+        using (var db = MoDb(CoSoA))
+        {
+            var kq = await new KhoNoiBoService(db).DieuChinhTonAsync(DcReq("LO1", 5));
+            Assert.True(kq.ThanhCong);
+            Assert.Contains("không cần điều chỉnh", kq.ThongBao);
+        }
+        using (var db = MoDb(CoSoA))
+            Assert.False(await db.KhoGiaoDichs.AnyAsync(g => g.Loai == LoaiGiaoDichKho.DieuChinh));
+    }
+
+    [Fact]
+    public async Task Dieu_Chinh_So_Am_Thi_Loi()
+    {
+        Seed(CoSoA);
+        using var db = MoDb(CoSoA);
+        Assert.False((await new KhoNoiBoService(db).DieuChinhTonAsync(DcReq("LO1", -1))).ThanhCong);
+    }
+
     [Fact]
     public async Task Ton_Kho_Bi_Loc_Theo_Co_So()
     {

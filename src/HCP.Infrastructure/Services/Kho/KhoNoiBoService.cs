@@ -50,6 +50,53 @@ public sealed class KhoNoiBoService : IKhoNoiBoService
             $"Đã nhập {req.SoLuong:0.###} {sp.DonViTinh} \"{sp.TenSanPham}\" (lô {req.MaLo}) vào kho.");
     }
 
+    public async Task<KetQuaThaoTac> DieuChinhTonAsync(DieuChinhTonRequest req, CancellationToken ct = default)
+    {
+        req.MaSanPham = req.MaSanPham?.Trim() ?? "";
+        req.MaKho = req.MaKho?.Trim() ?? "";
+        req.MaLo = req.MaLo?.Trim() ?? "";
+
+        if (string.IsNullOrWhiteSpace(req.MaSanPham)) return KetQuaThaoTac.Loi("Thiếu mã sản phẩm.");
+        if (string.IsNullOrWhiteSpace(req.MaKho)) return KetQuaThaoTac.Loi("Thiếu mã kho.");
+        if (string.IsNullOrWhiteSpace(req.MaLo)) return KetQuaThaoTac.Loi("Thiếu mã lô.");
+        if (req.SoLuongThucTe < 0) return KetQuaThaoTac.Loi("Số tồn thực tế không được âm.");
+
+        var sp = await _db.Products.FirstOrDefaultAsync(p => p.MaSanPham == req.MaSanPham, ct);
+        if (sp is null) return KetQuaThaoTac.Loi($"Không tìm thấy sản phẩm \"{req.MaSanPham}\".");
+        if (!await _db.Warehouses.AnyAsync(k => k.MaKho == req.MaKho, ct))
+            return KetQuaThaoTac.Loi($"Không tìm thấy kho \"{req.MaKho}\".");
+
+        // Tồn sổ và hạn dùng hiện tại của đúng lô này.
+        var giaoDichLo = await _db.KhoGiaoDichs
+            .Where(g => g.MaSanPham == req.MaSanPham && g.MaKho == req.MaKho && g.MaLo == req.MaLo)
+            .ToListAsync(ct);
+        var tonSo = giaoDichLo.Sum(g => g.SoLuong);
+        var hsd = giaoDichLo.Where(g => g.HanSuDung.HasValue).Max(g => (DateOnly?)g.HanSuDung);
+
+        var chenhLech = req.SoLuongThucTe - tonSo;
+        if (chenhLech == 0)
+            return KetQuaThaoTac.Ok($"Tồn sổ và thực tế đều {tonSo:0.###} {sp.DonViTinh} - không cần điều chỉnh.");
+
+        _db.KhoGiaoDichs.Add(new KhoGiaoDich
+        {
+            MaSanPham = req.MaSanPham,
+            MaKho = req.MaKho,
+            MaLo = req.MaLo,
+            SoLuong = chenhLech,                   // dương: tăng; âm: giảm
+            HanSuDung = hsd,                       // giữ hạn dùng để không tách nhóm tồn
+            Loai = LoaiGiaoDichKho.DieuChinh,
+            ChungTu = "DC-" + DateTime.Now.ToString("yyMMdd-HHmmss"),
+            GhiChu = string.IsNullOrWhiteSpace(req.LyDo) ? null : req.LyDo.Trim(),
+            ThoiGianUtc = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync(ct);
+
+        var chieu = chenhLech > 0 ? "tăng" : "giảm";
+        return KetQuaThaoTac.Ok(
+            $"Đã điều chỉnh lô {req.MaLo}: sổ {tonSo:0.###} → thực tế {req.SoLuongThucTe:0.###} "
+            + $"({chieu} {Math.Abs(chenhLech):0.###} {sp.DonViTinh}).");
+    }
+
     public async Task<IReadOnlyList<TonKhoDto>> LayTonAsync(CancellationToken ct = default)
     {
         var giaoDich = await _db.KhoGiaoDichs.AsNoTracking().ToListAsync(ct);
