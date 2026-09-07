@@ -201,6 +201,30 @@ app.MapRazorPages();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
+// --- Tự động áp migration khi khởi động ---
+// Hai context (TenantStoreDbContext + AppDbContext) dùng CHUNG một database nhưng có bộ
+// migration riêng, nên phải áp cả hai. Nhờ vậy deploy lên server KHÔNG cần chạy tay
+// "dotnet ef database update". Migrate chỉ chạy DDL nên không cần tenant context.
+// Lưu ý: nếu chạy nhiều tiến trình/worker song song, chỉ nên để một tiến trình migrate;
+// với một site IIS thông thường thì an toàn.
+using (var scope = app.Services.CreateScope())
+{
+    var sp = scope.ServiceProvider;
+    var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Migrations");
+    try
+    {
+        await sp.GetRequiredService<TenantStoreDbContext>().Database.MigrateAsync();
+        await sp.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+        logger.LogInformation("Đã áp dụng migration cơ sở dữ liệu (TenantStore + App).");
+    }
+    catch (Exception ex)
+    {
+        // Ném lại để lỗi hiện rõ khi khởi động thay vì chạy tiếp với schema thiếu.
+        logger.LogCritical(ex, "Áp dụng migration cơ sở dữ liệu thất bại khi khởi động.");
+        throw;
+    }
+}
+
 await DbSeeder.SeedAsync(app.Services);
 
 // Job nền quét hàng đợi đồng bộ mỗi phút. Chạy tự động, không cần thao tác thủ công.
