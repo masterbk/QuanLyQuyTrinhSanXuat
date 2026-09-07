@@ -290,6 +290,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         lenhSX.Property(l => l.MaThanhPham).HasMaxLength(255).IsRequired();
         lenhSX.Property(l => l.MaKho).HasMaxLength(255).IsRequired();
         lenhSX.Property(l => l.MaLoThanhPham).HasMaxLength(255).IsRequired();
+        lenhSX.Property(l => l.MaLoDaTao).HasMaxLength(255);
         lenhSX.Property(l => l.SoLuong).HasPrecision(18, 3);
         lenhSX.Property(l => l.GhiChu).HasMaxLength(1000);
         lenhSX.HasMany(l => l.TieuHao).WithOne(t => t.LenhSanXuat!)

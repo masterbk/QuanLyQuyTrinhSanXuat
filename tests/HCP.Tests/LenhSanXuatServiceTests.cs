@@ -2,6 +2,7 @@ using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.Kho;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
@@ -21,6 +22,13 @@ public class LenhSanXuatServiceTests
         accessor.SetTenant(CoSo);
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(_dbName).Options;
         return new AppDbContext(accessor, options);
+    }
+
+    private static LenhSanXuatService Svc(AppDbContext db)
+    {
+        var accessor = new TestMultiTenantContextAccessor();
+        accessor.SetTenant(CoSo);
+        return new LenhSanXuatService(db, new SyncOutboxWriter(db, accessor));
     }
 
     /// <summary>Thành phẩm BANH_MI (định mức 0.1kg bột/cái), nguyên liệu BOT_MI, kho KHO01.</summary>
@@ -70,7 +78,7 @@ public class LenhSanXuatServiceTests
         int id;
         using (var db = MoDb())
         {
-            var svc = new LenhSanXuatService(db);
+            var svc = Svc(db);
             var kq = await svc.TaoAsync(Lenh(10));   // cần 10 * 0.1 = 1.0 kg bột
             Assert.True(kq.ThanhCong, kq.ThongBao);
             id = (await db.LenhSanXuats.SingleAsync()).Id;
@@ -78,7 +86,7 @@ public class LenhSanXuatServiceTests
 
         using (var db = MoDb())
         {
-            var kq = await new LenhSanXuatService(db).ThucHienAsync(id);
+            var kq = await Svc(db).ThucHienAsync(id);
             Assert.True(kq.ThanhCong, kq.ThongBao);
         }
 
@@ -112,7 +120,7 @@ public class LenhSanXuatServiceTests
 
         using (var db = MoDb())
         {
-            var kq = await new LenhSanXuatService(db).ThucHienAsync(id);
+            var kq = await Svc(db).ThucHienAsync(id);
             Assert.False(kq.ThanhCong);
             Assert.Contains("Không đủ", kq.ThongBao);
         }
@@ -132,8 +140,8 @@ public class LenhSanXuatServiceTests
 
         int id;
         using (var db = MoDb()) id = (await Tao(db, 10)).Id;
-        using (var db = MoDb()) Assert.True((await new LenhSanXuatService(db).ThucHienAsync(id)).ThanhCong);
-        using (var db = MoDb()) Assert.False((await new LenhSanXuatService(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.False((await Svc(db).ThucHienAsync(id)).ThanhCong);
 
         // Chỉ trừ 1 lần (10*0.1=1.0) -> còn 4.0.
         Assert.Equal(4.0m, TonLo("BOT_MI", "LO_A"));
@@ -141,7 +149,77 @@ public class LenhSanXuatServiceTests
 
     private static async Task<LenhSanXuat> Tao(AppDbContext db, decimal sl)
     {
-        await new LenhSanXuatService(db).TaoAsync(Lenh(sl));
+        await Svc(db).TaoAsync(Lenh(sl));
         return await db.LenhSanXuats.OrderByDescending(l => l.Id).FirstAsync();
+    }
+
+    [Fact]
+    public async Task Tao_Lo_Dong_Bo_Sinh_Batch_Va_Hang_Doi()
+    {
+        SeedDanhMuc();
+        // Khâu + quy trình cho thành phẩm để sinh bước truy xuất.
+        using (var db = MoDb())
+        {
+            db.ProductionSteps.Add(new ProductionStep { MaKhau = "KHAU01", TenKhau = "Phối trộn" });
+            var qt = new ProductionProcess { MaQuyTrinh = "QT01", TenQuyTrinh = "Làm bánh" };
+            qt.DanhSachKhau.Add(new ProcessStepLine { MaKhau = "KHAU01", ThuTu = 1 });
+            db.ProductionProcesses.Add(qt);
+            var banh = await db.Products.SingleAsync(p => p.MaSanPham == "BANH_MI");
+            banh.MaQuyTrinh = "QT01";
+            await db.SaveChangesAsync();
+        }
+        NhapBot("LO_A", 0.6m, new DateOnly(2026, 1, 1));
+        NhapBot("LO_B", 0.6m, new DateOnly(2026, 6, 1));
+
+        int id;
+        using (var db = MoDb())
+        {
+            var lenh = Lenh(10);
+            lenh.TaoLoDongBo = true;
+            await Svc(db).TaoAsync(lenh);
+            id = (await db.LenhSanXuats.SingleAsync()).Id;
+        }
+
+        using (var db = MoDb())
+            Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            var lenh = await db.LenhSanXuats.SingleAsync();
+            Assert.Equal("LOTP1", lenh.MaLoDaTao);
+
+            var batch = await db.Batches
+                .Include(b => b.DanhSachKho).Include(b => b.DanhSachKhau)
+                .SingleAsync(b => b.MaLo == "LOTP1");
+            Assert.Equal("BANH_MI", batch.MaSanPham);
+            Assert.Single(batch.DanhSachKho);
+            Assert.Equal("KHO01", batch.DanhSachKho[0].MaKho);
+            // Một bước cho mỗi lô nguyên liệu tiêu hao (LO_A, LO_B), đều trỏ về lô thành phẩm.
+            Assert.Equal(2, batch.DanhSachKhau.Count);
+            Assert.All(batch.DanhSachKhau, s => Assert.Equal("LOTP1", s.MaLoSanXuat));
+            Assert.All(batch.DanhSachKhau, s => Assert.Equal("KHAU01", s.MaKhau));
+            Assert.Contains(batch.DanhSachKhau, s => s.MaLoNguyenLieu == "LO_A");
+            Assert.Contains(batch.DanhSachKhau, s => s.MaLoNguyenLieu == "LO_B");
+
+            // Đã đưa vào hàng đợi đồng bộ HanoiCheck.
+            Assert.True(await db.SyncOutboxItems.AnyAsync(o => o.EntityType == "Batch" && o.EntityKey == "LOTP1"));
+        }
+    }
+
+    [Fact]
+    public async Task Khong_Bat_Tao_Lo_Thi_Khong_Sinh_Batch()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;   // TaoLoDongBo mặc định false
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            Assert.False(await db.Batches.AnyAsync());
+            Assert.False(await db.SyncOutboxItems.AnyAsync(o => o.EntityType == "Batch"));
+        }
     }
 }

@@ -33,6 +33,15 @@ public class LenhSanXuat : TenantEntity
 
     public TrangThaiLenhSX TrangThai { get; set; } = TrangThaiLenhSX.MoiTao;
 
+    /// <summary>
+    /// Khi thực hiện lệnh, tự sinh một Lô sản xuất (Batch) cho thành phẩm và đồng bộ sang
+    /// HanoiCheck (kèm truy xuất lô nguyên liệu → lô thành phẩm). Mặc định tắt.
+    /// </summary>
+    public bool TaoLoDongBo { get; set; }
+
+    /// <summary>Mã lô sản xuất (Batch) đã sinh tự động khi thực hiện (nếu có) - để hiển thị/tra cứu.</summary>
+    public string? MaLoDaTao { get; set; }
+
     public DateTime? ThoiGianHoanThanhUtc { get; set; }
 
     public string? GhiChu { get; set; }

@@ -90,6 +90,13 @@ else
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
                             @context.ThoiGianHoanThanhUtc?.ToLocalTime().ToString("dd/MM HH:mm")
                         </MudText>
+                        @if (!string.IsNullOrEmpty(context.MaLoDaTao))
+                        {
+                            <MudTooltip Text="Đã tạo lô đồng bộ HanoiCheck">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Secondary"
+                                         Icon="@Icons.Material.Filled.CloudSync">@context.MaLoDaTao</MudChip>
+                            </MudTooltip>
+                        }
                     }
                 </MudTd>
             </RowTemplate>
@@ -143,6 +150,10 @@ else
                 </MudItem>
                 <MudItem xs="12">
                     <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Variant="Variant.Outlined" MaxLength="1000" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_input.TaoLoDongBo" Color="Color.Primary" Dense="true"
+                                 Label="Khi thực hiện, tạo Lô sản xuất và đồng bộ HanoiCheck (truy xuất lô nguyên liệu → lô thành phẩm)" />
                 </MudItem>
             </MudGrid>
         </MudForm>

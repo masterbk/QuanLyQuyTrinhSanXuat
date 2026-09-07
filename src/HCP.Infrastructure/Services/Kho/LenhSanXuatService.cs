@@ -1,6 +1,8 @@
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
+using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.Kho;
@@ -9,8 +11,13 @@ namespace HCP.Infrastructure.Services.Kho;
 public sealed class LenhSanXuatService : ILenhSanXuatService
 {
     private readonly AppDbContext _db;
+    private readonly ISyncOutboxWriter _outbox;
 
-    public LenhSanXuatService(AppDbContext db) => _db = db;
+    public LenhSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<IReadOnlyList<LenhSanXuat>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.LenhSanXuats.AsNoTracking()
@@ -140,9 +147,91 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         lenh.TrangThai = TrangThaiLenhSX.HoanThanh;
         lenh.ThoiGianHoanThanhUtc = now;
 
+        // Tuỳ chọn: sinh Lô sản xuất (Batch) cho thành phẩm để đồng bộ HanoiCheck, kèm truy xuất
+        // lô nguyên liệu → lô thành phẩm. Batch được thêm cùng transaction; đẩy hàng đợi sau khi lưu.
+        Batch? batch = null;
+        if (lenh.TaoLoDongBo)
+        {
+            batch = await DungBatchTuLenhAsync(lenh, tp, keHoachTru, now, ct);
+            if (batch is not null)
+            {
+                _db.Batches.Add(batch);
+                lenh.MaLoDaTao = batch.MaLo;
+            }
+        }
+
         await _db.SaveChangesAsync(ct);
-        return KetQuaThaoTac.Ok(
-            $"Đã sản xuất {lenh.SoLuong:0.###} \"{tp.TenSanPham}\" (lô {lenh.MaLoThanhPham}), trừ nguyên liệu theo định mức.");
+
+        if (batch is not null)
+            await _outbox.ThemAsync("Batch", batch.MaLo, HnCPayloadMapper.LoSanXuat(batch), ct);
+
+        var thongBao = $"Đã sản xuất {lenh.SoLuong:0.###} \"{tp.TenSanPham}\" (lô {lenh.MaLoThanhPham}), trừ nguyên liệu theo định mức.";
+        if (batch is not null)
+            thongBao += $" Đã tạo lô \"{batch.MaLo}\" và đưa vào hàng đợi đồng bộ HanoiCheck.";
+        else if (lenh.TaoLoDongBo)
+            thongBao += " (Lô đồng bộ đã tồn tại nên bỏ qua tạo mới.)";
+        return KetQuaThaoTac.Ok(thongBao);
+    }
+
+    /// <summary>
+    /// Dựng Batch từ một lệnh sản xuất đã tính kế hoạch tiêu hao: lô thành phẩm + kho + (nếu có
+    /// khâu) một bước cho mỗi lô nguyên liệu tiêu hao (ma_lo_nguyen_lieu → ma_lo_san_xuat). Trả về
+    /// null nếu mã lô này đã có Batch (tránh trùng khoá nghiệp vụ).
+    /// </summary>
+    private async Task<Batch?> DungBatchTuLenhAsync(
+        LenhSanXuat lenh, Product tp,
+        List<(string MaNL, string MaLo, DateOnly? Hsd, decimal SoLuong)> keHoachTru,
+        DateTime now, CancellationToken ct)
+    {
+        if (await _db.Batches.AnyAsync(b => b.MaLo == lenh.MaLoThanhPham, ct)) return null;
+
+        // Chọn khâu để gắn bước truy xuất: ưu tiên khâu đầu của quy trình thành phẩm, sau đó là
+        // khâu bất kỳ trong danh mục. Không có khâu nào thì để danh sách bước rỗng (vẫn hợp lệ).
+        string? maKhau = null;
+        if (!string.IsNullOrWhiteSpace(tp.MaQuyTrinh))
+        {
+            maKhau = await _db.ProcessStepLines
+                .Where(l => l.ProductionProcess!.MaQuyTrinh == tp.MaQuyTrinh)
+                .OrderBy(l => l.ThuTu).Select(l => l.MaKhau).FirstOrDefaultAsync(ct);
+        }
+        maKhau ??= await _db.ProductionSteps.OrderBy(s => s.MaKhau)
+            .Select(s => s.MaKhau).FirstOrDefaultAsync(ct);
+
+        var moTaNL = string.Join("; ", keHoachTru.Select(t => $"{t.MaLo}×{t.SoLuong:0.###}"));
+
+        var batch = new Batch
+        {
+            MaSanPham = lenh.MaThanhPham,
+            MaLo = lenh.MaLoThanhPham,
+            TenLo = $"Lô SX {lenh.MaLenh}",
+            NgayNhap = lenh.NgaySanXuat,
+            NgaySanXuat = lenh.NgaySanXuat,
+            HanSuDung = lenh.HanSuDungThanhPham,
+            GhiChu = $"Tự động từ lệnh sản xuất {lenh.MaLenh}."
+                     + (moTaNL.Length > 0 ? $" Nguyên liệu tiêu hao: {moTaNL}." : ""),
+            DanhSachKho = new() { new BatchWarehouse { MaKho = lenh.MaKho } }
+        };
+
+        if (!string.IsNullOrWhiteSpace(maKhau))
+        {
+            var thuTu = 1;
+            foreach (var t in keHoachTru)
+            {
+                batch.DanhSachKhau.Add(new BatchStep
+                {
+                    MaBuocSx = $"{lenh.MaLenh}-{thuTu}",
+                    MaKhau = maKhau,
+                    ThuTu = thuTu,
+                    ThoiGian = now,
+                    MaLoNguyenLieu = t.MaLo,
+                    MaLoSanXuat = lenh.MaLoThanhPham,
+                    GhiChu = $"Tiêu hao {t.MaNL} lô {t.MaLo}: {t.SoLuong:0.###}"
+                });
+                thuTu++;
+            }
+        }
+
+        return batch;
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)
