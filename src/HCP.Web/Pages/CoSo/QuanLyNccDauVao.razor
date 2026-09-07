@@ -178,11 +178,11 @@ else
             </MudItem>
             <MudItem xs="12" sm="4">
                 <MudDatePicker @bind-Date="_attpNgayCap" Label="Ngày cấp"
-                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
             </MudItem>
             <MudItem xs="12" sm="4">
                 <MudDatePicker @bind-Date="_attpNgayHetHan" Label="Ngày hết hạn"
-                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
             </MudItem>
         </MudGrid>
 
@@ -194,11 +194,11 @@ else
             </MudItem>
             <MudItem xs="12" sm="4">
                 <MudDatePicker @bind-Date="_hopDongNgayKy" Label="Ngày ký"
-                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
             </MudItem>
             <MudItem xs="12" sm="4">
                 <MudDatePicker @bind-Date="_hopDongNgayHetHan" Label="Ngày hết hạn"
-                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                               Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
             </MudItem>
         </MudGrid>
     </DialogContent>

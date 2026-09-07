@@ -137,7 +137,7 @@ else
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudDatePicker @bind-Date="_ngaySanXuat" Label="Ngày sản xuất"
-                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="_input.MaLoThanhPham" Label="Mã lô thành phẩm"
@@ -146,7 +146,7 @@ else
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudDatePicker @bind-Date="_hsdThanhPham" Label="Hạn dùng thành phẩm"
-                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
                 </MudItem>
                 <MudItem xs="12">
                     <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Variant="Variant.Outlined" MaxLength="1000" />

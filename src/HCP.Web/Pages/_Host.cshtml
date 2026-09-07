@@ -13,7 +13,10 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="css/site.css" rel="stylesheet" />
-    <link href="HCP.Web.styles.css" rel="stylesheet" />
+    @* Bundle CSS scoped của Blazor: dự án hiện KHÔNG có file .razor.css nào nên bundle rỗng và
+       không được sinh khi publish (Release) -> gây 404 trên IIS. Bỏ link cho sạch console.
+       Nếu sau này thêm bất kỳ *.razor.css (CSS isolation), khai lại dòng:
+       <link href="HCP.Web.styles.css" rel="stylesheet" /> *@
     <link rel="icon" type="image/png" href="favicon.png" />
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
 </head>

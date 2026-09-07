@@ -130,7 +130,7 @@ else
                 </MudItem>
                 <MudItem xs="6" sm="6">
                     <MudDatePicker @bind-Date="_ngayXuat" Label="Ngày xuất"
-                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                                   Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
                 </MudItem>
                 <MudItem xs="12">
                     <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Variant="Variant.Outlined" MaxLength="1000" />

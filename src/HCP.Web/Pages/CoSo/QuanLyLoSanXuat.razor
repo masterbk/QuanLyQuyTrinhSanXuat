@@ -111,16 +111,16 @@ else
                         </MudItem>
                         <MudItem xs="12" sm="4">
                             <MudDatePicker @bind-Date="_ngayNhap" Label="Ngày nhập"
-                                           Variant="Variant.Outlined" DateFormat="dd/MM/yyyy"
+                                           Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))"
                                            Required="true" RequiredError="Vui lòng chọn ngày nhập" />
                         </MudItem>
                         <MudItem xs="12" sm="4">
                             <MudDatePicker @bind-Date="_ngaySanXuat" Label="Ngày sản xuất"
-                                           Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                                           Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
                         </MudItem>
                         <MudItem xs="12" sm="4">
                             <MudDatePicker @bind-Date="_hanSuDung" Label="Hạn sử dụng"
-                                           Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+                                           Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
                         </MudItem>
                         <MudItem xs="12">
                             <MudTextField @bind-Value="_input.DiaChiThuMua" Label="Địa chỉ thu mua nguyên liệu"
@@ -200,7 +200,7 @@ else
                             <MudItem xs="12" sm="6">
                                 <MudDatePicker Date="khau.ThoiGian" DateChanged="d => khau.ThoiGian = d"
                                                Label="Thời điểm thực hiện" Variant="Variant.Outlined"
-                                               DateFormat="dd/MM/yyyy" />
+                                               DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
                                 <MudSelect T="string" Label="Trạng thái" @bind-Value="khau.TrangThai"

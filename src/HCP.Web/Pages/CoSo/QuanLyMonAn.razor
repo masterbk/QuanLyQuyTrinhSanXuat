@@ -189,7 +189,7 @@ else
                             <MudItem xs="12" sm="6">
                                 <MudDatePicker Date="khau.ThoiGian" DateChanged="d => khau.ThoiGian = d"
                                                Label="Thời điểm thực hiện" Variant="Variant.Outlined"
-                                               DateFormat="dd/MM/yyyy" />
+                                               DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
                                 <MudSelect T="string" Label="Trạng thái" @bind-Value="khau.TrangThai"
