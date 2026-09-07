@@ -19,4 +19,10 @@ public class DinhMucNguyenLieu : TenantEntity
 
     /// <summary>Lượng nguyên liệu cho 1 đơn vị thành phẩm (≥ 0).</summary>
     public decimal SoLuong { get; set; }
+
+    /// <summary>
+    /// Hệ số hao hụt (%) cộng thêm khi sản xuất, vd 5 = +5%. Nhu cầu thực tế trừ kho =
+    /// SoLuong × số lượng SX × (1 + HaoHutPhanTram/100). Mặc định 0.
+    /// </summary>
+    public decimal HaoHutPhanTram { get; set; }
 }

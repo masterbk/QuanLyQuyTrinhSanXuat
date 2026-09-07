@@ -207,6 +207,31 @@ public class LenhSanXuatServiceTests
     }
 
     [Fact]
+    public async Task Hao_Hut_Phan_Tram_Lam_Tang_Luong_Tru()
+    {
+        // Định mức 0.1 kg/cái + hao hụt 10% -> làm 10 cái cần 10 × 0.1 × 1.1 = 1.1 kg.
+        using (var db = MoDb())
+        {
+            var banh = new Product { MaSanPham = "BANH_MI", TenSanPham = "Bánh mì", MaLoaiSp = "x",
+                                     LoaiSanPham = LoaiSanPham.ThanhPham, DonViTinh = "cái" };
+            banh.DanhSachDinhMuc.Add(new DinhMucNguyenLieu { MaNguyenLieu = "BOT_MI", SoLuong = 0.1m, HaoHutPhanTram = 10m });
+            db.Products.Add(banh);
+            db.Products.Add(new Product { MaSanPham = "BOT_MI", TenSanPham = "Bột mì",
+                                          LoaiSanPham = LoaiSanPham.NguyenLieu, DonViTinh = "kg" });
+            db.Warehouses.Add(new Warehouse { MaKho = "KHO01", TenKho = "Kho", DiaChi = "HN" });
+            db.SaveChanges();
+        }
+        NhapBot("LO1", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) { await Svc(db).TaoAsync(Lenh(10)); id = (await db.LenhSanXuats.SingleAsync()).Id; }
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        // Trừ 1.1 kg -> còn 0.9.
+        Assert.Equal(0.9m, TonLo("BOT_MI", "LO1"));
+    }
+
+    [Fact]
     public async Task Khong_Bat_Tao_Lo_Thi_Khong_Sinh_Batch()
     {
         SeedDanhMuc();

@@ -89,4 +89,35 @@ public class DinhMucServiceTests
         });
         Assert.False(kq.ThanhCong);
     }
+
+    [Fact]
+    public async Task Luu_Va_Doc_Lai_Hao_Hut_Phan_Tram()
+    {
+        var id = SeedThanhPham();
+        using (var db = MoDb())
+        {
+            var kq = await new DinhMucService(db).LuuAsync(id, new[]
+            {
+                new DinhMucNguyenLieu { MaNguyenLieu = "BOT_MI", SoLuong = 0.1m, HaoHutPhanTram = 10m }
+            });
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        using (var db = MoDb())
+        {
+            var dm = await new DinhMucService(db).LayTheoThanhPhamAsync(id);
+            Assert.Equal(10m, dm.Single().HaoHutPhanTram);
+        }
+    }
+
+    [Fact]
+    public async Task Chan_Hao_Hut_Ngoai_Khoang()
+    {
+        var id = SeedThanhPham();
+        using var db = MoDb();
+        var svc = new DinhMucService(db);
+        Assert.False((await svc.LuuAsync(id, new[]
+            { new DinhMucNguyenLieu { MaNguyenLieu = "BOT_MI", SoLuong = 0.1m, HaoHutPhanTram = 150m } })).ThanhCong);
+        Assert.False((await svc.LuuAsync(id, new[]
+            { new DinhMucNguyenLieu { MaNguyenLieu = "BOT_MI", SoLuong = 0.1m, HaoHutPhanTram = -5m } })).ThanhCong);
+    }
 }

@@ -82,7 +82,7 @@ else
             @foreach (var d in _dong)
             {
                 <MudGrid Class="align-center mb-1">
-                    <MudItem xs="7">
+                    <MudItem xs="6">
                         <MudSelect T="string" @bind-Value="d.MaNguyenLieu" Label="Nguyên liệu"
                                    Variant="Variant.Outlined" Dense="true">
                             @foreach (var nl in _nguyenLieu)
@@ -93,9 +93,14 @@ else
                             }
                         </MudSelect>
                     </MudItem>
-                    <MudItem xs="4">
+                    <MudItem xs="3">
                         <MudNumericField @bind-Value="d.SoLuong" Label="Định lượng"
                                          Variant="Variant.Outlined" Dense="true" Min="0m" />
+                    </MudItem>
+                    <MudItem xs="2">
+                        <MudNumericField @bind-Value="d.HaoHutPhanTram" Label="Hao hụt %"
+                                         Variant="Variant.Outlined" Dense="true" Min="0m" Max="99m"
+                                         Adornment="Adornment.End" AdornmentText="%" />
                     </MudItem>
                     <MudItem xs="1">
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
@@ -147,7 +152,10 @@ else
     {
         _thanhPhamChon = tp;
         var dm = await DinhMucService.LayTheoThanhPhamAsync(tp.Id);
-        _dong = dm.Select(x => new DinhMucNguyenLieu { MaNguyenLieu = x.MaNguyenLieu, SoLuong = x.SoLuong }).ToList();
+        _dong = dm.Select(x => new DinhMucNguyenLieu
+        {
+            MaNguyenLieu = x.MaNguyenLieu, SoLuong = x.SoLuong, HaoHutPhanTram = x.HaoHutPhanTram
+        }).ToList();
         _hienForm = true;
     }
 

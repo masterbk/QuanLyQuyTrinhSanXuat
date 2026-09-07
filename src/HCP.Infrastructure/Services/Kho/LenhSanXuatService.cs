@@ -41,7 +41,7 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         var ket = new List<NguyenLieuCanDto>();
         foreach (var dm in tp.DanhSachDinhMuc)
         {
-            var can = dm.SoLuong * soLuong;
+            var can = NhuCau(dm, soLuong);
             var ton = await TonAsync(dm.MaNguyenLieu, maKho, ct);
             var p = tenTheoMa.GetValueOrDefault(dm.MaNguyenLieu);
             ket.Add(new NguyenLieuCanDto(dm.MaNguyenLieu, p?.TenSanPham ?? dm.MaNguyenLieu,
@@ -97,7 +97,7 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
 
         foreach (var dm in tp.DanhSachDinhMuc)
         {
-            var can = dm.SoLuong * lenh.SoLuong;
+            var can = NhuCau(dm, lenh.SoLuong);
             var lots = await LayLoFefoAsync(dm.MaNguyenLieu, lenh.MaKho, ct);
             var tongTon = lots.Sum(x => x.Ton);
             if (tongTon < can)
@@ -245,6 +245,10 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         await _db.SaveChangesAsync(ct);
         return KetQuaThaoTac.Ok($"Đã xoá lệnh \"{lenh.MaLenh}\".");
     }
+
+    /// <summary>Nhu cầu nguyên liệu = định lượng × số lượng SX × (1 + hao hụt%).</summary>
+    private static decimal NhuCau(DinhMucNguyenLieu dm, decimal soLuong) =>
+        dm.SoLuong * soLuong * (1 + dm.HaoHutPhanTram / 100m);
 
     /// <summary>Tồn hiện tại của một nguyên liệu trong một kho (tổng mọi lô).</summary>
     private async Task<decimal> TonAsync(string maSanPham, string maKho, CancellationToken ct) =>

@@ -31,7 +31,7 @@ public sealed class DinhMucService : IDinhMucService
 
         var dsMoi = dongDinhMuc
             .Where(d => !string.IsNullOrWhiteSpace(d.MaNguyenLieu))
-            .Select(d => new { Ma = d.MaNguyenLieu.Trim(), d.SoLuong })
+            .Select(d => new { Ma = d.MaNguyenLieu.Trim(), d.SoLuong, d.HaoHutPhanTram })
             .ToList();
 
         var maTrung = dsMoi.GroupBy(x => x.Ma).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
@@ -40,6 +40,9 @@ public sealed class DinhMucService : IDinhMucService
 
         if (dsMoi.Any(x => x.SoLuong <= 0))
             return KetQuaThaoTac.Loi("Định lượng mỗi nguyên liệu phải lớn hơn 0.");
+
+        if (dsMoi.Any(x => x.HaoHutPhanTram < 0 || x.HaoHutPhanTram >= 100))
+            return KetQuaThaoTac.Loi("Hao hụt (%) phải từ 0 đến dưới 100.");
 
         // Mỗi mã phải là một nguyên liệu đã khai.
         var nguyenLieuHopLe = await _db.Products
@@ -52,7 +55,10 @@ public sealed class DinhMucService : IDinhMucService
         // Thay thế toàn bộ.
         _db.DinhMucNguyenLieus.RemoveRange(tp.DanhSachDinhMuc);
         tp.DanhSachDinhMuc = dsMoi
-            .Select(x => new DinhMucNguyenLieu { MaNguyenLieu = x.Ma, SoLuong = x.SoLuong })
+            .Select(x => new DinhMucNguyenLieu
+            {
+                MaNguyenLieu = x.Ma, SoLuong = x.SoLuong, HaoHutPhanTram = x.HaoHutPhanTram
+            })
             .ToList();
 
         await _db.SaveChangesAsync(ct);

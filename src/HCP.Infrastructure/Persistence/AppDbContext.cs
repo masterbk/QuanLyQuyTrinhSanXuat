@@ -281,6 +281,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dinhMuc.ToTable("DinhMucNguyenLieu");
         dinhMuc.Property(d => d.MaNguyenLieu).HasMaxLength(255).IsRequired();
         dinhMuc.Property(d => d.SoLuong).HasPrecision(18, 4);
+        dinhMuc.Property(d => d.HaoHutPhanTram).HasPrecision(5, 2);
         dinhMuc.HasIndex(d => new { d.ProductId, d.MaNguyenLieu }).IsUnique();
         dinhMuc.IsMultiTenant().AdjustUniqueIndexes();
 
