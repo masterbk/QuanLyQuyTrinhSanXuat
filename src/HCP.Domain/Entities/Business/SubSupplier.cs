@@ -27,7 +27,9 @@ public class SubSupplier : TenantEntity
     /// <summary>nhom_thuc_pham - danh sách mã nhóm thực phẩm cung ứng, bắt buộc tối thiểu 1.</summary>
     public List<SubSupplierFoodGroup> NhomThucPham { get; set; } = new();
 
-    // --- giay_chung_nhan_attp: gửi thì cả 3 trường đều bắt buộc ---
+    // --- giay_chung_nhan_attp (HnC nhận dạng MẢNG, mỗi phần tử cần ten_giay_chung_nhan) ---
+    /// <summary>ten_giay_chung_nhan - tên giấy chứng nhận ATTP (HnC bắt buộc khi có khai ATTP).</summary>
+    public string? AttpTenGiay { get; set; }
     public string? AttpSoGiay { get; set; }
     public DateOnly? AttpNgayCap { get; set; }
     public DateOnly? AttpNgayHetHan { get; set; }
@@ -37,9 +39,10 @@ public class SubSupplier : TenantEntity
     public DateOnly? HopDongNgayKy { get; set; }
     public DateOnly? HopDongNgayHetHan { get; set; }
 
-    /// <summary>Có khai báo giấy chứng nhận ATTP hay không (quyết định có gửi object sang HnC).</summary>
+    /// <summary>Có khai báo giấy chứng nhận ATTP hay không (quyết định có gửi mảng sang HnC).</summary>
     public bool CoGiayChungNhanAttp =>
-        !string.IsNullOrWhiteSpace(AttpSoGiay) || AttpNgayCap.HasValue || AttpNgayHetHan.HasValue;
+        !string.IsNullOrWhiteSpace(AttpTenGiay) || !string.IsNullOrWhiteSpace(AttpSoGiay)
+        || AttpNgayCap.HasValue || AttpNgayHetHan.HasValue;
 
     public bool CoHopDong =>
         !string.IsNullOrWhiteSpace(HopDongSo) || HopDongNgayKy.HasValue || HopDongNgayHetHan.HasValue;

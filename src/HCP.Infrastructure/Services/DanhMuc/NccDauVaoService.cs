@@ -78,6 +78,7 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
         hienTai.DiaChi = entity.DiaChi;
         hienTai.DienThoai = entity.DienThoai;
 
+        hienTai.AttpTenGiay = entity.AttpTenGiay;
         hienTai.AttpSoGiay = entity.AttpSoGiay;
         hienTai.AttpNgayCap = entity.AttpNgayCap;
         hienTai.AttpNgayHetHan = entity.AttpNgayHetHan;
@@ -161,6 +162,7 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
         entity.MaSoThue = entity.MaSoThue?.Trim();
         entity.DiaChi = entity.DiaChi?.Trim();
         entity.DienThoai = entity.DienThoai?.Trim();
+        entity.AttpTenGiay = entity.AttpTenGiay?.Trim();
         entity.AttpSoGiay = entity.AttpSoGiay?.Trim();
         entity.HopDongSo = entity.HopDongSo?.Trim();
 

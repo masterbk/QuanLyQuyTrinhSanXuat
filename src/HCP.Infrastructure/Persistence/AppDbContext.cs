@@ -222,6 +222,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         subSupplier.Property(s => s.MaSoThue).HasMaxLength(20);
         subSupplier.Property(s => s.DiaChi).HasMaxLength(500);
         subSupplier.Property(s => s.DienThoai).HasMaxLength(20);
+        subSupplier.Property(s => s.AttpTenGiay).HasMaxLength(255);
         subSupplier.Property(s => s.AttpSoGiay).HasMaxLength(255);
         subSupplier.Property(s => s.HopDongSo).HasMaxLength(255);
         subSupplier.Ignore(s => s.CoGiayChungNhanAttp);

@@ -64,21 +64,31 @@ public static class HnCPayloadMapper
             dien_thoai = s.DienThoai,
             nhom_thuc_pham = s.NhomThucPham.Select(g => g.MaNhom).ToArray(),
 
-            // Chỉ gửi object giấy ATTP / hợp đồng khi có khai; nếu không thì bỏ hẳn khỏi JSON.
+            // HnC nhận giay_chung_nhan_attp / hop_dong dưới dạng MẢNG (mỗi phần tử là một giấy /
+            // hợp đồng). Chỉ gửi khi có khai; không khai thì bỏ hẳn khỏi JSON.
+            // ten_giay_chung_nhan là bắt buộc -> fallback nhãn mặc định nếu chưa nhập tên.
             giay_chung_nhan_attp = s.CoGiayChungNhanAttp
-                ? new
+                ? new[]
                 {
-                    so_giay = s.AttpSoGiay,
-                    ngay_cap = Ngay(s.AttpNgayCap),
-                    ngay_het_han = Ngay(s.AttpNgayHetHan)
+                    new
+                    {
+                        ten_giay_chung_nhan = string.IsNullOrWhiteSpace(s.AttpTenGiay)
+                            ? "Giấy chứng nhận ATTP" : s.AttpTenGiay,
+                        so_giay = s.AttpSoGiay,
+                        ngay_cap = Ngay(s.AttpNgayCap),
+                        ngay_het_han = Ngay(s.AttpNgayHetHan)
+                    }
                 }
                 : null,
             hop_dong = s.CoHopDong
-                ? new
+                ? new[]
                 {
-                    so_hop_dong = s.HopDongSo,
-                    ngay_ky = Ngay(s.HopDongNgayKy),
-                    ngay_het_han = Ngay(s.HopDongNgayHetHan)
+                    new
+                    {
+                        so_hop_dong = s.HopDongSo,
+                        ngay_ky = Ngay(s.HopDongNgayKy),
+                        ngay_het_han = Ngay(s.HopDongNgayHetHan)
+                    }
                 }
                 : null
         }

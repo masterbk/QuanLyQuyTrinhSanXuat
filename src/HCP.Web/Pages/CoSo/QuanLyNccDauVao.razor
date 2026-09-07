@@ -169,9 +169,14 @@ else
 
         <MudText Typo="Typo.subtitle2" Class="mb-2">Giấy chứng nhận ATTP</MudText>
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2 d-block">
-            Không bắt buộc, nhưng đã khai thì phải đủ cả ba trường.
+            Không bắt buộc. Nếu khai, nên nhập Tên giấy chứng nhận (HanoiCheck yêu cầu) cùng số giấy, ngày cấp, ngày hết hạn.
         </MudText>
         <MudGrid>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_input.AttpTenGiay" Label="Tên giấy chứng nhận"
+                              Variant="Variant.Outlined" MaxLength="255"
+                              HelperText="vd: Giấy chứng nhận cơ sở đủ điều kiện ATTP." />
+            </MudItem>
             <MudItem xs="12" sm="4">
                 <MudTextField @bind-Value="_input.AttpSoGiay" Label="Số giấy"
                               Variant="Variant.Outlined" MaxLength="255" />
@@ -320,6 +325,7 @@ else
                 MaSoThue = ncc.MaSoThue,
                 DiaChi = ncc.DiaChi,
                 DienThoai = ncc.DienThoai,
+                AttpTenGiay = ncc.AttpTenGiay,
                 AttpSoGiay = ncc.AttpSoGiay,
                 HopDongSo = ncc.HopDongSo
             };

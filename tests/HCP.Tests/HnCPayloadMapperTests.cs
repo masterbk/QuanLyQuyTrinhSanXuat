@@ -330,9 +330,35 @@ public class HnCPayloadMapperTests
         };
         var e = Ser(HnCPayloadMapper.NccDauVao(s));
 
-        var attp = e.GetProperty("giay_chung_nhan_attp");
+        // HnC nhận giay_chung_nhan_attp dưới dạng MẢNG, mỗi phần tử có ten_giay_chung_nhan.
+        var attpArr = e.GetProperty("giay_chung_nhan_attp");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, attpArr.ValueKind);
+        var attp = attpArr[0];
+        Assert.Equal("Giấy chứng nhận ATTP", attp.GetProperty("ten_giay_chung_nhan").GetString()); // fallback khi chưa nhập tên
         Assert.Equal("ATTP-2026-0099", attp.GetProperty("so_giay").GetString());
         Assert.Equal("2025-06-01", attp.GetProperty("ngay_cap").GetString());
         Assert.Equal("2028-06-01", attp.GetProperty("ngay_het_han").GetString());
+    }
+
+    [Fact]
+    public void NccDauVao_Hop_Dong_La_Mang_Co_So_Hop_Dong()
+    {
+        var s = new SubSupplier
+        {
+            MaNccDauVao = "NCC003", Ten = "Trại LMN",
+            NhomThucPham = { new SubSupplierFoodGroup { MaNhom = "THIT" } },
+            AttpTenGiay = "GCN cơ sở đủ điều kiện ATTP",
+            AttpSoGiay = "ATTP-77", AttpNgayCap = new DateOnly(2025, 1, 1), AttpNgayHetHan = new DateOnly(2027, 1, 1),
+            HopDongSo = "HD-2026-01", HopDongNgayKy = new DateOnly(2026, 1, 1), HopDongNgayHetHan = new DateOnly(2026, 12, 31)
+        };
+        var e = Ser(HnCPayloadMapper.NccDauVao(s));
+
+        var attp = e.GetProperty("giay_chung_nhan_attp")[0];
+        Assert.Equal("GCN cơ sở đủ điều kiện ATTP", attp.GetProperty("ten_giay_chung_nhan").GetString());
+
+        var hd = e.GetProperty("hop_dong");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, hd.ValueKind);
+        Assert.Equal("HD-2026-01", hd[0].GetProperty("so_hop_dong").GetString());
+        Assert.Equal("2026-01-01", hd[0].GetProperty("ngay_ky").GetString());
     }
 }
