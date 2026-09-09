@@ -1,6 +1,7 @@
 @page "/app/don-hang"
 @using HCP.Domain.Constants
 @using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
 @using HCP.Infrastructure.Services.DanhMuc
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
@@ -10,7 +11,6 @@
 @inject IDanhMucService<Warehouse> KhoService
 @inject IDanhMucService<Batch> LoService
 @inject IDanhMucService<Staff> NhanSuService
-@inject IDanhMucChuanService DanhMucChuanService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -156,21 +156,21 @@ else
                                         }
                                     </MudSelect>
                                 }
-                                else if (_danhMucChuan.Count > 0)
+                                else if (_thanhPham.Count > 0)
                                 {
-                                    <MudSelect T="string" @bind-Value="dong.MaLoaiSp" Label="Loại thực phẩm"
+                                    <MudSelect T="string" @bind-Value="dong.MaLoaiSp" Label="Thực phẩm (thành phẩm)"
                                                Variant="Variant.Outlined">
-                                        @foreach (var dm in _danhMucChuan)
+                                        @foreach (var sp in _thanhPham)
                                         {
-                                            <MudSelectItem T="string" Value="@dm.Code">@dm.Code — @dm.Name</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@sp.MaSanPham">@sp.MaSanPham — @sp.TenSanPham</MudSelectItem>
                                         }
                                     </MudSelect>
                                 }
                                 else
                                 {
-                                    <MudTextField @bind-Value="dong.MaLoaiSp" Label="Mã loại thực phẩm"
+                                    <MudTextField @bind-Value="dong.MaLoaiSp" Label="Mã thực phẩm"
                                                   Variant="Variant.Outlined" MaxLength="100"
-                                                  HelperText="vd THIT, RAU_CU" />
+                                                  HelperText="Chưa có thành phẩm - khai ở Thực phẩm/SKU (loại Thành phẩm)." />
                                 }
                             </MudItem>
                             <MudItem xs="6" sm="3">
@@ -299,10 +299,10 @@ else
     private List<Order> _danhSach = new();
     private List<Dish> _monAn = new();
     private List<Product> _sanPham = new();
+    private List<Product> _thanhPham = new();   // chỉ thành phẩm - dùng cho dòng đặt hàng thực phẩm
     private List<Warehouse> _kho = new();
     private List<Batch> _lo = new();
     private List<Staff> _nhanSu = new();
-    private List<StandardFoodCategory> _danhMucChuan = new();
 
     private bool _dangTai = true;
     private bool _dangLuu;
@@ -324,10 +324,10 @@ else
         _danhSach = (await DonHangService.LayTatCaAsync()).ToList();
         _monAn = (await MonAnService.LayTatCaAsync()).ToList();
         _sanPham = (await ThucPhamService.LayTatCaAsync()).ToList();
+        _thanhPham = _sanPham.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham).ToList();
         _kho = (await KhoService.LayTatCaAsync()).ToList();
         _lo = (await LoService.LayTatCaAsync()).ToList();
         _nhanSu = (await NhanSuService.LayTatCaAsync()).ToList();
-        _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
         _dangTai = false;
     }
 
