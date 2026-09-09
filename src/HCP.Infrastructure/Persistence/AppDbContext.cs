@@ -62,6 +62,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<SyncOutboxItem> SyncOutboxItems => Set<SyncOutboxItem>();
     public DbSet<SystemLogEntry> SystemLogs => Set<SystemLogEntry>();
 
+    // Đơn hàng NHẬN VỀ từ HnC (chiều kéo). Job nền ghi -> KHÔNG lọc theo tenant tự động,
+    // TenantId gán/lọc tường minh (giống SyncOutbox/SystemLog).
+    public DbSet<DonHangNhan> DonHangNhans => Set<DonHangNhan>();
+    public DbSet<DonHangNhanDong> DonHangNhanDongs => Set<DonHangNhanDong>();
+
     // --- Bảng nghiệp vụ (LỌC theo tenant) ---
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<Facility> Facilities => Set<Facility>();
@@ -498,6 +503,26 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         orderExport.Property(x => x.SoLuong).HasPrecision(18, 3);
         orderExport.HasIndex(x => x.OrderId);
         orderExport.IsMultiTenant().AdjustUniqueIndexes();
+
+        // --- Đơn hàng nhận về (chiều kéo từ HnC) ---
+        // KHÔNG gọi IsMultiTenant(): job nền ghi không có tenant context nên TenantId
+        // được gán tường minh; đọc phải lọc tường minh theo TenantId của cơ sở hiện hành.
+        var dhNhan = builder.Entity<DonHangNhan>();
+        dhNhan.ToTable("DonHangNhan");
+        dhNhan.Property(d => d.TenantId).HasMaxLength(64).IsRequired();
+        dhNhan.Property(d => d.MaDonHang).HasMaxLength(255).IsRequired();
+        dhNhan.Property(d => d.TenTruong).HasMaxLength(500);
+        dhNhan.Property(d => d.TrangThai).HasMaxLength(50);
+        dhNhan.HasMany(d => d.Dong).WithOne(l => l.DonHangNhan!)
+              .HasForeignKey(l => l.DonHangNhanId).OnDelete(DeleteBehavior.Cascade);
+        dhNhan.HasIndex(d => new { d.TenantId, d.MaDonHang }).IsUnique();
+
+        var dhNhanDong = builder.Entity<DonHangNhanDong>();
+        dhNhanDong.ToTable("DonHangNhanDong");
+        dhNhanDong.Property(l => l.TenantId).HasMaxLength(64).IsRequired();
+        dhNhanDong.Property(l => l.MaSanPham).HasMaxLength(255).IsRequired();
+        dhNhanDong.Property(l => l.TenSanPham).HasMaxLength(500);
+        dhNhanDong.HasIndex(l => l.DonHangNhanId);
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
         var standardFood = builder.Entity<StandardFoodCategory>();

@@ -1,0 +1,127 @@
+@page "/app/don-hang-nhan"
+@using HCP.Domain.Constants
+@using HCP.Infrastructure.Services.DonHangNhan
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDonHangNhanService DonHangNhanService
+@inject ISnackbar Snackbar
+
+<PageTitle>Đơn hàng từ trường</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Đơn hàng từ trường</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Đơn do trường học đặt, tự động kéo về từ HanoiCheck (mỗi 15 phút). Bấm "Đồng bộ ngay" để cập nhật thủ công.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudDownload"
+               Disabled="_dangDongBo" OnClick="DongBoNgayAsync">Đồng bộ ngay</MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        Chưa có đơn hàng nào. Bấm <b>"Đồng bộ ngay"</b> để kéo về (cần đã cấu hình kết nối HanoiCheck).
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh Style="width:56px">STT</MudTh>
+            <MudTh>Mã đơn</MudTh>
+            <MudTh>Trường học</MudTh>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh>Ngày giao</MudTh>
+            <MudTh>Sản phẩm</MudTh>
+            <MudTh>Đồng bộ lúc</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
+            <MudTd DataLabel="Mã đơn"><b>@context.MaDonHang</b></MudTd>
+            <MudTd DataLabel="Trường học">@(context.TenTruong ?? "-")</MudTd>
+            <MudTd DataLabel="Trạng thái">
+                <MudChip T="string" Size="Size.Small" Color="MauTrangThai(context.TrangThai)">
+                    @TenTrangThai(context.TrangThai)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Ngày giao">@(context.NgayGiao?.ToString("dd/MM/yyyy") ?? "-")</MudTd>
+            <MudTd DataLabel="Sản phẩm">
+                @if (context.Dong.Count == 0)
+                {
+                    <span class="mud-text-secondary">-</span>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2">
+                        @string.Join(", ", context.Dong.Select(d => d.TenSanPham ?? d.MaSanPham))
+                    </MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Đồng bộ lúc">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    @context.LanDongBoUtc.ToLocalTime().ToString("dd/MM HH:mm")
+                </MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<HCP.Domain.Entities.Business.DonHangNhan> _danhSach = new();
+    private bool _dangTai = true;
+    private bool _dangDongBo;
+
+    protected override async Task OnInitializedAsync() => await TaiAsync();
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await DonHangNhanService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    private async Task DongBoNgayAsync()
+    {
+        _dangDongBo = true;
+        var kq = await DonHangNhanService.DongBoNgayAsync();
+        _dangDongBo = false;
+
+        if (kq.ChuaCauHinh)
+            Snackbar.Add("Chưa cấu hình kết nối HanoiCheck. Vào Cài đặt kết nối để khai báo.", Severity.Warning);
+        else if (!kq.ThanhCong)
+            Snackbar.Add(kq.ThongBao ?? "Đồng bộ đơn hàng thất bại.", Severity.Error);
+        else
+            Snackbar.Add($"Đã đồng bộ {kq.SoDon} đơn hàng từ HanoiCheck.", Severity.Success);
+
+        if (kq.ThanhCong) await TaiAsync();
+    }
+
+    // Các mã trạng thái đơn theo đặc tả HnC.
+    private static string TenTrangThai(string? s) => s switch
+    {
+        "CHO_XAC_NHAN" => "Chờ xác nhận",
+        "TU_CHOI" => "Từ chối",
+        "DANG_CHUAN_BI" => "Đang chuẩn bị",
+        "DANG_GIAO" => "Đang giao",
+        "DA_GIAO" => "Đã giao",
+        "GIAO_HANG_THANH_CONG" => "Giao thành công",
+        "TRA_HANG" => "Trả hàng",
+        "HUY" => "Huỷ",
+        _ => s ?? "-"
+    };
+
+    private static Color MauTrangThai(string? s) => s switch
+    {
+        "CHO_XAC_NHAN" => Color.Info,
+        "DANG_CHUAN_BI" or "DANG_GIAO" => Color.Primary,
+        "DA_GIAO" or "GIAO_HANG_THANH_CONG" => Color.Success,
+        "TU_CHOI" or "HUY" or "TRA_HANG" => Color.Error,
+        _ => Color.Default
+    };
+}

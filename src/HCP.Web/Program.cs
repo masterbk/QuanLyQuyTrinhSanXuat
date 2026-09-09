@@ -12,6 +12,7 @@ using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.Dashboard;
 using HCP.Infrastructure.Services.DanhMuc;
+using HCP.Infrastructure.Services.DonHangNhan;
 using HCP.Infrastructure.Services.Kho;
 using HCP.Infrastructure.Services.NhatKyDongBo;
 using HCP.Infrastructure.Sync;
@@ -141,6 +142,9 @@ builder.Services.AddScoped<ISystemLogWriter, SystemLogWriter>();
 builder.Services.AddScoped<ISyncOutboxProcessor, SyncOutboxProcessor>();
 builder.Services.AddScoped<ISyncOutboxWriter, SyncOutboxWriter>();
 builder.Services.AddScoped<IStandardFoodsSyncJob, StandardFoodsSyncJob>();
+builder.Services.AddScoped<IHanoiCheckOrderQueryClient, HanoiCheckOrderQueryClient>();
+builder.Services.AddScoped<IDongBoDonHangJob, DongBoDonHangJob>();
+builder.Services.AddScoped<IDonHangNhanService, DonHangNhanService>();
 
 // HttpClient riêng cho việc gửi dữ liệu merge (khác client lấy token).
 builder.Services.AddHttpClient(HanoiCheckSyncClient.HttpClientName, http =>
@@ -244,6 +248,12 @@ using (var scope = app.Services.CreateScope())
         "cap-nhat-danh-muc-chuan",
         j => j.DongBoAsync(CancellationToken.None),
         Cron.Daily);
+
+    // Kéo đơn hàng từ trường về (GET /orders) - đơn theo ngày, 15 phút một lần là đủ.
+    recurringJobs.AddOrUpdate<IDongBoDonHangJob>(
+        "keo-don-hang-hanoicheck",
+        j => j.DongBoTatCaAsync(CancellationToken.None),
+        "*/15 * * * *");
 }
 
 app.Run();
