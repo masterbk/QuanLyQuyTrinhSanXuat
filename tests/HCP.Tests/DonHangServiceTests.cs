@@ -30,6 +30,7 @@ public class DonHangServiceTests
         using var db = MoDb();
         db.Warehouses.Add(new Warehouse { MaKho = "KHO01", TenKho = "Kho", DiaChi = "HN" });
         db.Products.Add(new Product { MaSanPham = "SP001", TenSanPham = "Thịt", MaLoaiSp = "THIT" });
+        db.Products.Add(new Product { MaSanPham = "SP_CHUA_LOAI", TenSanPham = "Bánh mới", MaLoaiSp = "" });
         db.Batches.Add(new Batch { MaSanPham = "SP001", MaLo = "LO01", TenLo = "Lô", NgayNhap = new DateOnly(2026, 7, 1) });
         db.Dishes.Add(new Dish { MaMonAn = "MON001", TenMonAn = "Cơm", NhomTuoiId = 1 });
         db.SaveChanges();
@@ -46,14 +47,55 @@ public class DonHangServiceTests
         var kq = await svc.ThemAsync(new Order
         {
             MaDonHang = "DH001", LoaiDonHang = "food", MaTruong = "TH_A", TrangThai = "DANG_GIAO",
-            ChiTiet = { new OrderLine { MaLoaiSp = "THIT", SoLuong = 50 } },
+            // Dòng đơn chọn THÀNH PHẨM (SP001) - ma_loai_sp "THIT" được service suy ra từ thành phẩm.
+            ChiTiet = { new OrderLine { MaSanPham = "SP001", SoLuong = 50 } },
             XuatKho = { new OrderExport { MaSanPham = "SP001", MaKho = "KHO01", MaLo = "LO01", SoLuong = 50 } }
         });
 
         Assert.True(kq.ThanhCong, kq.ThongBao);
         Assert.Equal("Order", outbox.EntityTypeCuoi);
         Assert.Contains("\"xuat_kho\"", outbox.PayloadCuoi);
-        Assert.Contains("\"ma_loai_sp\":\"THIT\"", outbox.PayloadCuoi);
+        Assert.Contains("\"ma_loai_sp\":\"THIT\"", outbox.PayloadCuoi);   // suy đúng từ thành phẩm
+
+        using var db2 = MoDb();
+        var dong = await db2.OrderLines.SingleAsync();
+        Assert.Equal("SP001", dong.MaSanPham);   // dòng lưu tham chiếu thành phẩm
+        Assert.Equal("THIT", dong.MaLoaiSp);     // ma_loai_sp đã suy ra và lưu kèm
+    }
+
+    [Fact]
+    public async Task Don_Food_Thanh_Pham_Chua_Khai_Ma_Loai_Sp_Thi_Bao_Loi()
+    {
+        Seed();
+        using var db = MoDb();
+        var svc = new DonHangService(db, new CapturingOutbox());
+
+        var kq = await svc.ThemAsync(new Order
+        {
+            MaDonHang = "DH005", LoaiDonHang = "food", MaTruong = "TH_A", TrangThai = "CHO_XAC_NHAN",
+            ChiTiet = { new OrderLine { MaSanPham = "SP_CHUA_LOAI", SoLuong = 10 } }
+        });
+
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("Mã loại SP", kq.ThongBao);
+        Assert.Equal(0, await db.Orders.CountAsync());
+    }
+
+    [Fact]
+    public async Task Don_Food_Thanh_Pham_Khong_Ton_Tai_Thi_Bao_Loi()
+    {
+        Seed();
+        using var db = MoDb();
+        var svc = new DonHangService(db, new CapturingOutbox());
+
+        var kq = await svc.ThemAsync(new Order
+        {
+            MaDonHang = "DH006", LoaiDonHang = "food", MaTruong = "TH_A", TrangThai = "CHO_XAC_NHAN",
+            ChiTiet = { new OrderLine { MaSanPham = "SP_KHONG_CO", SoLuong = 10 } }
+        });
+
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("SP_KHONG_CO", kq.ThongBao);
     }
 
     [Fact]
@@ -90,7 +132,7 @@ public class DonHangServiceTests
         var kq = await svc.ThemAsync(new Order
         {
             MaDonHang = "DH003", LoaiDonHang = "food", MaTruong = "TH_A", TrangThai = "CHO_XAC_NHAN",
-            ChiTiet = { new OrderLine { SoLuong = 10 } } // thiếu ma_loai_sp
+            ChiTiet = { new OrderLine { SoLuong = 10 } } // thiếu thành phẩm
         });
 
         Assert.False(kq.ThanhCong);
@@ -107,7 +149,7 @@ public class DonHangServiceTests
         var kq = await svc.ThemAsync(new Order
         {
             MaDonHang = "DH004", LoaiDonHang = "food", MaTruong = "TH_A", TrangThai = "DANG_GIAO",
-            ChiTiet = { new OrderLine { MaLoaiSp = "THIT", SoLuong = 50 } },
+            ChiTiet = { new OrderLine { MaSanPham = "SP001", SoLuong = 50 } },
             XuatKho = { new OrderExport { MaSanPham = "SP001", MaKho = "KHO01", MaLo = "LO_KHONG_CO", SoLuong = 50 } }
         });
 

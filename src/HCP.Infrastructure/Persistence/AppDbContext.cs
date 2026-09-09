@@ -487,6 +487,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
 
         var orderLine = builder.Entity<OrderLine>();
         orderLine.ToTable("OrderLines");
+        orderLine.Property(l => l.MaSanPham).HasMaxLength(255);
         orderLine.Property(l => l.MaLoaiSp).HasMaxLength(100);
         orderLine.Property(l => l.MaMonAn).HasMaxLength(255);
         orderLine.Property(l => l.SoLuong).HasPrecision(18, 3);

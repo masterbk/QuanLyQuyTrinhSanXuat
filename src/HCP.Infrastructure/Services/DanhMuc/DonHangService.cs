@@ -140,8 +140,26 @@ public class DonHangService : IDanhMucService<Order>
         }
         else
         {
-            if (o.ChiTiet.Any(l => string.IsNullOrWhiteSpace(l.MaLoaiSp)))
-                return "Đơn thực phẩm: mỗi dòng phải có mã loại thực phẩm.";
+            // Đơn food: dòng lưu MÃ THÀNH PHẨM (SKU) nội bộ. ma_loai_sp KHÔNG nhập tay mà được
+            // SUY từ thành phẩm - nên chỉ cần chọn đúng thành phẩm là đủ để sau này đẩy lên HnC.
+            if (o.ChiTiet.Any(l => string.IsNullOrWhiteSpace(l.MaSanPham)))
+                return "Đơn thực phẩm: mỗi dòng phải chọn thành phẩm.";
+
+            var skus = o.ChiTiet.Select(l => l.MaSanPham!.Trim()).Distinct().ToList();
+            var loaiTheoSku = await _db.Products
+                .Where(p => skus.Contains(p.MaSanPham))
+                .Select(p => new { p.MaSanPham, p.MaLoaiSp })
+                .ToDictionaryAsync(p => p.MaSanPham, p => p.MaLoaiSp, ct);
+
+            foreach (var l in o.ChiTiet)
+            {
+                var sku = l.MaSanPham!.Trim();
+                if (!loaiTheoSku.TryGetValue(sku, out var maLoai))
+                    return $"Thành phẩm \"{sku}\" không có trong danh mục thực phẩm.";
+                if (string.IsNullOrWhiteSpace(maLoai))
+                    return $"Thành phẩm \"{sku}\" chưa khai Mã loại SP (ma_loai_sp) - bổ sung ở màn Thực phẩm để đẩy đơn lên HanoiCheck.";
+                l.MaLoaiSp = maLoai;  // suy ma_loai_sp từ thành phẩm cho đúng trường HnC cần
+            }
         }
 
         // Xuất kho (chỉ có ở đơn food): kho/thực phẩm/lô phải tồn tại.
@@ -194,8 +212,10 @@ public class DonHangService : IDanhMucService<Order>
         var laDonMon = o.LoaiDonHang == LoaiDonHang.Dish;
         foreach (var l in o.ChiTiet)
         {
-            if (laDonMon) { l.MaLoaiSp = null; l.MaMonAn = l.MaMonAn?.Trim(); }
-            else { l.MaMonAn = null; l.MaLoaiSp = l.MaLoaiSp?.Trim(); }
+            // Đơn món: chỉ giữ ma_mon_an. Đơn food: giữ MÃ THÀNH PHẨM (SKU); ma_loai_sp để trống
+            // ở đây, sẽ được KiemTraAsync suy từ thành phẩm đã chọn.
+            if (laDonMon) { l.MaLoaiSp = null; l.MaSanPham = null; l.MaMonAn = l.MaMonAn?.Trim(); }
+            else { l.MaMonAn = null; l.MaSanPham = l.MaSanPham?.Trim(); }
             l.PathFile = string.IsNullOrWhiteSpace(l.PathFile) ? null : l.PathFile.Trim();
         }
 
@@ -204,6 +224,7 @@ public class DonHangService : IDanhMucService<Order>
 
     private static OrderLine SaoChepDong(OrderLine l) => new()
     {
+        MaSanPham = l.MaSanPham,
         MaLoaiSp = l.MaLoaiSp,
         MaMonAn = l.MaMonAn,
         SoLuong = l.SoLuong,

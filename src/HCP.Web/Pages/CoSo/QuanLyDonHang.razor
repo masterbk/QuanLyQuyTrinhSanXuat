@@ -158,19 +158,21 @@ else
                                 }
                                 else if (_thanhPham.Count > 0)
                                 {
-                                    <MudSelect T="string" @bind-Value="dong.MaLoaiSp" Label="Thực phẩm (thành phẩm)"
+                                    @* Dòng đơn lưu MÃ THÀNH PHẨM (SKU) của hệ thống. Mã loại SP (ma_loai_sp)
+                                       mà HnC cần sẽ được suy từ thành phẩm này khi lưu/đẩy đơn. *@
+                                    <MudSelect T="string" @bind-Value="dong.MaSanPham" Label="Thực phẩm (thành phẩm)"
                                                Variant="Variant.Outlined">
                                         @foreach (var sp in _thanhPham)
                                         {
-                                            <MudSelectItem T="string" Value="@sp.MaSanPham">@sp.MaSanPham — @sp.TenSanPham</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@sp.MaSanPham">@sp.TenSanPham (@sp.MaSanPham)</MudSelectItem>
                                         }
                                     </MudSelect>
                                 }
                                 else
                                 {
-                                    <MudTextField @bind-Value="dong.MaLoaiSp" Label="Mã thực phẩm"
-                                                  Variant="Variant.Outlined" MaxLength="100"
-                                                  HelperText="Chưa có thành phẩm - khai ở Thực phẩm/SKU (loại Thành phẩm)." />
+                                    <MudTextField @bind-Value="dong.MaSanPham" Label="Mã thành phẩm (SKU)"
+                                                  Variant="Variant.Outlined" MaxLength="255"
+                                                  HelperText="Chưa có thành phẩm - khai ở màn Thực phẩm (loại Thành phẩm)." />
                                 }
                             </MudItem>
                             <MudItem xs="6" sm="3">
@@ -373,7 +375,8 @@ else
                 Images = dh.Images.Select(i => new OrderImage { PathFile = i.PathFile, SortOrder = i.SortOrder }).ToList(),
                 ChiTiet = dh.ChiTiet.Select(l => new OrderLine
                 {
-                    MaLoaiSp = l.MaLoaiSp, MaMonAn = l.MaMonAn, SoLuong = l.SoLuong, PathFile = l.PathFile
+                    MaSanPham = l.MaSanPham, MaLoaiSp = l.MaLoaiSp,
+                    MaMonAn = l.MaMonAn, SoLuong = l.SoLuong, PathFile = l.PathFile
                 }).ToList(),
                 XuatKho = dh.XuatKho.Select(x => new OrderExport
                 {

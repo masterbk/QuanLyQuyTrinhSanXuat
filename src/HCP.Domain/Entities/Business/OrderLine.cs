@@ -13,7 +13,13 @@ public class OrderLine : TenantEntity
     public int OrderId { get; set; }
     public Order? Order { get; set; }
 
-    /// <summary>ma_loai_sp - mã danh mục thực phẩm (đơn food).</summary>
+    /// <summary>
+    /// Mã thành phẩm (SKU) nội bộ được chọn cho dòng đơn food. Là tham chiếu tới thực phẩm
+    /// của hệ thống; <see cref="MaLoaiSp"/> được suy ra từ thành phẩm này khi lưu/đẩy lên HnC.
+    /// </summary>
+    public string? MaSanPham { get; set; }
+
+    /// <summary>ma_loai_sp - mã danh mục thực phẩm (đơn food). Suy từ thành phẩm <see cref="MaSanPham"/>.</summary>
     public string? MaLoaiSp { get; set; }
 
     /// <summary>ma_mon_an - mã món ăn (đơn dish).</summary>
