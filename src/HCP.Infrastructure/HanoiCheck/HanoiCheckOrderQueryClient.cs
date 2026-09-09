@@ -108,6 +108,61 @@ public sealed class HanoiCheckOrderQueryClient : IHanoiCheckOrderQueryClient
         }
     }
 
+    public async Task<OrderDetailResult> LayChiTietAsync(string tenantId, string maDon, CancellationToken ct = default)
+    {
+        var token = await _tokenManager.LayAccessTokenAsync(tenantId, ct);
+        switch (token.TrangThai)
+        {
+            case TokenTrangThai.ChuaCauHinh:
+                return OrderDetailResult.ChuaCauHinhKq(token.ThongBao ?? "Chưa cấu hình kết nối.");
+            case TokenTrangThai.Loi:
+                return OrderDetailResult.Loi(token.ThongBao ?? "Không lấy được token.");
+        }
+
+        var cauHinh = await _db.TenantHnCCredentials.FirstOrDefaultAsync(c => c.TenantId == tenantId, ct);
+        if (cauHinh is null) return OrderDetailResult.ChuaCauHinhKq("Chưa cấu hình kết nối.");
+
+        var hmacSecret = _protector.TryUnprotect(cauHinh.HmacSecretEncrypted);
+        if (hmacSecret is null)
+            return OrderDetailResult.Loi("Không giải mã được hmac_secret. Cơ sở cần nhập lại secret.");
+
+        // PATH ký gồm cả mã đơn, không kèm query. Mã đơn dùng chung cho URL và chuỗi ký.
+        var path = "/api/supplier/orders/" + maDon;
+        var url = cauHinh.BaseUrl.TrimEnd('/') + path;
+        var headers = _signer.Ky(hmacSecret, "GET", path, string.Empty);
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+            request.Headers.TryAddWithoutValidation("X-Timestamp", headers.Timestamp);
+            request.Headers.TryAddWithoutValidation("X-Nonce", headers.Nonce);
+            request.Headers.TryAddWithoutValidation("X-Signature", headers.Signature);
+
+            var http = _httpFactory.CreateClient(HanoiCheckSyncClient.HttpClientName);
+            using var response = await http.SendAsync(request, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            if (!response.IsSuccessStatusCode)
+                return OrderDetailResult.Loi($"HanoiCheck trả về HTTP {(int)response.StatusCode} khi lấy chi tiết đơn {maDon}.");
+
+            OrderDetailResponse? parsed;
+            try { parsed = JsonSerializer.Deserialize<OrderDetailResponse>(body); }
+            catch (JsonException) { return OrderDetailResult.Loi("Phản hồi chi tiết đơn không đúng định dạng JSON."); }
+
+            if (parsed?.Data is null) return OrderDetailResult.Loi("Chi tiết đơn không có dữ liệu.");
+            return OrderDetailResult.Ok(parsed.Data);
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return OrderDetailResult.Loi("Hết thời gian chờ khi lấy chi tiết đơn.");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Lỗi mạng khi lấy chi tiết đơn {MaDon} cơ sở {TenantId}.", maDon, tenantId);
+            return OrderDetailResult.Loi("Lỗi mạng khi lấy chi tiết đơn: " + ex.Message);
+        }
+    }
+
     /// <summary>Dựng phần query (chưa gồm page/per_page) từ bộ lọc.</summary>
     private static string BaseQuery(OrderQueryFilter f)
     {

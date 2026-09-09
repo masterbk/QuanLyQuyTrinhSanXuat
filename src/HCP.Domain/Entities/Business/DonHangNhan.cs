@@ -30,6 +30,15 @@ public class DonHangNhan : AuditableEntity
     /// <summary>Ngày giao (order_date) nếu HnC trả về.</summary>
     public DateOnly? NgayGiao { get; set; }
 
+    /// <summary>Người giao hàng (từ chi tiết đơn).</summary>
+    public string? MaNguoiGiao { get; set; }
+
+    /// <summary>Địa chỉ/điểm giao (từ chi tiết đơn).</summary>
+    public string? DiaChiGiao { get; set; }
+
+    /// <summary>Đã kéo chi tiết đơn (items + phân bổ) hay chưa.</summary>
+    public bool DaLayChiTiet { get; set; }
+
     /// <summary>Thời điểm đồng bộ gần nhất từ HanoiCheck.</summary>
     public DateTime LanDongBoUtc { get; set; }
 

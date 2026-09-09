@@ -40,6 +40,7 @@ else
             <MudTh>Ngày giao</MudTh>
             <MudTh>Sản phẩm</MudTh>
             <MudTh>Đồng bộ lúc</MudTh>
+            <MudTh Style="width:60px"></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
@@ -68,14 +69,84 @@ else
                     @context.LanDongBoUtc.ToLocalTime().ToString("dd/MM HH:mm")
                 </MudText>
             </MudTd>
+            <MudTd>
+                <MudTooltip Text="Xem chi tiết đơn">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
+                                   Color="Color.Primary" OnClick="@(() => MoChiTiet(context))" />
+                </MudTooltip>
+            </MudTd>
         </RowTemplate>
     </MudTable>
 }
+
+<MudDialog @bind-Visible="_hienChiTiet" Options="_dialogOptions">
+    <TitleContent><MudText Typo="Typo.h6">Chi tiết đơn @_chon?.MaDonHang</MudText></TitleContent>
+    <DialogContent>
+        @if (_chon is not null)
+        {
+            <MudGrid Class="mb-2">
+                <MudItem xs="12" sm="6"><b>Trường:</b> @(_chon.TenTruong ?? "-")</MudItem>
+                <MudItem xs="12" sm="6"><b>Trạng thái:</b> @TenTrangThai(_chon.TrangThai)</MudItem>
+                <MudItem xs="12" sm="6"><b>Ngày giao:</b> @(_chon.NgayGiao?.ToString("dd/MM/yyyy") ?? "-")</MudItem>
+                <MudItem xs="12" sm="6"><b>Người giao:</b> @(_chon.MaNguoiGiao ?? "-")</MudItem>
+                <MudItem xs="12"><b>Địa chỉ giao:</b> @(_chon.DiaChiGiao ?? "-")</MudItem>
+            </MudGrid>
+            @if (!_chon.DaLayChiTiet)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                    Chưa lấy được chi tiết đầy đủ (số lượng, phân bổ lô/kho) - sẽ tự cập nhật ở lần đồng bộ sau.
+                </MudAlert>
+            }
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Dòng hàng</MudText>
+            <MudTable Items="_chon.Dong" Dense="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Mã</MudTh>
+                    <MudTh>Tên</MudTh>
+                    <MudTh Style="text-align:right">Số lượng</MudTh>
+                    <MudTh>Phân bổ (NCC · lô · kho · SL)</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Mã">@context.MaSanPham</MudTd>
+                    <MudTd DataLabel="Tên">@context.TenSanPham</MudTd>
+                    <MudTd DataLabel="Số lượng" Style="text-align:right">@(context.SoLuong?.ToString("0.###") ?? "-")</MudTd>
+                    <MudTd DataLabel="Phân bổ">
+                        @if (context.PhanBo.Count == 0)
+                        {
+                            <span class="mud-text-secondary">-</span>
+                        }
+                        else
+                        {
+                            @foreach (var pb in context.PhanBo)
+                            {
+                                <MudText Typo="Typo.caption" Class="d-block">
+                                    @(pb.MaThucPhamNcc ?? "?") · lô @(pb.MaLo ?? "-") · kho @(pb.MaKho ?? "-") · @(pb.SoLuong?.ToString("0.###") ?? "-")
+                                </MudText>
+                            }
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienChiTiet = false)">Đóng</MudButton>
+    </DialogActions>
+</MudDialog>
 
 @code {
     private List<HCP.Domain.Entities.Business.DonHangNhan> _danhSach = new();
     private bool _dangTai = true;
     private bool _dangDongBo;
+
+    private bool _hienChiTiet;
+    private HCP.Domain.Entities.Business.DonHangNhan? _chon;
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    private void MoChiTiet(HCP.Domain.Entities.Business.DonHangNhan don)
+    {
+        _chon = don;
+        _hienChiTiet = true;
+    }
 
     protected override async Task OnInitializedAsync() => await TaiAsync();
 

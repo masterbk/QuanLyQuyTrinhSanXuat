@@ -24,7 +24,7 @@ public sealed class DonHangNhanService : IDonHangNhanService
     {
         var tenantId = TenantId;
         return await _db.DonHangNhans.AsNoTracking()
-            .Include(d => d.Dong)
+            .Include(d => d.Dong).ThenInclude(l => l.PhanBo)
             .Where(d => d.TenantId == tenantId)
             .OrderByDescending(d => d.NgayGiao).ThenByDescending(d => d.LanDongBoUtc)
             .ToListAsync(ct);

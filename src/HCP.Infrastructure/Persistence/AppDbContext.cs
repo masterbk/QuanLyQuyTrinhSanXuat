@@ -66,6 +66,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     // TenantId gán/lọc tường minh (giống SyncOutbox/SystemLog).
     public DbSet<DonHangNhan> DonHangNhans => Set<DonHangNhan>();
     public DbSet<DonHangNhanDong> DonHangNhanDongs => Set<DonHangNhanDong>();
+    public DbSet<DonHangNhanPhanBo> DonHangNhanPhanBos => Set<DonHangNhanPhanBo>();
 
     // --- Bảng nghiệp vụ (LỌC theo tenant) ---
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
@@ -522,7 +523,21 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dhNhanDong.Property(l => l.TenantId).HasMaxLength(64).IsRequired();
         dhNhanDong.Property(l => l.MaSanPham).HasMaxLength(255).IsRequired();
         dhNhanDong.Property(l => l.TenSanPham).HasMaxLength(500);
+        dhNhanDong.Property(l => l.SoLuong).HasPrecision(18, 3);
+        dhNhanDong.Property(l => l.MaTruyVet).HasMaxLength(255);
+        dhNhanDong.Property(l => l.MaThucDon).HasMaxLength(255);
+        dhNhanDong.HasMany(l => l.PhanBo).WithOne(p => p.DonHangNhanDong!)
+                  .HasForeignKey(p => p.DonHangNhanDongId).OnDelete(DeleteBehavior.Cascade);
         dhNhanDong.HasIndex(l => l.DonHangNhanId);
+
+        var dhPhanBo = builder.Entity<DonHangNhanPhanBo>();
+        dhPhanBo.ToTable("DonHangNhanPhanBo");
+        dhPhanBo.Property(p => p.TenantId).HasMaxLength(64).IsRequired();
+        dhPhanBo.Property(p => p.MaThucPhamNcc).HasMaxLength(255);
+        dhPhanBo.Property(p => p.MaLo).HasMaxLength(255);
+        dhPhanBo.Property(p => p.MaKho).HasMaxLength(255);
+        dhPhanBo.Property(p => p.SoLuong).HasPrecision(18, 3);
+        dhPhanBo.HasIndex(p => p.DonHangNhanDongId);
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
         var standardFood = builder.Entity<StandardFoodCategory>();

@@ -17,4 +17,18 @@ public class DonHangNhanDong : AuditableEntity
 
     /// <summary>name - tên sản phẩm/món ăn.</summary>
     public string? TenSanPham { get; set; }
+
+    // --- Bổ sung từ chi tiết đơn (GET /orders/{code}) ---
+
+    /// <summary>Số lượng đặt (từ chi tiết đơn).</summary>
+    public decimal? SoLuong { get; set; }
+
+    /// <summary>trace_code - mã truy vết dòng hàng (khi 1 sản phẩm xuất hiện nhiều dòng).</summary>
+    public string? MaTruyVet { get; set; }
+
+    /// <summary>menu_code - mã thực đơn nguồn của dòng (nếu có).</summary>
+    public string? MaThucDon { get; set; }
+
+    /// <summary>Phân bổ cung ứng của dòng: lô/kho/số lượng theo từng supplier_food_code.</summary>
+    public List<DonHangNhanPhanBo> PhanBo { get; set; } = new();
 }

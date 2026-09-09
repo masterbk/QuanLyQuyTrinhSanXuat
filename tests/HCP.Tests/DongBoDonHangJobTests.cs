@@ -26,8 +26,15 @@ public class DongBoDonHangJobTests
     private sealed class FakeOrderClient : IHanoiCheckOrderQueryClient
     {
         public OrderQueryResult Result = OrderQueryResult.Ok(Array.Empty<OrderListItem>());
+        public Dictionary<string, OrderDetail> ChiTietTheoMa = new();
+
         public Task<OrderQueryResult> LayDanhSachAsync(string tenantId, OrderQueryFilter filter, CancellationToken ct = default)
             => Task.FromResult(Result);
+
+        public Task<OrderDetailResult> LayChiTietAsync(string tenantId, string maDon, CancellationToken ct = default)
+            => Task.FromResult(ChiTietTheoMa.TryGetValue(maDon, out var d)
+                ? OrderDetailResult.Ok(d)
+                : OrderDetailResult.Loi("Không có chi tiết giả lập."));
     }
 
     private static OrderListItem Don(string code, string truong, string status, string? ngay,
@@ -81,6 +88,46 @@ public class DongBoDonHangJobTests
         }
     }
 
+    private static OrderDetail ChiTiet(string code, string status, string ngay,
+        params (string ma, string ten, decimal sl, string trace, (string sfc, string lo, string kho, decimal sl)[] alloc)[] items) => new()
+    {
+        Code = code, Status = status, OrderDate = ngay,
+        School = new SchoolInfo { Name = "Trường A" },
+        Items = items.Select(i => new OrderDetailItem
+        {
+            Code = i.ma, Name = i.ten, SoLuong = i.sl, TraceCode = i.trace,
+            Allocations = i.alloc.Select(a => new OrderAllocation
+            { SupplierFoodCode = a.sfc, MaLo = a.lo, MaKho = a.kho, SoLuong = a.sl }).ToList()
+        }).ToList()
+    };
+
+    [Fact]
+    public async Task Keo_Chi_Tiet_Do_So_Luong_Va_Phan_Bo()
+    {
+        var client = new FakeOrderClient
+        {
+            Result = OrderQueryResult.Ok(new[] { Don("DH001", "Trường A", "DANG_GIAO", "2026-09-10", ("TP-01", "Bánh mì")) }),
+        };
+        client.ChiTietTheoMa["DH001"] = ChiTiet("DH001", "DANG_GIAO", "2026-09-10",
+            ("TP-01", "Bánh mì", 30m, "TR-1", new[] { ("SF-01", "LO_A", "KHO01", 20m), ("SF-01", "LO_B", "KHO01", 10m) }));
+
+        using (var db = MoDb()) Assert.True((await Job(db, client).DongBoMotCoSoAsync(CoSo)).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            var don = await db.DonHangNhans
+                .Include(d => d.Dong).ThenInclude(l => l.PhanBo)
+                .SingleAsync(d => d.TenantId == CoSo && d.MaDonHang == "DH001");
+            Assert.True(don.DaLayChiTiet);
+            var dong = Assert.Single(don.Dong);
+            Assert.Equal(30m, dong.SoLuong);
+            Assert.Equal("TR-1", dong.MaTruyVet);
+            Assert.Equal(2, dong.PhanBo.Count);
+            Assert.Contains(dong.PhanBo, p => p.MaLo == "LO_A" && p.MaKho == "KHO01" && p.SoLuong == 20m);
+            Assert.All(dong.PhanBo, p => Assert.Equal(CoSo, p.TenantId));
+        }
+    }
+
     [Fact]
     public async Task Dong_Bo_Lai_Thi_Upsert_Khong_Nhan_Ban()
     {
@@ -88,13 +135,15 @@ public class DongBoDonHangJobTests
         {
             Result = OrderQueryResult.Ok(new[] { Don("DH001", "Trường A", "CHO_XAC_NHAN", "2026-09-10", ("TP-01", "Bánh mì")) })
         };
+        client.ChiTietTheoMa["DH001"] = ChiTiet("DH001", "CHO_XAC_NHAN", "2026-09-10",
+            ("TP-01", "Bánh mì", 10m, "TR-1", System.Array.Empty<(string, string, string, decimal)>()));
         using (var db = MoDb()) await Job(db, client).DongBoMotCoSoAsync(CoSo);
 
-        // Lần 2: cùng mã đơn nhưng đổi trạng thái + dòng sản phẩm.
-        client.Result = OrderQueryResult.Ok(new[]
-        {
-            Don("DH001", "Trường A", "DA_GIAO", "2026-09-10", ("TP-01", "Bánh mì"), ("TP-09", "Bánh kem"))
-        });
+        // Lần 2: cùng mã đơn nhưng đổi trạng thái + dòng hàng.
+        client.Result = OrderQueryResult.Ok(new[] { Don("DH001", "Trường A", "DA_GIAO", "2026-09-10") });
+        client.ChiTietTheoMa["DH001"] = ChiTiet("DH001", "DA_GIAO", "2026-09-10",
+            ("TP-01", "Bánh mì", 10m, "TR-1", System.Array.Empty<(string, string, string, decimal)>()),
+            ("TP-09", "Bánh kem", 5m, "TR-2", System.Array.Empty<(string, string, string, decimal)>()));
         using (var db = MoDb()) await Job(db, client).DongBoMotCoSoAsync(CoSo);
 
         using (var db = MoDb())
@@ -102,9 +151,8 @@ public class DongBoDonHangJobTests
             var dons = await db.DonHangNhans.Include(d => d.Dong).Where(d => d.TenantId == CoSo).ToListAsync();
             Assert.Single(dons);                              // không nhân bản
             Assert.Equal("DA_GIAO", dons[0].TrangThai);       // cập nhật tại chỗ
-            Assert.Equal(2, dons[0].Dong.Count);              // dòng thay mới
-            // Không còn dòng mồ côi.
-            Assert.Equal(2, await db.DonHangNhanDongs.CountAsync());
+            Assert.Equal(2, dons[0].Dong.Count);              // dòng thay mới từ chi tiết
+            Assert.Equal(2, await db.DonHangNhanDongs.CountAsync()); // không còn mồ côi
         }
     }
 
