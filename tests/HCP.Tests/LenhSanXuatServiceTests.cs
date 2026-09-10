@@ -232,6 +232,200 @@ public class LenhSanXuatServiceTests
     }
 
     [Fact]
+    public async Task Huy_Lenh_Da_Thuc_Hien_Tra_Lai_Nguyen_Lieu_Va_Thu_Hoi_Thanh_Pham()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 0.6m, new DateOnly(2026, 1, 1));
+        NhapBot("LO_B", 0.6m, new DateOnly(2026, 6, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;      // cần 1.0 kg bột
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).HuyAsync(id, "Nhập nhầm số lượng");
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        // Tồn về đúng như trước khi sản xuất, đảo đúng từng lô nguyên liệu.
+        Assert.Equal(0.6m, TonLo("BOT_MI", "LO_A"));
+        Assert.Equal(0.6m, TonLo("BOT_MI", "LO_B"));
+        Assert.Equal(0m, TonLo("BANH_MI", "LOTP1"));
+
+        using (var db = MoDb())
+        {
+            var lenh = await db.LenhSanXuats.SingleAsync();
+            Assert.Equal(TrangThaiLenhSX.DaHuy, lenh.TrangThai);
+            Assert.Equal("Nhập nhầm số lượng", lenh.LyDoHuy);
+            Assert.NotNull(lenh.ThoiGianHuyUtc);
+
+            // Dữ liệu gốc được GIỮ LẠI (không xoá), chỉ thêm dòng đảo tương ứng.
+            Assert.Equal(3, await db.KhoGiaoDichs.CountAsync(
+                g => g.ChungTu == "LSX-001" && g.Loai != LoaiGiaoDichKho.HoanTacSanXuat));
+            Assert.Equal(3, await db.KhoGiaoDichs.CountAsync(g => g.Loai == LoaiGiaoDichKho.HoanTacSanXuat));
+
+            // Dòng đảo trả nguyên liệu giữ nguyên hạn dùng của lô để FEFO về sau không sai.
+            var daoLoA = await db.KhoGiaoDichs.SingleAsync(
+                g => g.Loai == LoaiGiaoDichKho.HoanTacSanXuat && g.MaLo == "LO_A");
+            Assert.Equal(0.6m, daoLoA.SoLuong);
+            Assert.Equal(new DateOnly(2026, 1, 1), daoLoA.HanSuDung);
+        }
+    }
+
+    [Fact]
+    public async Task Khong_Huy_Duoc_Khi_Thanh_Pham_Da_Ban_Bot()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        // Bán bớt 3 cái từ lô thành phẩm -> không thu hồi đủ 10 nữa.
+        using (var db = MoDb())
+        {
+            db.KhoGiaoDichs.Add(new KhoGiaoDich
+            {
+                MaSanPham = "BANH_MI", MaKho = "KHO01", MaLo = "LOTP1", SoLuong = -3m,
+                Loai = LoaiGiaoDichKho.XuatBan, ThoiGianUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).HuyAsync(id, "Thử huỷ");
+            Assert.False(kq.ThanhCong);
+            Assert.Contains("không thu hồi được", kq.ThongBao);
+        }
+
+        // Không đảo gì cả: tồn giữ nguyên, lệnh vẫn Hoàn thành.
+        Assert.Equal(1.0m, TonLo("BOT_MI", "LO_A"));
+        Assert.Equal(7m, TonLo("BANH_MI", "LOTP1"));
+        using (var db = MoDb())
+            Assert.Equal(TrangThaiLenhSX.HoanThanh, (await db.LenhSanXuats.SingleAsync()).TrangThai);
+    }
+
+    [Fact]
+    public async Task Huy_Lenh_Xoa_Lo_Dong_Bo_Va_Go_Khoi_Hang_Doi_Khi_Chua_Gui()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb())
+        {
+            var lenh = Lenh(10);
+            lenh.TaoLoDongBo = true;
+            await Svc(db).TaoAsync(lenh);
+            id = (await db.LenhSanXuats.SingleAsync()).Id;
+        }
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True(await db.Batches.AnyAsync(b => b.MaLo == "LOTP1"));
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).HuyAsync(id, "Hỏng mẻ bánh");
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+            Assert.Contains("chưa gửi sang HanoiCheck", kq.ThongBao);
+        }
+
+        using (var db = MoDb())
+        {
+            Assert.False(await db.Batches.AnyAsync(b => b.MaLo == "LOTP1"));
+            Assert.False(await db.SyncOutboxItems.AnyAsync(o => o.EntityType == "Batch" && o.EntityKey == "LOTP1"));
+        }
+    }
+
+    [Fact]
+    public async Task Huy_Lenh_Da_Gui_HnC_Van_Huy_Nhung_Canh_Bao()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb())
+        {
+            var lenh = Lenh(10);
+            lenh.TaoLoDongBo = true;
+            await Svc(db).TaoAsync(lenh);
+            id = (await db.LenhSanXuats.SingleAsync()).Id;
+        }
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        // Giả lập job nền đã gửi thành công sang HanoiCheck.
+        using (var db = MoDb())
+        {
+            var item = await db.SyncOutboxItems.SingleAsync(o => o.EntityKey == "LOTP1");
+            item.Status = SyncOutboxStatus.Success;
+            await db.SaveChangesAsync();
+        }
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).HuyAsync(id, "Hỏng mẻ bánh");
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+            Assert.Contains("CẢNH BÁO", kq.ThongBao);
+        }
+
+        using (var db = MoDb())
+        {
+            // Bản ghi hàng đợi đã gửi được GIỮ LẠI làm bằng chứng đã đẩy đi.
+            Assert.True(await db.SyncOutboxItems.AnyAsync(o => o.EntityKey == "LOTP1"));
+            Assert.Equal(TrangThaiLenhSX.DaHuy, (await db.LenhSanXuats.SingleAsync()).TrangThai);
+        }
+    }
+
+    [Fact]
+    public async Task Huy_Bat_Buoc_Ly_Do_Va_Khong_Huy_Lenh_Nhap()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;
+
+        // Lệnh còn nháp thì dùng Xoá, không huỷ.
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).HuyAsync(id, "Lý do gì đó");
+            Assert.False(kq.ThanhCong);
+            Assert.Contains("Xoá", kq.ThongBao);
+        }
+
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        // Thiếu lý do -> chặn.
+        using (var db = MoDb()) Assert.False((await Svc(db).HuyAsync(id, "  ")).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).HuyAsync(id, "Sai định mức")).ThanhCong);
+        // Không huỷ hai lần (tránh đảo kho hai lượt).
+        using (var db = MoDb()) Assert.False((await Svc(db).HuyAsync(id, "Lần hai")).ThanhCong);
+
+        Assert.Equal(2m, TonLo("BOT_MI", "LO_A"));   // chỉ đảo đúng 1 lần
+    }
+
+    [Fact]
+    public async Task Khong_Xoa_Duoc_Lenh_Da_Thuc_Hien_Va_Da_Huy()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.False((await Svc(db).XoaAsync(id)).ThanhCong);
+
+        using (var db = MoDb()) Assert.True((await Svc(db).HuyAsync(id, "Huỷ thử")).ThanhCong);
+        using (var db = MoDb()) Assert.False((await Svc(db).XoaAsync(id)).ThanhCong);
+        // Lệnh đã huỷ cũng không chạy lại được.
+        using (var db = MoDb()) Assert.False((await Svc(db).ThucHienAsync(id)).ThanhCong);
+
+        using (var db = MoDb()) Assert.Equal(1, await db.LenhSanXuats.CountAsync());
+    }
+
+    [Fact]
     public async Task Khong_Bat_Tao_Lo_Thi_Khong_Sinh_Batch()
     {
         SeedDanhMuc();

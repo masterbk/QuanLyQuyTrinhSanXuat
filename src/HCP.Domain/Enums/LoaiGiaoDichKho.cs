@@ -16,5 +16,8 @@ public enum LoaiGiaoDichKho
     XuatBan = 3,
 
     /// <summary>Điều chỉnh/kiểm kê (+/−).</summary>
-    DieuChinh = 4
+    DieuChinh = 4,
+
+    /// <summary>Bút toán đảo khi huỷ lệnh sản xuất đã thực hiện: trả nguyên liệu (+), thu hồi thành phẩm (−).</summary>
+    HoanTacSanXuat = 5
 }

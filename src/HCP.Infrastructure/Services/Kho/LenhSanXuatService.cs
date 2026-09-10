@@ -85,6 +85,8 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
         if (lenh.TrangThai == TrangThaiLenhSX.HoanThanh)
             return KetQuaThaoTac.Loi("Lệnh này đã thực hiện rồi.");
+        if (lenh.TrangThai == TrangThaiLenhSX.DaHuy)
+            return KetQuaThaoTac.Loi("Lệnh này đã huỷ, không thực hiện lại được. Hãy tạo lệnh mới.");
 
         var tp = await _db.Products.Include(p => p.DanhSachDinhMuc)
             .FirstOrDefaultAsync(p => p.MaSanPham == lenh.MaThanhPham, ct);
@@ -239,16 +241,106 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         var lenh = await _db.LenhSanXuats.FirstOrDefaultAsync(l => l.Id == id, ct);
         if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
         if (lenh.TrangThai == TrangThaiLenhSX.HoanThanh)
-            return KetQuaThaoTac.Loi("Không xoá được lệnh đã thực hiện (đã phát sinh giao dịch kho).");
+            return KetQuaThaoTac.Loi(
+                "Không xoá được lệnh đã thực hiện (đã phát sinh giao dịch kho). Dùng \"Huỷ lệnh\" "
+                + "để hệ thống ghi bút toán đảo trả lại tồn kho.");
+        if (lenh.TrangThai == TrangThaiLenhSX.DaHuy)
+            return KetQuaThaoTac.Loi(
+                "Không xoá được lệnh đã huỷ - lệnh và bút toán đảo được giữ lại để truy xuất.");
 
         _db.LenhSanXuats.Remove(lenh);
         await _db.SaveChangesAsync(ct);
         return KetQuaThaoTac.Ok($"Đã xoá lệnh \"{lenh.MaLenh}\".");
     }
 
+    public async Task<KetQuaThaoTac> HuyAsync(int id, string? lyDo, CancellationToken ct = default)
+    {
+        lyDo = lyDo?.Trim();
+        if (string.IsNullOrWhiteSpace(lyDo)) return KetQuaThaoTac.Loi("Vui lòng nhập lý do huỷ.");
+        if (lyDo.Length > 500) lyDo = lyDo[..500];
+
+        var lenh = await _db.LenhSanXuats.Include(l => l.TieuHao).FirstOrDefaultAsync(l => l.Id == id, ct);
+        if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
+        if (lenh.TrangThai == TrangThaiLenhSX.MoiTao)
+            return KetQuaThaoTac.Loi("Lệnh chưa thực hiện thì dùng nút \"Xoá\", không cần huỷ.");
+        if (lenh.TrangThai == TrangThaiLenhSX.DaHuy)
+            return KetQuaThaoTac.Loi("Lệnh này đã huỷ rồi.");
+
+        // Đảo đúng các dòng sổ kho do chính lệnh này sinh ra (giữ nguyên lô + hạn dùng của lô),
+        // thay vì tính lại theo định mức - định mức có thể đã bị sửa sau khi lệnh chạy.
+        var dongGoc = await _db.KhoGiaoDichs
+            .Where(g => g.ChungTu == lenh.MaLenh
+                        && (g.Loai == LoaiGiaoDichKho.XuatSanXuat || g.Loai == LoaiGiaoDichKho.NhapThanhPham))
+            .ToListAsync(ct);
+        if (dongGoc.Count == 0)
+            return KetQuaThaoTac.Loi("Không tìm thấy giao dịch kho của lệnh này để đảo.");
+
+        // Thành phẩm đã nhập phải còn nguyên trong lô mới thu hồi được (chưa bán, chưa dùng tiếp).
+        var canThuHoi = dongGoc.Where(g => g.Loai == LoaiGiaoDichKho.NhapThanhPham).Sum(g => g.SoLuong);
+        if (canThuHoi > 0)
+        {
+            var tonLoTp = await TonLoAsync(lenh.MaThanhPham, lenh.MaKho, lenh.MaLoThanhPham, ct);
+            if (tonLoTp < canThuHoi)
+                return KetQuaThaoTac.Loi(
+                    $"Không huỷ được: lô thành phẩm \"{lenh.MaLoThanhPham}\" chỉ còn {tonLoTp:0.###}/"
+                    + $"{canThuHoi:0.###} - phần đã xuất bán hoặc dùng tiếp không thu hồi được. "
+                    + "Hãy dùng Kiểm kê / Điều chỉnh tồn để xử lý.");
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var goc in dongGoc)
+        {
+            _db.KhoGiaoDichs.Add(new KhoGiaoDich
+            {
+                MaSanPham = goc.MaSanPham, MaKho = goc.MaKho, MaLo = goc.MaLo,
+                SoLuong = -goc.SoLuong, HanSuDung = goc.HanSuDung,
+                Loai = LoaiGiaoDichKho.HoanTacSanXuat, ChungTu = lenh.MaLenh,
+                GhiChu = $"Đảo do huỷ lệnh sản xuất {lenh.MaLenh}: {lyDo}",
+                ThoiGianUtc = now
+            });
+        }
+
+        // Lô sản xuất (Batch) sinh kèm: xoá trong app, đồng thời gỡ khỏi hàng đợi nếu chưa gửi đi.
+        var canhBaoHnC = false;
+        if (!string.IsNullOrWhiteSpace(lenh.MaLoDaTao))
+        {
+            var batch = await _db.Batches.FirstOrDefaultAsync(b => b.MaLo == lenh.MaLoDaTao, ct);
+            if (batch is not null) _db.Batches.Remove(batch);
+
+            var tenantId = _db.TenantInfo?.Id;
+            var hangDoi = await _db.SyncOutboxItems
+                .Where(o => o.TenantId == tenantId && o.EntityType == "Batch" && o.EntityKey == lenh.MaLoDaTao)
+                .ToListAsync(ct);
+            // Đã gửi thành công (hoặc đang gửi) thì HanoiCheck đã có dữ liệu - không thu hồi được.
+            canhBaoHnC = hangDoi.Any(o => o.Status is SyncOutboxStatus.Success or SyncOutboxStatus.Processing);
+            _db.SyncOutboxItems.RemoveRange(
+                hangDoi.Where(o => o.Status is not (SyncOutboxStatus.Success or SyncOutboxStatus.Processing)));
+        }
+
+        lenh.TrangThai = TrangThaiLenhSX.DaHuy;
+        lenh.ThoiGianHuyUtc = now;
+        lenh.LyDoHuy = lyDo;
+        await _db.SaveChangesAsync(ct);
+
+        var thongBao = $"Đã huỷ lệnh \"{lenh.MaLenh}\": trả lại nguyên liệu và thu hồi "
+                       + $"{canThuHoi:0.###} thành phẩm lô {lenh.MaLoThanhPham}.";
+        if (canhBaoHnC)
+            thongBao += $" CẢNH BÁO: lô \"{lenh.MaLoDaTao}\" đã gửi sang HanoiCheck, hệ thống không "
+                        + "thu hồi được - cần xử lý thủ công phía HanoiCheck.";
+        else if (!string.IsNullOrWhiteSpace(lenh.MaLoDaTao))
+            thongBao += $" Đã xoá lô \"{lenh.MaLoDaTao}\" khỏi app (chưa gửi sang HanoiCheck).";
+        return KetQuaThaoTac.Ok(thongBao);
+    }
+
     /// <summary>Nhu cầu nguyên liệu = định lượng × số lượng SX × (1 + hao hụt%).</summary>
     private static decimal NhuCau(DinhMucNguyenLieu dm, decimal soLuong) =>
         dm.SoLuong * soLuong * (1 + dm.HaoHutPhanTram / 100m);
+
+    /// <summary>Tồn hiện tại của một lô cụ thể (sản phẩm + kho + lô).</summary>
+    private async Task<decimal> TonLoAsync(string maSanPham, string maKho, string maLo, CancellationToken ct) =>
+        await _db.KhoGiaoDichs
+            .Where(g => g.MaSanPham == maSanPham && g.MaKho == maKho && g.MaLo == maLo)
+            .SumAsync(g => (decimal?)g.SoLuong, ct) ?? 0m;
 
     /// <summary>Tồn hiện tại của một nguyên liệu trong một kho (tổng mọi lô).</summary>
     private async Task<decimal> TonAsync(string maSanPham, string maKho, CancellationToken ct) =>

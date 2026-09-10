@@ -7,5 +7,8 @@ public enum TrangThaiLenhSX
     MoiTao = 0,
 
     /// <summary>Đã thực hiện: đã trừ nguyên liệu và nhập thành phẩm vào kho.</summary>
-    HoanThanh = 1
+    HoanThanh = 1,
+
+    /// <summary>Đã huỷ sau khi thực hiện: kho đã được ghi bút toán đảo (trả nguyên liệu, thu hồi thành phẩm).</summary>
+    DaHuy = 2
 }

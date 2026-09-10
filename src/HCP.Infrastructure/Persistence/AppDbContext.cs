@@ -301,6 +301,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         lenhSX.Property(l => l.MaLoDaTao).HasMaxLength(255);
         lenhSX.Property(l => l.SoLuong).HasPrecision(18, 3);
         lenhSX.Property(l => l.GhiChu).HasMaxLength(1000);
+        lenhSX.Property(l => l.LyDoHuy).HasMaxLength(500);
         lenhSX.HasMany(l => l.TieuHao).WithOne(t => t.LenhSanXuat!)
               .HasForeignKey(t => t.LenhSanXuatId).OnDelete(DeleteBehavior.Cascade);
         lenhSX.HasIndex(l => l.MaLenh).IsUnique();

@@ -44,6 +44,12 @@ public class LenhSanXuat : TenantEntity
 
     public DateTime? ThoiGianHoanThanhUtc { get; set; }
 
+    /// <summary>Thời điểm huỷ lệnh (đã ghi bút toán đảo kho).</summary>
+    public DateTime? ThoiGianHuyUtc { get; set; }
+
+    /// <summary>Lý do huỷ - bắt buộc nhập để còn truy vết vì sao tồn kho bị đảo.</summary>
+    public string? LyDoHuy { get; set; }
+
     public string? GhiChu { get; set; }
 
     /// <summary>Nguyên liệu (theo lô) đã tiêu hao khi thực hiện lệnh - lưu để truy xuất.</summary>

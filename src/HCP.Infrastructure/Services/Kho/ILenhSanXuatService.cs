@@ -31,4 +31,11 @@ public interface ILenhSanXuatService
 
     /// <summary>Xoá lệnh (chỉ xoá được lệnh chưa thực hiện).</summary>
     Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Huỷ lệnh ĐÃ THỰC HIỆN: ghi bút toán đảo trong sổ kho (trả nguyên liệu về đúng lô đã trừ,
+    /// thu hồi thành phẩm đã nhập) rồi chuyển lệnh sang "Đã huỷ". Dữ liệu gốc được giữ nguyên để
+    /// truy xuất. Chặn nếu thành phẩm của lô đã bị bán/dùng tiếp (tồn không đủ để thu hồi).
+    /// </summary>
+    Task<KetQuaThaoTac> HuyAsync(int id, string? lyDo, CancellationToken ct = default);
 }

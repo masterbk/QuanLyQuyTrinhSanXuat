@@ -73,6 +73,12 @@ else
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Success">Hoàn thành</MudChip>
                     }
+                    else if (context.TrangThai == TrangThaiLenhSX.DaHuy)
+                    {
+                        <MudTooltip Text="@($"Lý do: {context.LyDoHuy}")">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Đã huỷ</MudChip>
+                        </MudTooltip>
+                    }
                     else
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Info">Mới tạo</MudChip>
@@ -87,7 +93,7 @@ else
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
                                        OnClick="@(() => XoaAsync(context))" />
                     }
-                    else
+                    else if (context.TrangThai == TrangThaiLenhSX.HoanThanh)
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
                             @context.ThoiGianHoanThanhUtc?.ToLocalTime().ToString("dd/MM HH:mm")
@@ -99,12 +105,52 @@ else
                                          Icon="@Icons.Material.Filled.CloudSync">@context.MaLoDaTao</MudChip>
                             </MudTooltip>
                         }
+                        <MudTooltip Text="Huỷ lệnh: trả lại nguyên liệu, thu hồi thành phẩm">
+                            <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Error"
+                                           Disabled="_dangXuLy" OnClick="@(() => MoHuy(context))" />
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Huỷ @context.ThoiGianHuyUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                        </MudText>
                     }
                 </MudTd>
             </RowTemplate>
         </MudTable>
     }
 }
+
+<MudDialog @bind-Visible="_hienHuy" Options="_dialogHuyOptions">
+    <TitleContent><MudText Typo="Typo.h6">Huỷ lệnh sản xuất</MudText></TitleContent>
+    <DialogContent>
+        @if (_lenhHuy is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                Huỷ lệnh <b>@_lenhHuy.MaLenh</b>: hệ thống ghi bút toán đảo - trả lại nguyên liệu về
+                đúng lô đã trừ và thu hồi @_lenhHuy.SoLuong.ToString("0.###") thành phẩm ở lô
+                <b>@_lenhHuy.MaLoThanhPham</b>. Lệnh vẫn được giữ lại để truy xuất.
+            </MudAlert>
+            @if (!string.IsNullOrEmpty(_lenhHuy.MaLoDaTao))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">
+                    Lệnh này đã sinh lô <b>@_lenhHuy.MaLoDaTao</b> để đồng bộ HanoiCheck. Lô sẽ bị xoá
+                    trong app, nhưng nếu đã gửi đi thì HanoiCheck KHÔNG tự thu hồi - phải xử lý thủ công bên đó.
+                </MudAlert>
+            }
+            <MudTextField @bind-Value="_lyDoHuy" Label="Lý do huỷ" Variant="Variant.Outlined"
+                          MaxLength="500" Lines="2" Immediate="true"
+                          HelperText="Bắt buộc - vd: nhập nhầm số lượng, hỏng mẻ bánh." />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienHuy = false)">Đóng</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="_dangXuLy" OnClick="HuyAsync">
+            Huỷ lệnh
+        </MudButton>
+    </DialogActions>
+</MudDialog>
 
 <MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
     <TitleContent><MudText Typo="Typo.h6">Tạo lệnh sản xuất</MudText></TitleContent>
@@ -216,7 +262,12 @@ else
     private DateTime? _ngaySanXuat;
     private DateTime? _hsdThanhPham;
 
+    private bool _hienHuy;
+    private LenhSanXuat? _lenhHuy;
+    private string? _lyDoHuy;
+
     private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+    private readonly DialogOptions _dialogHuyOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
 
     protected override async Task OnInitializedAsync() => await TaiAsync();
 
@@ -286,6 +337,29 @@ else
         _dangXuLy = false;
         Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
         if (kq.ThanhCong) await TaiAsync();
+    }
+
+    private void MoHuy(LenhSanXuat lenh)
+    {
+        _lenhHuy = lenh;
+        _lyDoHuy = null;
+        _hienHuy = true;
+    }
+
+    private async Task HuyAsync()
+    {
+        if (_lenhHuy is null) return;
+        if (string.IsNullOrWhiteSpace(_lyDoHuy))
+        {
+            Snackbar.Add("Vui lòng nhập lý do huỷ.", Severity.Info);
+            return;
+        }
+
+        _dangXuLy = true;
+        var kq = await LenhService.HuyAsync(_lenhHuy.Id, _lyDoHuy);
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) { _hienHuy = false; await TaiAsync(); }
     }
 
     private async Task XoaAsync(LenhSanXuat lenh)
