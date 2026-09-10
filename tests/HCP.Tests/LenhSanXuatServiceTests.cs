@@ -86,7 +86,7 @@ public class LenhSanXuatServiceTests
 
         using (var db = MoDb())
         {
-            var kq = await Svc(db).ThucHienAsync(id);
+            var kq = await Svc(db).ThucHienAsync(id, Anh());
             Assert.True(kq.ThanhCong, kq.ThongBao);
         }
 
@@ -120,7 +120,7 @@ public class LenhSanXuatServiceTests
 
         using (var db = MoDb())
         {
-            var kq = await Svc(db).ThucHienAsync(id);
+            var kq = await Svc(db).ThucHienAsync(id, Anh());
             Assert.False(kq.ThanhCong);
             Assert.Contains("Không đủ", kq.ThongBao);
         }
@@ -140,12 +140,16 @@ public class LenhSanXuatServiceTests
 
         int id;
         using (var db = MoDb()) id = (await Tao(db, 10)).Id;
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
-        using (var db = MoDb()) Assert.False((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
+        using (var db = MoDb()) Assert.False((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         // Chỉ trừ 1 lần (10*0.1=1.0) -> còn 4.0.
         Assert.Equal(4.0m, TonLo("BOT_MI", "LO_A"));
     }
+
+    /// <summary>Ảnh lô mẫu - lệnh nào cũng phải kèm ít nhất 1 ảnh mới hoàn thành được.</summary>
+    private static List<AnhLoSanXuat> Anh() =>
+        new() { new AnhLoSanXuat("lo.jpg", "/uploads/coso-a/2026/09/abc.jpg") };
 
     private static async Task<LenhSanXuat> Tao(AppDbContext db, decimal sl)
     {
@@ -181,7 +185,7 @@ public class LenhSanXuatServiceTests
         }
 
         using (var db = MoDb())
-            Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+            Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         using (var db = MoDb())
         {
@@ -225,10 +229,84 @@ public class LenhSanXuatServiceTests
 
         int id;
         using (var db = MoDb()) { await Svc(db).TaoAsync(Lenh(10)); id = (await db.LenhSanXuats.SingleAsync()).Id; }
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         // Trừ 1.1 kg -> còn 0.9.
         Assert.Equal(0.9m, TonLo("BOT_MI", "LO1"));
+    }
+
+    [Fact]
+    public async Task Khong_Hoan_Thanh_Duoc_Khi_Thieu_Anh_Lo()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).ThucHienAsync(id, new List<AnhLoSanXuat>());
+            Assert.False(kq.ThanhCong);
+            Assert.Contains("ít nhất 1 ảnh", kq.ThongBao);
+        }
+        // Ảnh chỉ có đường dẫn rỗng cũng không tính là ảnh.
+        using (var db = MoDb())
+            Assert.False((await Svc(db).ThucHienAsync(id,
+                new List<AnhLoSanXuat> { new("a.jpg", "  ") })).ThanhCong);
+
+        // Chưa động vào kho, lệnh vẫn còn nháp.
+        Assert.Equal(2m, TonLo("BOT_MI", "LO_A"));
+        Assert.Equal(0m, TonLo("BANH_MI", "LOTP1"));
+        using (var db = MoDb())
+            Assert.Equal(TrangThaiLenhSX.MoiTao, (await db.LenhSanXuats.SingleAsync()).TrangThai);
+    }
+
+    [Fact]
+    public async Task Anh_Lo_Duoc_Luu_Theo_Lenh_Va_Vao_File_Cua_Lo_Dong_Bo()
+    {
+        SeedDanhMuc();
+        using (var db = MoDb())
+        {
+            db.ProductionSteps.Add(new ProductionStep { MaKhau = "KHAU01", TenKhau = "Phối trộn" });
+            await db.SaveChangesAsync();
+        }
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb())
+        {
+            var lenh = Lenh(10);
+            lenh.TaoLoDongBo = true;
+            await Svc(db).TaoAsync(lenh);
+            id = (await db.LenhSanXuats.SingleAsync()).Id;
+        }
+
+        var anh = new List<AnhLoSanXuat>
+        {
+            new("mat-truoc.jpg", "/uploads/coso-a/2026/09/a1.jpg"),
+            new("mat-sau.jpg", "/uploads/coso-a/2026/09/a2.jpg")
+        };
+        using (var db = MoDb())
+            Assert.True((await Svc(db).ThucHienAsync(id, anh)).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            // Lưu theo lệnh, mã file đánh số theo mã lệnh.
+            var luu = await db.LenhSanXuatAnhs.OrderBy(a => a.Id).ToListAsync();
+            Assert.Equal(2, luu.Count);
+            Assert.Equal("LSX-001-A1", luu[0].MaFile);
+            Assert.Equal("LSX-001-A2", luu[1].MaFile);
+            Assert.Equal("/uploads/coso-a/2026/09/a2.jpg", luu[1].DuongDan);
+
+            // Và cùng lúc là danh sách file của Lô sản xuất gửi HanoiCheck.
+            var batch = await db.Batches.Include(b => b.DanhSachFile).SingleAsync(b => b.MaLo == "LOTP1");
+            Assert.Equal(2, batch.DanhSachFile.Count);
+            Assert.All(batch.DanhSachFile, f => Assert.Equal("HINH_ANH", f.Loai));
+            Assert.All(batch.DanhSachFile, f => Assert.Equal("KHAU01", f.MaKhau));
+            Assert.Contains(batch.DanhSachFile, f => f.TenFile == "mat-truoc.jpg");
+            Assert.Contains(batch.DanhSachFile, f => f.DuongDan == "/uploads/coso-a/2026/09/a2.jpg");
+        }
     }
 
     [Fact]
@@ -240,7 +318,7 @@ public class LenhSanXuatServiceTests
 
         int id;
         using (var db = MoDb()) id = (await Tao(db, 10)).Id;      // cần 1.0 kg bột
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         using (var db = MoDb())
         {
@@ -281,7 +359,7 @@ public class LenhSanXuatServiceTests
 
         int id;
         using (var db = MoDb()) id = (await Tao(db, 10)).Id;
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         // Bán bớt 3 cái từ lô thành phẩm -> không thu hồi đủ 10 nữa.
         using (var db = MoDb())
@@ -322,7 +400,7 @@ public class LenhSanXuatServiceTests
             await Svc(db).TaoAsync(lenh);
             id = (await db.LenhSanXuats.SingleAsync()).Id;
         }
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
         using (var db = MoDb()) Assert.True(await db.Batches.AnyAsync(b => b.MaLo == "LOTP1"));
 
         using (var db = MoDb())
@@ -353,7 +431,7 @@ public class LenhSanXuatServiceTests
             await Svc(db).TaoAsync(lenh);
             id = (await db.LenhSanXuats.SingleAsync()).Id;
         }
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         // Giả lập job nền đã gửi thành công sang HanoiCheck.
         using (var db = MoDb())
@@ -395,7 +473,7 @@ public class LenhSanXuatServiceTests
             Assert.Contains("Xoá", kq.ThongBao);
         }
 
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         // Thiếu lý do -> chặn.
         using (var db = MoDb()) Assert.False((await Svc(db).HuyAsync(id, "  ")).ThanhCong);
@@ -414,13 +492,13 @@ public class LenhSanXuatServiceTests
 
         int id;
         using (var db = MoDb()) id = (await Tao(db, 10)).Id;
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
         using (var db = MoDb()) Assert.False((await Svc(db).XoaAsync(id)).ThanhCong);
 
         using (var db = MoDb()) Assert.True((await Svc(db).HuyAsync(id, "Huỷ thử")).ThanhCong);
         using (var db = MoDb()) Assert.False((await Svc(db).XoaAsync(id)).ThanhCong);
         // Lệnh đã huỷ cũng không chạy lại được.
-        using (var db = MoDb()) Assert.False((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.False((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         using (var db = MoDb()) Assert.Equal(1, await db.LenhSanXuats.CountAsync());
     }
@@ -433,7 +511,7 @@ public class LenhSanXuatServiceTests
 
         int id;
         using (var db = MoDb()) id = (await Tao(db, 10)).Id;   // TaoLoDongBo mặc định false
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
 
         using (var db = MoDb())
         {

@@ -76,17 +76,25 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         lenh.GhiChu = lenh.GhiChu?.Trim();
         _db.LenhSanXuats.Add(lenh);
         await _db.SaveChangesAsync(ct);
-        return KetQuaThaoTac.Ok($"Đã tạo lệnh sản xuất \"{lenh.MaLenh}\". Bấm \"Thực hiện\" để trừ nguyên liệu.");
+        return KetQuaThaoTac.Ok($"Đã tạo lệnh sản xuất \"{lenh.MaLenh}\". Bấm \"Hoàn thành\" để trừ nguyên liệu.");
     }
 
-    public async Task<KetQuaThaoTac> ThucHienAsync(int id, CancellationToken ct = default)
+    public async Task<KetQuaThaoTac> ThucHienAsync(
+        int id, IReadOnlyList<AnhLoSanXuat> anhLo, CancellationToken ct = default)
     {
-        var lenh = await _db.LenhSanXuats.Include(l => l.TieuHao).FirstOrDefaultAsync(l => l.Id == id, ct);
+        // Kiểm tra ảnh TRƯỚC mọi thứ khác: thiếu chứng từ thì không được động vào kho.
+        anhLo = (anhLo ?? Array.Empty<AnhLoSanXuat>())
+            .Where(a => !string.IsNullOrWhiteSpace(a.DuongDan)).ToList();
+        if (anhLo.Count == 0)
+            return KetQuaThaoTac.Loi("Cần tải lên ít nhất 1 ảnh lô thành phẩm trước khi hoàn thành lệnh.");
+
+        var lenh = await _db.LenhSanXuats.Include(l => l.TieuHao).Include(l => l.DanhSachAnh)
+            .FirstOrDefaultAsync(l => l.Id == id, ct);
         if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
         if (lenh.TrangThai == TrangThaiLenhSX.HoanThanh)
-            return KetQuaThaoTac.Loi("Lệnh này đã thực hiện rồi.");
+            return KetQuaThaoTac.Loi("Lệnh này đã hoàn thành rồi.");
         if (lenh.TrangThai == TrangThaiLenhSX.DaHuy)
-            return KetQuaThaoTac.Loi("Lệnh này đã huỷ, không thực hiện lại được. Hãy tạo lệnh mới.");
+            return KetQuaThaoTac.Loi("Lệnh này đã huỷ, không hoàn thành lại được. Hãy tạo lệnh mới.");
 
         var tp = await _db.Products.Include(p => p.DanhSachDinhMuc)
             .FirstOrDefaultAsync(p => p.MaSanPham == lenh.MaThanhPham, ct);
@@ -145,6 +153,17 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             SoLuong = lenh.SoLuong, HanSuDung = lenh.HanSuDungThanhPham,
             Loai = LoaiGiaoDichKho.NhapThanhPham, ChungTu = lenh.MaLenh, ThoiGianUtc = now
         });
+
+        // Ảnh chứng từ của lô thành phẩm - mã file đánh theo lệnh để khớp với file gửi HanoiCheck.
+        var thuTuAnh = 1;
+        foreach (var a in anhLo)
+        {
+            lenh.DanhSachAnh.Add(new LenhSanXuatAnh
+            {
+                MaFile = $"{lenh.MaLenh}-A{thuTuAnh++}",
+                TenFile = a.TenFile, DuongDan = a.DuongDan, ThoiGianUtc = now
+            });
+        }
 
         lenh.TrangThai = TrangThaiLenhSX.HoanThanh;
         lenh.ThoiGianHoanThanhUtc = now;
@@ -231,6 +250,19 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
                 });
                 thuTu++;
             }
+        }
+
+        // Ảnh lô chụp lúc hoàn thành lệnh chính là danh sách file của lô gửi sang HanoiCheck.
+        foreach (var anh in lenh.DanhSachAnh)
+        {
+            batch.DanhSachFile.Add(new BatchFile
+            {
+                MaFile = anh.MaFile,
+                TenFile = anh.TenFile,
+                DuongDan = anh.DuongDan,
+                Loai = "HINH_ANH",
+                MaKhau = maKhau
+            });
         }
 
         return batch;

@@ -4,12 +4,15 @@
 @using HCP.Domain.Enums
 @using HCP.Infrastructure.Services.DanhMuc
 @using HCP.Infrastructure.Services.Kho
+@using HCP.Web.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
 @inject ILenhSanXuatService LenhService
 @inject IDinhMucService DinhMucService
 @inject IDanhMucService<Product> ThucPhamService
 @inject IDanhMucService<Warehouse> KhoDanhMucService
+@inject ILuuTruAnhService LuuTruAnh
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -88,8 +91,8 @@ else
                     @if (context.TrangThai == TrangThaiLenhSX.MoiTao)
                     {
                         <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                   StartIcon="@Icons.Material.Filled.PlayArrow" Disabled="_dangXuLy"
-                                   OnClick="@(() => ThucHienAsync(context))">Thực hiện</MudButton>
+                                   StartIcon="@Icons.Material.Filled.CheckCircle" Disabled="_dangXuLy"
+                                   OnClick="@(() => MoHoanThanh(context))">Hoàn thành</MudButton>
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
                                        OnClick="@(() => XoaAsync(context))" />
                     }
@@ -121,6 +124,70 @@ else
         </MudTable>
     }
 }
+
+<MudDialog @bind-Visible="_hienHoanThanh" Options="_dialogHuyOptions">
+    <TitleContent><MudText Typo="Typo.h6">Hoàn thành lệnh sản xuất</MudText></TitleContent>
+    <DialogContent>
+        @if (_lenhHoanThanh is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">
+                Hoàn thành lệnh <b>@_lenhHoanThanh.MaLenh</b>? Hệ thống sẽ trừ nguyên liệu theo định mức
+                và nhập @_lenhHoanThanh.SoLuong.ToString("0.###") thành phẩm vào lô
+                <b>@_lenhHoanThanh.MaLoThanhPham</b>.
+            </MudText>
+
+            <MudText Typo="Typo.subtitle2">Ảnh lô sản phẩm <span class="mud-error-text">*</span></MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Bắt buộc ít nhất 1 ảnh. Ảnh này chính là mục "File" của Lô sản xuất khi đồng bộ HanoiCheck.
+            </MudText>
+
+            <div class="mt-2 mb-2">
+                <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="ChonAnhAsync"
+                               Accept="image/*" MaximumFileCount="10">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_dangTaiAnh"
+                                   StartIcon="@Icons.Material.Filled.PhotoCamera">Chọn ảnh</MudButton>
+                    </ActivatorContent>
+                </MudFileUpload>
+                @if (_dangTaiAnh)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="mt-2" />
+                }
+            </div>
+
+            @if (_anhDaChon.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">Chưa có ảnh nào.</MudAlert>
+            }
+            else
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var anh in _anhDaChon)
+                    {
+                        <MudPaper Class="pa-1" Elevation="1" Style="width:110px">
+                            <MudImage Src="@anh.DuongDan" Alt="@anh.TenFile" Height="80" Width="100"
+                                      ObjectFit="ObjectFit.Cover" Class="rounded" />
+                            <MudTooltip Text="@anh.TenFile">
+                                <MudText Typo="Typo.caption" Class="d-block text-truncate" Style="max-width:100px">
+                                    @anh.TenFile
+                                </MudText>
+                            </MudTooltip>
+                            <MudButton Size="Size.Small" Color="Color.Error" FullWidth="true"
+                                       OnClick="@(() => _anhDaChon.Remove(anh))">Bỏ</MudButton>
+                        </MudPaper>
+                    }
+                </div>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienHoanThanh = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="HoanThanhAsync"
+                   Disabled="@(_dangXuLy || _dangTaiAnh || _anhDaChon.Count == 0)">
+            Hoàn thành
+        </MudButton>
+    </DialogActions>
+</MudDialog>
 
 <MudDialog @bind-Visible="_hienHuy" Options="_dialogHuyOptions">
     <TitleContent><MudText Typo="Typo.h6">Huỷ lệnh sản xuất</MudText></TitleContent>
@@ -201,7 +268,7 @@ else
                 </MudItem>
                 <MudItem xs="12">
                     <MudCheckBox @bind-Value="_input.TaoLoDongBo" Color="Color.Primary" Dense="true"
-                                 Label="Khi thực hiện, tạo Lô sản xuất và đồng bộ HanoiCheck (truy xuất lô nguyên liệu → lô thành phẩm)" />
+                                 Label="Khi hoàn thành, tạo Lô sản xuất và đồng bộ HanoiCheck (truy xuất lô nguyên liệu → lô thành phẩm)" />
                 </MudItem>
             </MudGrid>
         </MudForm>
@@ -266,6 +333,11 @@ else
     private LenhSanXuat? _lenhHuy;
     private string? _lyDoHuy;
 
+    private bool _hienHoanThanh;
+    private bool _dangTaiAnh;
+    private LenhSanXuat? _lenhHoanThanh;
+    private readonly List<AnhLoSanXuat> _anhDaChon = new();
+
     private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
     private readonly DialogOptions _dialogHuyOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
 
@@ -325,18 +397,45 @@ else
         if (kq.ThanhCong) { _hienForm = false; await TaiAsync(); }
     }
 
-    private async Task ThucHienAsync(LenhSanXuat lenh)
+    private void MoHoanThanh(LenhSanXuat lenh)
     {
-        var dongY = await DialogService.ShowMessageBox("Xác nhận thực hiện",
-            $"Thực hiện lệnh \"{lenh.MaLenh}\"? Hệ thống sẽ trừ nguyên liệu và nhập thành phẩm vào kho.",
-            yesText: "Thực hiện", cancelText: "Huỷ");
-        if (dongY != true) return;
+        _lenhHoanThanh = lenh;
+        _anhDaChon.Clear();
+        _hienHoanThanh = true;
+    }
+
+    /// <summary>Tải ảnh lên đĩa ngay khi chọn để xem trước được; lưu vào DB lúc bấm Hoàn thành.</summary>
+    private async Task ChonAnhAsync(IReadOnlyList<IBrowserFile> files)
+    {
+        _dangTaiAnh = true;
+        foreach (var f in files)
+        {
+            try
+            {
+                _anhDaChon.Add(await LuuTruAnh.LuuAsync(f));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+        _dangTaiAnh = false;
+    }
+
+    private async Task HoanThanhAsync()
+    {
+        if (_lenhHoanThanh is null) return;
+        if (_anhDaChon.Count == 0)
+        {
+            Snackbar.Add("Cần tải lên ít nhất 1 ảnh lô sản phẩm.", Severity.Info);
+            return;
+        }
 
         _dangXuLy = true;
-        var kq = await LenhService.ThucHienAsync(lenh.Id);
+        var kq = await LenhService.ThucHienAsync(_lenhHoanThanh.Id, _anhDaChon.ToList());
         _dangXuLy = false;
         Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
-        if (kq.ThanhCong) await TaiAsync();
+        if (kq.ThanhCong) { _hienHoanThanh = false; await TaiAsync(); }
     }
 
     private void MoHuy(LenhSanXuat lenh)

@@ -82,6 +82,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<DinhMucNguyenLieu> DinhMucNguyenLieus => Set<DinhMucNguyenLieu>();
     public DbSet<LenhSanXuat> LenhSanXuats => Set<LenhSanXuat>();
     public DbSet<LenhSanXuatTieuHao> LenhSanXuatTieuHaos => Set<LenhSanXuatTieuHao>();
+    public DbSet<LenhSanXuatAnh> LenhSanXuatAnhs => Set<LenhSanXuatAnh>();
     public DbSet<KhachHang> KhachHangs => Set<KhachHang>();
     public DbSet<PhieuXuatBan> PhieuXuatBans => Set<PhieuXuatBan>();
     public DbSet<PhieuXuatBanChiTiet> PhieuXuatBanChiTiets => Set<PhieuXuatBanChiTiet>();
@@ -304,6 +305,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         lenhSX.Property(l => l.LyDoHuy).HasMaxLength(500);
         lenhSX.HasMany(l => l.TieuHao).WithOne(t => t.LenhSanXuat!)
               .HasForeignKey(t => t.LenhSanXuatId).OnDelete(DeleteBehavior.Cascade);
+        lenhSX.HasMany(l => l.DanhSachAnh).WithOne(a => a.LenhSanXuat!)
+              .HasForeignKey(a => a.LenhSanXuatId).OnDelete(DeleteBehavior.Cascade);
         lenhSX.HasIndex(l => l.MaLenh).IsUnique();
         lenhSX.IsMultiTenant().AdjustUniqueIndexes();
 
@@ -313,6 +316,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         tieuHao.Property(t => t.MaLo).HasMaxLength(255).IsRequired();
         tieuHao.Property(t => t.SoLuong).HasPrecision(18, 4);
         tieuHao.IsMultiTenant();
+
+        var lenhAnh = builder.Entity<LenhSanXuatAnh>();
+        lenhAnh.ToTable("LenhSanXuatAnh");
+        lenhAnh.Property(a => a.MaFile).HasMaxLength(255).IsRequired();
+        lenhAnh.Property(a => a.TenFile).HasMaxLength(255).IsRequired();
+        lenhAnh.Property(a => a.DuongDan).HasMaxLength(1000).IsRequired();
+        lenhAnh.IsMultiTenant();
 
         // --- Bán hàng: khách hàng + phiếu xuất bán ---
         var khachHang = builder.Entity<KhachHang>();

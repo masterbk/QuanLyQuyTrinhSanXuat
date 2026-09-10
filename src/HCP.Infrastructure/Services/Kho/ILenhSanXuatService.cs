@@ -2,6 +2,11 @@ using HCP.Domain.Entities.Business;
 
 namespace HCP.Infrastructure.Services.Kho;
 
+/// <summary>
+/// Một ảnh lô thành phẩm đã được tầng web lưu xuống đĩa: tên gốc để hiển thị và đường dẫn phục vụ lại.
+/// </summary>
+public sealed record AnhLoSanXuat(string TenFile, string DuongDan);
+
 /// <summary>Nhu cầu nguyên liệu cho một lệnh sản xuất (để xem trước và kiểm tra đủ tồn).</summary>
 public sealed record NguyenLieuCanDto(
     string MaNguyenLieu,
@@ -26,8 +31,13 @@ public interface ILenhSanXuatService
 
     Task<KetQuaThaoTac> TaoAsync(LenhSanXuat lenh, CancellationToken ct = default);
 
-    /// <summary>Thực hiện lệnh: trừ nguyên liệu (FEFO) + nhập thành phẩm. Chỉ chạy khi còn "Mới tạo".</summary>
-    Task<KetQuaThaoTac> ThucHienAsync(int id, CancellationToken ct = default);
+    /// <summary>
+    /// Hoàn thành lệnh: trừ nguyên liệu (FEFO) + nhập thành phẩm. Chỉ chạy khi còn "Mới tạo".
+    /// Bắt buộc kèm ít nhất 1 ảnh lô thành phẩm; ảnh được lưu theo lệnh và, nếu lệnh có sinh Lô
+    /// sản xuất đồng bộ, được đưa luôn vào danh sách file của lô (loại HINH_ANH).
+    /// </summary>
+    Task<KetQuaThaoTac> ThucHienAsync(
+        int id, IReadOnlyList<AnhLoSanXuat> anhLo, CancellationToken ct = default);
 
     /// <summary>Xoá lệnh (chỉ xoá được lệnh chưa thực hiện).</summary>
     Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default);

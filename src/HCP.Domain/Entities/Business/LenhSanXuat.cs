@@ -54,4 +54,7 @@ public class LenhSanXuat : TenantEntity
 
     /// <summary>Nguyên liệu (theo lô) đã tiêu hao khi thực hiện lệnh - lưu để truy xuất.</summary>
     public List<LenhSanXuatTieuHao> TieuHao { get; set; } = new();
+
+    /// <summary>Ảnh lô thành phẩm chụp lúc hoàn thành lệnh (bắt buộc ít nhất 1).</summary>
+    public List<LenhSanXuatAnh> DanhSachAnh { get; set; } = new();
 }
