@@ -53,7 +53,7 @@
             </MudNavLink>
         </MudNavGroup>
 
-        <MudNavGroup Title="Kho &amp; Sản xuất" Icon="@Icons.Material.Filled.Inventory" Expanded="true">
+        <MudNavGroup Title="Kho & Sản xuất" Icon="@Icons.Material.Filled.Inventory" Expanded="true">
             <MudNavLink Href="/app/kho-noi-bo" Icon="@Icons.Material.Filled.Warehouse">
                 Tồn kho &amp; nhập
             </MudNavLink>
@@ -79,6 +79,9 @@
     <AuthorizeView Roles="@AppRoles.TenantAdmin">
         <MudNavLink Href="/app/cai-dat-ket-noi" Icon="@Icons.Material.Filled.Link">
             Cài đặt kết nối HanoiCheck
+        </MudNavLink>
+        <MudNavLink Href="/app/kiem-tra-api" Icon="@Icons.Material.Filled.Api">
+            Kiểm tra API HanoiCheck
         </MudNavLink>
     </AuthorizeView>
 </MudNavMenu>

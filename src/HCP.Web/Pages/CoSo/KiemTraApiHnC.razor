@@ -1,0 +1,280 @@
+@page "/app/kiem-tra-api"
+@using System.Security.Claims
+@using HCP.Domain.Constants
+@using HCP.Infrastructure.HanoiCheck
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin)]
+@inject IKiemTraApiHnCService ApiService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Kiểm tra API HanoiCheck</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Kiểm tra API HanoiCheck</MudText>
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Gọi thử các API tra cứu (GET) của HanoiCheck bằng bộ mã xác thực của cơ sở và xem nguyên văn
+    dữ liệu trả về. Chỉ đọc dữ liệu, không gửi gì lên HanoiCheck. Mỗi lần gọi được ghi vào nhật ký hệ thống.
+</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudSelect T="string" Value="_maApi" ValueChanged="ChonApi" Label="API"
+                       Variant="Variant.Outlined" Dense="true">
+                @foreach (var a in ApiService.DanhSachApi)
+                {
+                    <MudSelectItem T="string" Value="@a.Ma">@a.Ten</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (_api is not null)
+            {
+                <div class="mt-3 mb-3">
+                    <code style="word-break:break-all">GET @_api.MauDuongDan</code>
+                    <div class="mt-1">
+                        @if (_api.CanKy)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning"
+                                     Icon="@Icons.Material.Filled.Key">Có ký HMAC</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Không cần ký</MudChip>
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@_api.MoTa</MudText>
+                </div>
+
+                @foreach (var ts in _api.ThamSo)
+                {
+                    <div class="mb-3">
+                        @if (ts.LuaChon is { Count: > 0 })
+                        {
+                            <MudSelect T="string" @bind-Value="_thamSo[ts.Ten]" Label="@NhanThamSo(ts)"
+                                       Variant="Variant.Outlined" Dense="true" Clearable="true"
+                                       HelperText="@ts.MoTa">
+                                @foreach (var lc in ts.LuaChon)
+                                {
+                                    <MudSelectItem T="string" Value="@lc">@lc</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        else
+                        {
+                            <MudTextField T="string" @bind-Value="_thamSo[ts.Ten]" Label="@NhanThamSo(ts)"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          HelperText="@ts.MoTa" Clearable="true" />
+                        }
+                    </div>
+                }
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.Send" Disabled="_dangGoi" OnClick="GoiAsync">
+                    @(_dangGoi ? "Đang gọi..." : "Gọi API")
+                </MudButton>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        <MudPaper Class="pa-4" Elevation="1" Style="min-height:300px">
+            @if (_dangGoi)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (_ketQua is null)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Chọn API, điền tham số rồi bấm <b>Gọi API</b> để xem kết quả.
+                </MudText>
+            }
+            else
+            {
+                <div class="d-flex flex-wrap align-center gap-2 mb-2">
+                    @if (_ketQua.HttpStatus is { } s)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="@MauTrangThai(s)">HTTP @s</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error">Không gửi được</MudChip>
+                    }
+                    @if (_ketQua.DaGui || _ketQua.ThoiGianMs > 0)
+                    {
+                        <MudText Typo="Typo.caption">@_ketQua.ThoiGianMs ms</MudText>
+                    }
+                    @if (_ketQua.NoiDung is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@KichThuoc(_ketQua.NoiDung)</MudText>
+                    }
+                    <MudSpacer />
+                    @if (!string.IsNullOrEmpty(_ketQua.NoiDung))
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="SaoChepAsync">
+                            Sao chép JSON
+                        </MudButton>
+                    }
+                </div>
+
+                @if (_ketQua.Url is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="d-block mb-2" Style="word-break:break-all">
+                        <b>GET</b> @_ketQua.Url
+                    </MudText>
+                }
+
+                @if (_ketQua.Loi is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_ketQua.Loi</MudAlert>
+                }
+
+                @if (_ketQua.NoiDung is not null)
+                {
+                    @if (!_ketQua.LaJson)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+                            Phản hồi không phải JSON - hiển thị nguyên văn.
+                        </MudAlert>
+                    }
+                    <pre class="json-ket-qua">@_hienThi</pre>
+                    @if (_biCat)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">
+                            Chỉ hiển thị @(GioiHanHienThi / 1024) KB đầu. Bấm "Sao chép JSON" để lấy toàn bộ.
+                        </MudText>
+                    }
+                }
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<style>
+    .json-ket-qua {
+        background: #1e1e2e;
+        color: #e0e0e0;
+        padding: 12px;
+        border-radius: 6px;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12.5px;
+        line-height: 1.45;
+        max-height: 65vh;
+        overflow: auto;
+        white-space: pre;
+        margin: 0;
+    }
+</style>
+
+@code {
+    /// <summary>Phản hồi lớn (vd danh mục chuẩn) chỉ vẽ phần đầu để trình duyệt không bị treo.</summary>
+    private const int GioiHanHienThi = 300 * 1024;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string? _maApi;
+    private ApiHnCDinhNghia? _api;
+    private Dictionary<string, string?> _thamSo = new();
+    private KetQuaGoiApiHnC? _ketQua;
+    private bool _dangGoi;
+    private bool _biCat;
+    private string _hienThi = "";
+
+    protected override void OnInitialized() => ChonApi(ApiService.DanhSachApi[0].Ma);
+
+    private void ChonApi(string ma)
+    {
+        _maApi = ma;
+        _api = ApiService.DanhSachApi.First(a => a.Ma == ma);
+        // Giữ lại giá trị đã nhập nếu trùng tên tham số (vd order_code khi chuyển giữa các API đơn hàng).
+        var cu = _thamSo;
+        _thamSo = _api.ThamSo.ToDictionary(t => t.Ten, t => cu.GetValueOrDefault(t.Ten) ?? t.MacDinh);
+        _ketQua = null;
+    }
+
+    private async Task GoiAsync()
+    {
+        if (_api is null) return;
+        _dangGoi = true;
+        StateHasChanged();
+
+        string? userId = null;
+        if (AuthState is not null)
+            userId = (await AuthState).User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        try
+        {
+            _ketQua = await ApiService.GoiAsync(_api.Ma, _thamSo, userId);
+            var nd = _ketQua.NoiDung ?? "";
+            _biCat = nd.Length > GioiHanHienThi;
+            _hienThi = _biCat ? nd[..GioiHanHienThi] + "\n..." : nd;
+            GoiYTiepTheo();
+        }
+        catch (Exception ex)
+        {
+            _ketQua = KetQuaGoiApiHnC.ChuaGui("Lỗi không mong đợi: " + ex.Message);
+        }
+        finally
+        {
+            _dangGoi = false;
+        }
+    }
+
+    /// <summary>
+    /// Giống bộ Postman: gọi danh sách đơn xong thì nhớ sẵn mã đơn đầu tiên, gọi chi tiết đơn xong
+    /// thì nhớ mã sản phẩm + trace_code dòng đầu - chuyển sang API kế tiếp là có sẵn tham số.
+    /// </summary>
+    private void GoiYTiepTheo()
+    {
+        if (_ketQua is not { LaJson: true, NoiDung: { } nd } || _ketQua.HttpStatus is not (>= 200 and < 300)) return;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(nd);
+            var goc = doc.RootElement;
+            if (_api!.Ma == "orders" && goc.TryGetProperty("data", out var ds)
+                && ds.ValueKind == System.Text.Json.JsonValueKind.Array && ds.GetArrayLength() > 0
+                && ds[0].TryGetProperty("code", out var ma))
+            {
+                _thamSo["order_code"] = ma.GetString();
+            }
+            else if (_api.Ma == "order-detail" && goc.TryGetProperty("data", out var ct)
+                     && ct.TryGetProperty("items", out var items)
+                     && items.ValueKind == System.Text.Json.JsonValueKind.Array && items.GetArrayLength() > 0)
+            {
+                var dong = items[0];
+                if (dong.TryGetProperty("code", out var sp)) _thamSo["product_code"] = sp.GetString();
+                if (dong.TryGetProperty("trace_code", out var tc) && tc.ValueKind == System.Text.Json.JsonValueKind.String)
+                    _thamSo["trace_code"] = tc.GetString();
+            }
+        }
+        catch (System.Text.Json.JsonException) { /* chỉ là gợi ý, bỏ qua */ }
+    }
+
+    private async Task SaoChepAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _ketQua?.NoiDung ?? "");
+            Snackbar.Add("Đã sao chép vào clipboard.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Trình duyệt không cho sao chép - hãy bôi đen rồi Ctrl+C.", Severity.Warning);
+        }
+    }
+
+    private static string NhanThamSo(ThamSoApiHnC ts) => ts.BatBuoc ? ts.Ten + " *" : ts.Ten;
+
+    private static Color MauTrangThai(int s) => s switch
+    {
+        >= 200 and < 300 => Color.Success,
+        >= 400 and < 500 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static string KichThuoc(string s)
+    {
+        var b = System.Text.Encoding.UTF8.GetByteCount(s);
+        return b < 1024 ? $"{b} B" : b < 1024 * 1024 ? $"{b / 1024d:0.#} KB" : $"{b / 1024d / 1024d:0.##} MB";
+    }
+}
