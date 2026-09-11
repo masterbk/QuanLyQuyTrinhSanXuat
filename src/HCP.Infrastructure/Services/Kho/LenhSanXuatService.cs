@@ -52,31 +52,67 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
 
     public async Task<KetQuaThaoTac> TaoAsync(LenhSanXuat lenh, CancellationToken ct = default)
     {
+        var loi = await KiemTraAsync(lenh, idDangSua: null, ct);
+        if (loi is not null) return KetQuaThaoTac.Loi(loi);
+
+        lenh.TrangThai = TrangThaiLenhSX.MoiTao;
+        _db.LenhSanXuats.Add(lenh);
+        await _db.SaveChangesAsync(ct);
+        return KetQuaThaoTac.Ok($"Đã tạo lệnh sản xuất \"{lenh.MaLenh}\". Bấm \"Hoàn thành\" để trừ nguyên liệu.");
+    }
+
+    public async Task<KetQuaThaoTac> CapNhatAsync(LenhSanXuat lenh, CancellationToken ct = default)
+    {
+        var goc = await _db.LenhSanXuats.FirstOrDefaultAsync(l => l.Id == lenh.Id, ct);
+        if (goc is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
+        // Kiểm tra trên bản trong DB chứ không tin trạng thái màn hình gửi lên: lệnh có thể vừa
+        // được hoàn thành ở tab khác - khi đó kho đã trừ, sửa số lượng sẽ lệch sổ kho.
+        if (goc.TrangThai != TrangThaiLenhSX.MoiTao)
+            return KetQuaThaoTac.Loi("Chỉ sửa được lệnh chưa hoàn thành. Lệnh đã hoàn thành thì dùng \"Huỷ lệnh\" rồi tạo lệnh mới.");
+
+        var loi = await KiemTraAsync(lenh, idDangSua: goc.Id, ct);
+        if (loi is not null) return KetQuaThaoTac.Loi(loi);
+
+        goc.MaLenh = lenh.MaLenh;
+        goc.MaThanhPham = lenh.MaThanhPham;
+        goc.SoLuong = lenh.SoLuong;
+        goc.MaKho = lenh.MaKho;
+        goc.MaLoThanhPham = lenh.MaLoThanhPham;
+        goc.HanSuDungThanhPham = lenh.HanSuDungThanhPham;
+        goc.NgaySanXuat = lenh.NgaySanXuat;
+        goc.GhiChu = lenh.GhiChu;
+        goc.TaoLoDongBo = lenh.TaoLoDongBo;
+        await _db.SaveChangesAsync(ct);
+        return KetQuaThaoTac.Ok($"Đã cập nhật lệnh sản xuất \"{goc.MaLenh}\".");
+    }
+
+    /// <summary>
+    /// Chuẩn hoá + kiểm tra dữ liệu lệnh (dùng chung cho tạo và sửa). Trả về thông báo lỗi, hoặc null
+    /// nếu hợp lệ. idDangSua: bỏ qua chính lệnh đó khi kiểm tra trùng mã.
+    /// </summary>
+    private async Task<string?> KiemTraAsync(LenhSanXuat lenh, int? idDangSua, CancellationToken ct)
+    {
         lenh.MaLenh = lenh.MaLenh?.Trim() ?? "";
         lenh.MaThanhPham = lenh.MaThanhPham?.Trim() ?? "";
         lenh.MaKho = lenh.MaKho?.Trim() ?? "";
         lenh.MaLoThanhPham = lenh.MaLoThanhPham?.Trim() ?? "";
+        lenh.GhiChu = string.IsNullOrWhiteSpace(lenh.GhiChu) ? null : lenh.GhiChu.Trim();
 
-        if (string.IsNullOrWhiteSpace(lenh.MaLenh)) return KetQuaThaoTac.Loi("Vui lòng nhập mã lệnh.");
-        if (await _db.LenhSanXuats.AnyAsync(l => l.MaLenh == lenh.MaLenh, ct))
-            return KetQuaThaoTac.Loi($"Mã lệnh \"{lenh.MaLenh}\" đã tồn tại.");
-        if (lenh.SoLuong <= 0) return KetQuaThaoTac.Loi("Số lượng sản xuất phải lớn hơn 0.");
-        if (string.IsNullOrWhiteSpace(lenh.MaLoThanhPham)) return KetQuaThaoTac.Loi("Vui lòng nhập mã lô thành phẩm.");
+        if (string.IsNullOrWhiteSpace(lenh.MaLenh)) return "Vui lòng nhập mã lệnh.";
+        if (await _db.LenhSanXuats.AnyAsync(l => l.MaLenh == lenh.MaLenh && l.Id != idDangSua, ct))
+            return $"Mã lệnh \"{lenh.MaLenh}\" đã tồn tại.";
+        if (lenh.SoLuong <= 0) return "Số lượng sản xuất phải lớn hơn 0.";
+        if (string.IsNullOrWhiteSpace(lenh.MaLoThanhPham)) return "Vui lòng nhập mã lô thành phẩm.";
 
         var tp = await _db.Products.Include(p => p.DanhSachDinhMuc)
             .FirstOrDefaultAsync(p => p.MaSanPham == lenh.MaThanhPham, ct);
         if (tp is null || tp.LoaiSanPham != LoaiSanPham.ThanhPham)
-            return KetQuaThaoTac.Loi("Vui lòng chọn thành phẩm hợp lệ.");
+            return "Vui lòng chọn thành phẩm hợp lệ.";
         if (tp.DanhSachDinhMuc.Count == 0)
-            return KetQuaThaoTac.Loi($"\"{tp.TenSanPham}\" chưa có định mức. Khai định mức trước khi sản xuất.");
+            return $"\"{tp.TenSanPham}\" chưa có định mức. Khai định mức trước khi sản xuất.";
         if (!await _db.Warehouses.AnyAsync(k => k.MaKho == lenh.MaKho, ct))
-            return KetQuaThaoTac.Loi("Vui lòng chọn kho hợp lệ.");
-
-        lenh.TrangThai = TrangThaiLenhSX.MoiTao;
-        lenh.GhiChu = lenh.GhiChu?.Trim();
-        _db.LenhSanXuats.Add(lenh);
-        await _db.SaveChangesAsync(ct);
-        return KetQuaThaoTac.Ok($"Đã tạo lệnh sản xuất \"{lenh.MaLenh}\". Bấm \"Hoàn thành\" để trừ nguyên liệu.");
+            return "Vui lòng chọn kho hợp lệ.";
+        return null;
     }
 
     public async Task<KetQuaThaoTac> ThucHienAsync(

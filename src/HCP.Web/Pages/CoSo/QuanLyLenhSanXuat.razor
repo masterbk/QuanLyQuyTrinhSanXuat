@@ -93,6 +93,10 @@ else
                         <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                    StartIcon="@Icons.Material.Filled.CheckCircle" Disabled="_dangXuLy"
                                    OnClick="@(() => MoHoanThanh(context))">Hoàn thành</MudButton>
+                        <MudTooltip Text="Sửa lệnh">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
+                                           OnClick="@(() => MoSua(context))" />
+                        </MudTooltip>
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
                                        OnClick="@(() => XoaAsync(context))" />
                     }
@@ -220,7 +224,9 @@ else
 </MudDialog>
 
 <MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
-    <TitleContent><MudText Typo="Typo.h6">Tạo lệnh sản xuất</MudText></TitleContent>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_idDangSua is null ? "Tạo lệnh sản xuất" : $"Sửa lệnh sản xuất {_maLenhDangSua}")</MudText>
+    </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" Model="_input">
             <MudGrid>
@@ -308,7 +314,7 @@ else
     <DialogActions>
         <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangLuu" OnClick="LuuAsync">
-            Tạo lệnh
+            @(_idDangSua is null ? "Tạo lệnh" : "Lưu thay đổi")
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -326,6 +332,8 @@ else
     private MudForm? _form;
     private bool _hienForm;
     private LenhSanXuat _input = new();
+    private int? _idDangSua;          // null = đang tạo mới
+    private string? _maLenhDangSua;
     private DateTime? _ngaySanXuat;
     private DateTime? _hsdThanhPham;
 
@@ -362,9 +370,35 @@ else
 
     private void MoForm()
     {
+        _idDangSua = null;
+        _maLenhDangSua = null;
         _input = new LenhSanXuat { SoLuong = 1 };
         _ngaySanXuat = DateTime.Today;
         _hsdThanhPham = null;
+        _preview = new List<NguyenLieuCanDto>();
+        _hienForm = true;
+    }
+
+    /// <summary>Mở form ở chế độ sửa trên BẢN SAO - bấm Huỷ thì dòng trong bảng không bị đổi theo.</summary>
+    private void MoSua(LenhSanXuat lenh)
+    {
+        _idDangSua = lenh.Id;
+        _maLenhDangSua = lenh.MaLenh;
+        _input = new LenhSanXuat
+        {
+            Id = lenh.Id,
+            MaLenh = lenh.MaLenh,
+            MaThanhPham = lenh.MaThanhPham,
+            SoLuong = lenh.SoLuong,
+            MaKho = lenh.MaKho,
+            MaLoThanhPham = lenh.MaLoThanhPham,
+            HanSuDungThanhPham = lenh.HanSuDungThanhPham,
+            NgaySanXuat = lenh.NgaySanXuat,
+            GhiChu = lenh.GhiChu,
+            TaoLoDongBo = lenh.TaoLoDongBo
+        };
+        _ngaySanXuat = lenh.NgaySanXuat.ToDateTime(TimeOnly.MinValue);
+        _hsdThanhPham = lenh.HanSuDungThanhPham?.ToDateTime(TimeOnly.MinValue);
         _preview = new List<NguyenLieuCanDto>();
         _hienForm = true;
     }
@@ -391,7 +425,9 @@ else
         _input.HanSuDungThanhPham = _hsdThanhPham is { } h ? DateOnly.FromDateTime(h) : null;
 
         _dangLuu = true;
-        var kq = await LenhService.TaoAsync(_input);
+        var kq = _idDangSua is null
+            ? await LenhService.TaoAsync(_input)
+            : await LenhService.CapNhatAsync(_input);
         _dangLuu = false;
         Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
         if (kq.ThanhCong) { _hienForm = false; await TaiAsync(); }

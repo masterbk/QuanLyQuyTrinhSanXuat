@@ -32,6 +32,12 @@ public interface ILenhSanXuatService
     Task<KetQuaThaoTac> TaoAsync(LenhSanXuat lenh, CancellationToken ct = default);
 
     /// <summary>
+    /// Sửa lệnh (theo lenh.Id) - chỉ khi còn "Mới tạo", tức chưa động vào kho. Kiểm tra dữ liệu
+    /// giống lúc tạo; mã lệnh được đổi nhưng không được trùng lệnh khác.
+    /// </summary>
+    Task<KetQuaThaoTac> CapNhatAsync(LenhSanXuat lenh, CancellationToken ct = default);
+
+    /// <summary>
     /// Hoàn thành lệnh: trừ nguyên liệu (FEFO) + nhập thành phẩm. Chỉ chạy khi còn "Mới tạo".
     /// Bắt buộc kèm ít nhất 1 ảnh lô thành phẩm; ảnh được lưu theo lệnh và, nếu lệnh có sinh Lô
     /// sản xuất đồng bộ, được đưa luôn vào danh sách file của lô (loại HINH_ANH).

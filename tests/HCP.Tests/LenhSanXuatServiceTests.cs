@@ -503,6 +503,99 @@ public class LenhSanXuatServiceTests
         using (var db = MoDb()) Assert.Equal(1, await db.LenhSanXuats.CountAsync());
     }
 
+    /// <summary>Bản sửa gửi từ màn hình: đối tượng MỚI mang Id, giống cách UI làm (không sửa entity đang theo dõi).</summary>
+    private static LenhSanXuat BanSua(int id, string maLenh, decimal sl, string loTp = "LOTP1") => new()
+    {
+        Id = id, MaLenh = maLenh, MaThanhPham = "BANH_MI", SoLuong = sl, MaKho = "KHO01",
+        MaLoThanhPham = loTp, NgaySanXuat = new DateOnly(2026, 9, 12), GhiChu = "  sửa lại  ", TaoLoDongBo = true
+    };
+
+    [Fact]
+    public async Task Sua_Lenh_Moi_Tao_Cap_Nhat_Du_Truong_Va_Hoan_Thanh_Theo_So_Moi()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 5m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).CapNhatAsync(BanSua(id, " LSX-002 ", 20m, "LOTP-MOI"));
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        using (var db = MoDb())
+        {
+            var lenh = await db.LenhSanXuats.SingleAsync();
+            Assert.Equal("LSX-002", lenh.MaLenh);            // đã trim
+            Assert.Equal(20m, lenh.SoLuong);
+            Assert.Equal("LOTP-MOI", lenh.MaLoThanhPham);
+            Assert.Equal(new DateOnly(2026, 9, 12), lenh.NgaySanXuat);
+            Assert.Equal("sửa lại", lenh.GhiChu);
+            Assert.True(lenh.TaoLoDongBo);
+            Assert.Equal(TrangThaiLenhSX.MoiTao, lenh.TrangThai);
+        }
+
+        // Sửa xong chưa hề động vào kho; hoàn thành thì trừ theo SỐ MỚI (20 × 0.1 = 2.0 kg).
+        Assert.Equal(5m, TonLo("BOT_MI", "LO_A"));
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
+        Assert.Equal(3m, TonLo("BOT_MI", "LO_A"));
+        Assert.Equal(20m, TonLo("BANH_MI", "LOTP-MOI"));
+    }
+
+    [Fact]
+    public async Task Khong_Sua_Duoc_Lenh_Da_Hoan_Thanh_Hoac_Da_Huy()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 5m, new DateOnly(2026, 1, 1));
+
+        int id;
+        using (var db = MoDb()) id = (await Tao(db, 10)).Id;
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, Anh())).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).CapNhatAsync(BanSua(id, "LSX-001", 99m));
+            Assert.False(kq.ThanhCong);
+            Assert.Contains("chưa hoàn thành", kq.ThongBao);
+        }
+        using (var db = MoDb()) Assert.True((await Svc(db).HuyAsync(id, "thử")).ThanhCong);
+        using (var db = MoDb()) Assert.False((await Svc(db).CapNhatAsync(BanSua(id, "LSX-001", 99m))).ThanhCong);
+
+        using (var db = MoDb()) Assert.Equal(10m, (await db.LenhSanXuats.SingleAsync()).SoLuong);
+    }
+
+    [Fact]
+    public async Task Sua_Kiem_Tra_Du_Lieu_Nhu_Luc_Tao()
+    {
+        SeedDanhMuc();
+        int id;
+        using (var db = MoDb())
+        {
+            await Svc(db).TaoAsync(Lenh(10));                        // LSX-001
+            var khac = Lenh(5); khac.MaLenh = "LSX-KHAC";
+            await Svc(db).TaoAsync(khac);
+            id = (await db.LenhSanXuats.SingleAsync(l => l.MaLenh == "LSX-001")).Id;
+        }
+
+        using (var db = MoDb())
+        {
+            var svc = Svc(db);
+            // Trùng mã với lệnh KHÁC -> chặn; giữ nguyên mã của chính nó -> được.
+            Assert.Contains("đã tồn tại", (await svc.CapNhatAsync(BanSua(id, "LSX-KHAC", 10m))).ThongBao);
+            Assert.True((await svc.CapNhatAsync(BanSua(id, "LSX-001", 12m))).ThanhCong);
+            Assert.False((await svc.CapNhatAsync(BanSua(id, "LSX-001", 0m))).ThanhCong);
+            Assert.False((await svc.CapNhatAsync(BanSua(id, "LSX-001", 10m, loTp: " "))).ThanhCong);
+            var saiTp = BanSua(id, "LSX-001", 10m); saiTp.MaThanhPham = "BOT_MI";   // nguyên liệu, không phải thành phẩm
+            Assert.False((await svc.CapNhatAsync(saiTp)).ThanhCong);
+            Assert.False((await svc.CapNhatAsync(BanSua(9999, "LSX-001", 10m))).ThanhCong);
+        }
+
+        using (var db = MoDb())
+            Assert.Equal(12m, (await db.LenhSanXuats.SingleAsync(l => l.Id == id)).SoLuong);   // chỉ lần hợp lệ được lưu
+    }
+
     [Fact]
     public async Task Khong_Bat_Tao_Lo_Thi_Khong_Sinh_Batch()
     {
