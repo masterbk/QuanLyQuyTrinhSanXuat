@@ -99,17 +99,22 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
                             TenantId = tenantId,
                             MaSanPham = i.Code!,
                             TenSanPham = i.Name,
-                            SoLuong = i.SoLuongCuoi,
+                            SoLuong = i.RequestedAmount,
+                            DonViTinh = i.Unit,
+                            FileUrl = i.FileUrl,
                             MaTruyVet = i.TraceCode,
                             MaThucDon = i.MenuCode,
                             PhanBo = (i.Allocations ?? new List<OrderAllocation>())
                                 .Select(a => new DonHangNhanPhanBo
                                 {
                                     TenantId = tenantId,
+                                    MaPhieuXuat = a.StockOutCode,
                                     MaThucPhamNcc = a.SupplierFoodCode,
-                                    MaLo = a.MaLo,
-                                    MaKho = a.MaKho,
-                                    SoLuong = a.SoLuongCuoi
+                                    MaLo = a.Batch?.Code,
+                                    TenLo = a.Batch?.Name,
+                                    MaKho = a.Warehouse?.Code,
+                                    TenKho = a.Warehouse?.Name,
+                                    SoLuong = a.Amount
                                 }).ToList()
                         }).ToList();
                     // Chi tiết chỉ bổ sung, không xoá thông tin danh sách đã có nếu chi tiết thiếu trường.

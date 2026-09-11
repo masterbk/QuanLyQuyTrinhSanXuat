@@ -95,9 +95,12 @@ public class DongBoDonHangJobTests
         School = new SchoolInfo { Name = "Trường A" },
         Items = items.Select(i => new OrderDetailItem
         {
-            Code = i.ma, Name = i.ten, SoLuong = i.sl, TraceCode = i.trace,
+            Code = i.ma, Food = new ProductInfo { Code = i.ma, Name = i.ten }, RequestedAmount = i.sl, TraceCode = i.trace,
             Allocations = i.alloc.Select(a => new OrderAllocation
-            { SupplierFoodCode = a.sfc, MaLo = a.lo, MaKho = a.kho, SoLuong = a.sl }).ToList()
+            {
+                SupplierFoodCode = a.sfc, Batch = new BatchInfo { Code = a.lo },
+                Warehouse = new WarehouseInfo { Code = a.kho }, Amount = a.sl
+            }).ToList()
         }).ToList()
     };
 
@@ -227,7 +230,7 @@ public class DongBoDonHangJobTests
         client.ChiTietTheoMa["DH260909Z4IFHJ"] = new OrderDetail
         {
             Code = "DH260909Z4IFHJ",
-            Items = new() { new OrderDetailItem { Code = "KEM-CARAMEL", Name = null } }
+            Items = new() { new OrderDetailItem { Code = "KEM-CARAMEL" } }   // không có food/dish -> không tên
         };
 
         using (var db = MoDb()) Assert.True((await Job(db, client).DongBoMotCoSoAsync(CoSo)).ThanhCong);
@@ -259,6 +262,240 @@ public class DongBoDonHangJobTests
             Assert.Null(huy.TenNguoiGiao);   // transporter: null
             Assert.Null(huy.KhoXuat);        // warehouses: []
         }
+    }
+
+    /// <summary>NGUYÊN VĂN response thật của GET /api/supplier/orders/{code} (Docs/ChiTietDonHang.json).</summary>
+    private const string JsonChiTietThat = """
+    {
+      "success": true,
+      "message": "Chi tiết đơn hàng",
+      "data": {
+        "code": "DH260910HLJESE",
+        "traceability_url": "https://tracuu.hanoicheck.com.vn/NCC-2026-000140/truy-xuat/DH260910HLJESE",
+        "order_date": "2026-09-11",
+        "product_type": "food",
+        "product_type_label": "Thực phẩm",
+        "school": {
+          "name": "MẦM NON 20-10"
+        },
+        "products": [
+          {
+            "code": "BN-BL-TRUNGMUOI",
+            "name": "Bánh bông lan trứng muối"
+          },
+          {
+            "code": "BM-05",
+            "name": "BÁNH MỲ GỐI(11 LÁT/1 CHIẾC)"
+          },
+          {
+            "code": "PZ-MINI-01",
+            "name": "BÁNH MINI PIZZA (6cm)"
+          }
+        ],
+        "product_summary": "Bánh bông lan trứng muối, BÁNH MỲ GỐI(11 LÁT/1 CHIẾC), BÁNH MINI PIZZA (6cm)",
+        "warehouses": [
+          {
+            "code": "K-01",
+            "name": "Kho số 1"
+          }
+        ],
+        "transporter": {
+          "code": "VC-03",
+          "name": "Trần Văn B",
+          "phone": "0900000002",
+          "transport_mean": "Xe máy",
+          "license_plate": "29A-000.02"
+        },
+        "status": "DANG_GIAO",
+        "status_label": "Đang giao",
+        "school_point": "1",
+        "delivery_address": null,
+        "note": null,
+        "images": [],
+        "created_at": "2026-09-10 11:18:20",
+        "items": [
+          {
+            "code": "BN-BL-TRUNGMUOI",
+            "menu_code": null,
+            "order_menu_trace_code": null,
+            "trace_code": null,
+            "file_path": null,
+            "file_url": null,
+            "food": {
+              "code": "BN-BL-TRUNGMUOI",
+              "name": "Bánh bông lan trứng muối"
+            },
+            "dish": null,
+            "requested_amount": 135,
+            "unit": "Cái",
+            "allocations": [
+              {
+                "stock_out_code": "NCC-DH260910HLJESE-25-4-4",
+                "supplier_food_code": "BN-BL-TRUNGMUOI",
+                "food": {
+                  "code": "BN-BL-TRUNGMUOI",
+                  "name": "Bánh bông lan trứng muối"
+                },
+                "batch": {
+                  "code": "BLTM-LO-01",
+                  "name": "Lô Bánh bông lan trứng muối số 1"
+                },
+                "warehouse": {
+                  "code": "K-01",
+                  "name": "Kho số 1"
+                },
+                "amount": 135
+              }
+            ],
+            "ingredients": []
+          },
+          {
+            "code": "BM-05",
+            "menu_code": null,
+            "order_menu_trace_code": null,
+            "trace_code": null,
+            "file_path": null,
+            "file_url": null,
+            "food": {
+              "code": "BM-05",
+              "name": "BÁNH MỲ GỐI(11 LÁT/1 CHIẾC)"
+            },
+            "dish": null,
+            "requested_amount": 19,
+            "unit": "Kg",
+            "allocations": [
+              {
+                "stock_out_code": "NCC-DH260910HLJESE-28-7-4",
+                "supplier_food_code": "BM-05",
+                "food": {
+                  "code": "BM-05",
+                  "name": "BÁNH MỲ GỐI(11 LÁT/1 CHIẾC)"
+                },
+                "batch": {
+                  "code": "LO-01",
+                  "name": "Bánh mỳ gối lô 01"
+                },
+                "warehouse": {
+                  "code": "K-01",
+                  "name": "Kho số 1"
+                },
+                "amount": 19
+              }
+            ],
+            "ingredients": []
+          },
+          {
+            "code": "PZ-MINI-01",
+            "menu_code": null,
+            "order_menu_trace_code": null,
+            "trace_code": null,
+            "file_path": null,
+            "file_url": null,
+            "food": {
+              "code": "PZ-MINI-01",
+              "name": "BÁNH MINI PIZZA (6cm)"
+            },
+            "dish": null,
+            "requested_amount": 70,
+            "unit": "Kg",
+            "allocations": [
+              {
+                "stock_out_code": "NCC-DH260910HLJESE-31-10-4",
+                "supplier_food_code": "PZ-MINI-01",
+                "food": {
+                  "code": "PZ-MINI-01",
+                  "name": "BÁNH MINI PIZZA (6cm)"
+                },
+                "batch": {
+                  "code": "PIZZA-LO-01",
+                  "name": "Lô Pizza số 01"
+                },
+                "warehouse": {
+                  "code": "K-01",
+                  "name": "Kho số 1"
+                },
+                "amount": 70
+              }
+            ],
+            "ingredients": []
+          }
+        ],
+        "menus": []
+      }
+    }
+    """;
+
+    [Fact]
+    public async Task Parse_JSON_Chi_Tiet_That_Ra_Dung_So_Luong_Lo_Kho()
+    {
+        var chiTiet = System.Text.Json.JsonSerializer.Deserialize<OrderDetailResponse>(JsonChiTietThat)!.Data!;
+        var dsDon = new OrderListItem
+        {
+            Code = chiTiet.Code, Status = chiTiet.Status, OrderDate = chiTiet.OrderDate,
+            School = chiTiet.School, Products = chiTiet.Products
+        };
+        var client = new FakeOrderClient { Result = OrderQueryResult.Ok(new[] { dsDon }) };
+        client.ChiTietTheoMa[chiTiet.Code!] = chiTiet;
+
+        using (var db = MoDb()) Assert.True((await Job(db, client).DongBoMotCoSoAsync(CoSo)).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            var don = await db.DonHangNhans.Include(d => d.Dong).ThenInclude(l => l.PhanBo)
+                .SingleAsync(d => d.MaDonHang == "DH260910HLJESE");
+            Assert.Equal(3, don.Dong.Count);
+            // Phần đầu đơn lấy từ chi tiết khi danh sách không có (danh sách giả lập ở đây thiếu người giao).
+            Assert.Equal("Trần Văn B", don.TenNguoiGiao);
+            Assert.Equal("K-01 - Kho số 1", don.KhoXuat);
+
+            var bl = don.Dong.Single(l => l.MaSanPham == "BN-BL-TRUNGMUOI");
+            Assert.Equal("Bánh bông lan trứng muối", bl.TenSanPham);
+            Assert.Equal(135m, bl.SoLuong);
+            Assert.Equal("Cái", bl.DonViTinh);
+            var pb = Assert.Single(bl.PhanBo);
+            Assert.Equal("NCC-DH260910HLJESE-25-4-4", pb.MaPhieuXuat);
+            Assert.Equal("BN-BL-TRUNGMUOI", pb.MaThucPhamNcc);
+            Assert.Equal("BLTM-LO-01", pb.MaLo);
+            Assert.Equal("Lô Bánh bông lan trứng muối số 1", pb.TenLo);
+            Assert.Equal("K-01", pb.MaKho);
+            Assert.Equal("Kho số 1", pb.TenKho);
+            Assert.Equal(135m, pb.SoLuong);
+
+            var banhGoi = don.Dong.Single(l => l.MaSanPham == "BM-05");
+            Assert.Equal(19m, banhGoi.SoLuong);
+            Assert.Equal("Kg", banhGoi.DonViTinh);
+            Assert.Equal("LO-01", Assert.Single(banhGoi.PhanBo).MaLo);
+        }
+    }
+
+    [Fact]
+    public void Parse_JSON_Chi_Tiet_San_Pham_Trong_Don_Cung_Cau_Truc_Dong_Hang()
+    {
+        // GET /orders/{code}/items/{productCode} trả một dòng hàng + order_code: DTO dòng hàng đọc được y hệt.
+        const string json = """
+        {"order_code":"DH260910HLJESE","code":"BN-BL-TRUNGMUOI","menu_code":null,"order_menu_trace_code":null,
+         "trace_code":null,"file_path":null,"file_url":null,
+         "food":{"code":"BN-BL-TRUNGMUOI","name":"Bánh bông lan trứng muối"},"dish":null,
+         "requested_amount":135,"unit":"Cái",
+         "allocations":[{"stock_out_code":"NCC-DH260910HLJESE-25-4-4","supplier_food_code":"BN-BL-TRUNGMUOI",
+           "food":{"code":"BN-BL-TRUNGMUOI","name":"Bánh bông lan trứng muối"},
+           "batch":{"code":"BLTM-LO-01","name":"Lô Bánh bông lan trứng muối số 1"},
+           "warehouse":{"code":"K-01","name":"Kho số 1"},"amount":135}],"ingredients":[]}
+        """;
+        var dong = System.Text.Json.JsonSerializer.Deserialize<OrderDetailItem>(json)!;
+        Assert.Equal("Bánh bông lan trứng muối", dong.Name);
+        Assert.Equal(135m, dong.RequestedAmount);
+        Assert.Equal("BLTM-LO-01", dong.Allocations![0].Batch!.Code);
+        Assert.Equal(135m, dong.Allocations[0].Amount);
+    }
+
+    [Fact]
+    public void Don_Mon_An_Lay_Ten_Tu_Dish()
+    {
+        var dong = System.Text.Json.JsonSerializer.Deserialize<OrderDetailItem>(
+            """{"code":"MON-01","food":null,"dish":{"code":"MON-01","name":"Phở gà"},"requested_amount":"50","unit":"Suất"}""")!;
+        Assert.Equal("Phở gà", dong.Name);
+        Assert.Equal(50m, dong.RequestedAmount);   // số dạng chuỗi vẫn đọc được
     }
 
     [Fact]

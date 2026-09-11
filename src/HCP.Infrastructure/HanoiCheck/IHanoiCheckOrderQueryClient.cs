@@ -113,9 +113,8 @@ public sealed class PaginationInfo
 }
 
 // --- Chi tiết đơn: GET /orders/{code} ---
-// LƯU Ý: phần đầu đơn (OrderHeader) đã khớp JSON thật. RIÊNG items[]/allocations[] vẫn là PHỎNG
-// ĐOÁN: JSON thật cho thấy allocations có supplier_food_code nhưng name/số lượng/lô/kho đang về
-// null -> tên trường khác. Cần JSON thật của GET /orders/{code} để sửa đúng chỗ này.
+// Khớp JSON THẬT (Docs/ChiTietDonHang.json, Docs/ChiTietSanPhamTrongDon.json - 11/09/2026).
+// GET /orders/{code}/items/{productCode} trả đúng cấu trúc một phần tử items[] cộng order_code.
 public sealed class OrderDetailResponse
 {
     [JsonPropertyName("success")] public bool Success { get; set; }
@@ -131,25 +130,39 @@ public sealed class OrderDetail : OrderHeader
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
 public sealed class OrderDetailItem
 {
+    /// <summary>Mã thực phẩm hoặc mã món ăn.</summary>
     [JsonPropertyName("code")] public string? Code { get; set; }
-    [JsonPropertyName("name")] public string? Name { get; set; }
-    [JsonPropertyName("trace_code")] public string? TraceCode { get; set; }
-    [JsonPropertyName("so_luong")] public decimal? SoLuong { get; set; }
-    [JsonPropertyName("quantity")] public decimal? Quantity { get; set; }
     [JsonPropertyName("menu_code")] public string? MenuCode { get; set; }
+    [JsonPropertyName("order_menu_trace_code")] public string? OrderMenuTraceCode { get; set; }
+    [JsonPropertyName("trace_code")] public string? TraceCode { get; set; }
+    [JsonPropertyName("file_url")] public string? FileUrl { get; set; }
+    /// <summary>Đơn thực phẩm: food có giá trị, dish = null; đơn món ăn thì ngược lại.</summary>
+    [JsonPropertyName("food")] public ProductInfo? Food { get; set; }
+    [JsonPropertyName("dish")] public ProductInfo? Dish { get; set; }
+    /// <summary>Số lượng trường đặt.</summary>
+    [JsonPropertyName("requested_amount")] public decimal? RequestedAmount { get; set; }
+    [JsonPropertyName("unit")] public string? Unit { get; set; }
     [JsonPropertyName("allocations")] public List<OrderAllocation>? Allocations { get; set; }
-    public decimal? SoLuongCuoi => SoLuong ?? Quantity;
+
+    public string? Name => Food?.Name ?? Dish?.Name;
 }
 
+/// <summary>Phân bổ cung ứng của dòng hàng = phiếu xuất kho của NCC trên HanoiCheck.</summary>
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
 public sealed class OrderAllocation
 {
+    [JsonPropertyName("stock_out_code")] public string? StockOutCode { get; set; }
     [JsonPropertyName("supplier_food_code")] public string? SupplierFoodCode { get; set; }
-    [JsonPropertyName("ma_lo")] public string? MaLo { get; set; }
-    [JsonPropertyName("ma_kho")] public string? MaKho { get; set; }
-    [JsonPropertyName("so_luong")] public decimal? SoLuong { get; set; }
-    [JsonPropertyName("quantity")] public decimal? Quantity { get; set; }
-    public decimal? SoLuongCuoi => SoLuong ?? Quantity;
+    [JsonPropertyName("food")] public ProductInfo? Food { get; set; }
+    [JsonPropertyName("batch")] public BatchInfo? Batch { get; set; }
+    [JsonPropertyName("warehouse")] public WarehouseInfo? Warehouse { get; set; }
+    [JsonPropertyName("amount")] public decimal? Amount { get; set; }
+}
+
+public sealed class BatchInfo
+{
+    [JsonPropertyName("code")] public string? Code { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
 }
 
 public sealed class OrderMenu

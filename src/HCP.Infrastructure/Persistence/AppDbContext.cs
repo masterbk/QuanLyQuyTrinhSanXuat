@@ -549,6 +549,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dhNhanDong.Property(l => l.SoLuong).HasPrecision(18, 3);
         dhNhanDong.Property(l => l.MaTruyVet).HasMaxLength(255);
         dhNhanDong.Property(l => l.MaThucDon).HasMaxLength(255);
+        dhNhanDong.Property(l => l.DonViTinh).HasMaxLength(50);
+        dhNhanDong.Property(l => l.FileUrl).HasMaxLength(1000);
         dhNhanDong.HasMany(l => l.PhanBo).WithOne(p => p.DonHangNhanDong!)
                   .HasForeignKey(p => p.DonHangNhanDongId).OnDelete(DeleteBehavior.Cascade);
         dhNhanDong.HasIndex(l => l.DonHangNhanId);
@@ -559,6 +561,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dhPhanBo.Property(p => p.MaThucPhamNcc).HasMaxLength(255);
         dhPhanBo.Property(p => p.MaLo).HasMaxLength(255);
         dhPhanBo.Property(p => p.MaKho).HasMaxLength(255);
+        dhPhanBo.Property(p => p.MaPhieuXuat).HasMaxLength(255);
+        dhPhanBo.Property(p => p.TenLo).HasMaxLength(500);
+        dhPhanBo.Property(p => p.TenKho).HasMaxLength(500);
         dhPhanBo.Property(p => p.SoLuong).HasPrecision(18, 3);
         dhPhanBo.HasIndex(p => p.DonHangNhanDongId);
 

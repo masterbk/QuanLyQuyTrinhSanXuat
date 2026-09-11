@@ -20,8 +20,14 @@ public class DonHangNhanDong : AuditableEntity
 
     // --- Bổ sung từ chi tiết đơn (GET /orders/{code}) ---
 
-    /// <summary>Số lượng đặt (từ chi tiết đơn).</summary>
+    /// <summary>requested_amount - số lượng trường đặt.</summary>
     public decimal? SoLuong { get; set; }
+
+    /// <summary>unit - đơn vị tính (Cái, Kg...).</summary>
+    public string? DonViTinh { get; set; }
+
+    /// <summary>file_url - file đính kèm dòng hàng (nếu có).</summary>
+    public string? FileUrl { get; set; }
 
     /// <summary>trace_code - mã truy vết dòng hàng (khi 1 sản phẩm xuất hiện nhiều dòng).</summary>
     public string? MaTruyVet { get; set; }

@@ -142,25 +142,35 @@ else
                 <HeaderContent>
                     <MudTh>Mã</MudTh>
                     <MudTh>Tên</MudTh>
-                    <MudTh Style="text-align:right">Số lượng</MudTh>
-                    <MudTh>Phân bổ (NCC · lô · kho · SL)</MudTh>
+                    <MudTh Style="text-align:right">Số lượng đặt</MudTh>
+                    <MudTh>Xuất kho (lô · kho · số lượng)</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="Mã">@context.MaSanPham</MudTd>
                     <MudTd DataLabel="Tên">@context.TenSanPham</MudTd>
-                    <MudTd DataLabel="Số lượng" Style="text-align:right">@(context.SoLuong?.ToString("0.###") ?? "-")</MudTd>
-                    <MudTd DataLabel="Phân bổ">
+                    <MudTd DataLabel="Số lượng đặt" Style="text-align:right; white-space:nowrap">
+                        @(context.SoLuong?.ToString("0.###") ?? "-") @context.DonViTinh
+                    </MudTd>
+                    <MudTd DataLabel="Xuất kho">
                         @if (context.PhanBo.Count == 0)
                         {
-                            <span class="mud-text-secondary">-</span>
+                            <span class="mud-text-secondary">Chưa xuất kho</span>
                         }
                         else
                         {
                             @foreach (var pb in context.PhanBo)
                             {
-                                <MudText Typo="Typo.caption" Class="d-block">
-                                    @(pb.MaThucPhamNcc ?? "?") · lô @(pb.MaLo ?? "-") · kho @(pb.MaKho ?? "-") · @(pb.SoLuong?.ToString("0.###") ?? "-")
-                                </MudText>
+                                <div class="mb-1">
+                                    <MudTooltip Text="@(pb.TenLo ?? "")">
+                                        <b>@(pb.MaLo ?? "-")</b>
+                                    </MudTooltip>
+                                    · <MudTooltip Text="@(pb.TenKho ?? "")">@(pb.MaKho ?? "-")</MudTooltip>
+                                    · <b>@(pb.SoLuong?.ToString("0.###") ?? "-")</b> @context.DonViTinh
+                                    @if (!string.IsNullOrEmpty(pb.MaPhieuXuat))
+                                    {
+                                        <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">Phiếu @pb.MaPhieuXuat</MudText>
+                                    }
+                                </div>
                             }
                         }
                     </MudTd>

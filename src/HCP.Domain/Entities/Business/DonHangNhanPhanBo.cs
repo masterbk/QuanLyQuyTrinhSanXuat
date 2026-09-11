@@ -18,11 +18,21 @@ public class DonHangNhanPhanBo : AuditableEntity
     /// <summary>supplier_food_code - mã thực phẩm của nhà cung cấp được phân bổ.</summary>
     public string? MaThucPhamNcc { get; set; }
 
-    /// <summary>ma_lo - lô xuất.</summary>
+    /// <summary>stock_out_code - mã phiếu xuất kho trên HanoiCheck.</summary>
+    public string? MaPhieuXuat { get; set; }
+
+    /// <summary>batch.code - lô xuất.</summary>
     public string? MaLo { get; set; }
 
-    /// <summary>ma_kho - kho xuất.</summary>
+    /// <summary>batch.name</summary>
+    public string? TenLo { get; set; }
+
+    /// <summary>warehouse.code - kho xuất.</summary>
     public string? MaKho { get; set; }
 
+    /// <summary>warehouse.name</summary>
+    public string? TenKho { get; set; }
+
+    /// <summary>amount - số lượng xuất.</summary>
     public decimal? SoLuong { get; set; }
 }
