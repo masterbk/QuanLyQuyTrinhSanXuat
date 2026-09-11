@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace HCP.Infrastructure.HanoiCheck;
@@ -20,14 +21,79 @@ public sealed class OrderListResponse
     [JsonPropertyName("pagination")] public PaginationInfo? Pagination { get; set; }
 }
 
-public sealed class OrderListItem
+/// <summary>
+/// Thông tin chung của một đơn - khớp JSON THẬT của GET /api/supplier/orders (đối chiếu
+/// response do người dùng cung cấp 11/09/2026, lưu tại Docs/donhang.json). Chi tiết đơn
+/// (GET /orders/{code}) được coi là cùng bộ trường này cộng thêm items[] và menus[].
+/// </summary>
+public abstract class OrderHeader
 {
     [JsonPropertyName("code")] public string? Code { get; set; }
-    [JsonPropertyName("school")] public SchoolInfo? School { get; set; }
-    [JsonPropertyName("products")] public List<ProductInfo>? Products { get; set; }
     [JsonPropertyName("status")] public string? Status { get; set; }
+    [JsonPropertyName("status_label")] public string? StatusLabel { get; set; }
     [JsonPropertyName("order_date")] public string? OrderDate { get; set; }
-    [JsonPropertyName("transporter_code")] public string? TransporterCode { get; set; }
+    [JsonPropertyName("school")] public SchoolInfo? School { get; set; }
+    /// <summary>"food" hoặc "dish".</summary>
+    [JsonPropertyName("product_type")] public string? ProductType { get; set; }
+    [JsonPropertyName("product_type_label")] public string? ProductTypeLabel { get; set; }
+    [JsonPropertyName("products")] public List<ProductInfo>? Products { get; set; }
+    [JsonPropertyName("warehouses")] public List<WarehouseInfo>? Warehouses { get; set; }
+    /// <summary>Người giao - object, null khi chưa phân công.</summary>
+    [JsonPropertyName("transporter")] public TransporterInfo? Transporter { get; set; }
+    /// <summary>Điểm trường giao hàng - JSON thật trả chuỗi ("4") nhưng nhận cả số cho chắc.</summary>
+    [JsonPropertyName("school_point"), JsonConverter(typeof(ChuoiHoacSoConverter))]
+    public string? SchoolPoint { get; set; }
+    [JsonPropertyName("delivery_address")] public string? DeliveryAddress { get; set; }
+    [JsonPropertyName("note")] public string? Note { get; set; }
+    [JsonPropertyName("traceability_url")] public string? TraceabilityUrl { get; set; }
+    /// <summary>Giờ Việt Nam, dạng "yyyy-MM-dd HH:mm:ss".</summary>
+    [JsonPropertyName("created_at")] public string? CreatedAt { get; set; }
+}
+
+public sealed class OrderListItem : OrderHeader
+{
+}
+
+public sealed class WarehouseInfo
+{
+    [JsonPropertyName("code")] public string? Code { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+}
+
+public sealed class TransporterInfo
+{
+    /// <summary>ma_nhan_su đã gửi ở mục Đồng bộ nhân sự.</summary>
+    [JsonPropertyName("code")] public string? Code { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("phone"), JsonConverter(typeof(ChuoiHoacSoConverter))]
+    public string? Phone { get; set; }
+    [JsonPropertyName("transport_mean")] public string? TransportMean { get; set; }
+    [JsonPropertyName("license_plate")] public string? LicensePlate { get; set; }
+}
+
+/// <summary>Đọc một trường có thể là chuỗi hoặc số thành chuỗi (HnC không nhất quán kiểu).</summary>
+public sealed class ChuoiHoacSoConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => reader.TryGetInt64(out var n) ? n.ToString()
+                                    : reader.GetDecimal().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            JsonTokenType.Null => null,
+            _ => SkipAndNull(ref reader)
+        };
+
+    private static string? SkipAndNull(ref Utf8JsonReader reader)
+    {
+        reader.Skip();
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
+    {
+        if (value is null) writer.WriteNullValue(); else writer.WriteStringValue(value);
+    }
 }
 
 public sealed class SchoolInfo
@@ -47,27 +113,22 @@ public sealed class PaginationInfo
 }
 
 // --- Chi tiết đơn: GET /orders/{code} ---
-// LƯU Ý: đặc tả chỉ mô tả bằng lời, KHÔNG có JSON mẫu đầy đủ. Tên trường allocations/số lượng
-// là PHỎNG ĐOÁN theo snake_case; parse tolerant (nhận cả so_luong lẫn quantity). Cần đối chiếu
-// sandbox thật rồi chỉnh lại đúng một chỗ này nếu sai.
+// LƯU Ý: phần đầu đơn (OrderHeader) đã khớp JSON thật. RIÊNG items[]/allocations[] vẫn là PHỎNG
+// ĐOÁN: JSON thật cho thấy allocations có supplier_food_code nhưng name/số lượng/lô/kho đang về
+// null -> tên trường khác. Cần JSON thật của GET /orders/{code} để sửa đúng chỗ này.
 public sealed class OrderDetailResponse
 {
     [JsonPropertyName("success")] public bool Success { get; set; }
     [JsonPropertyName("data")] public OrderDetail? Data { get; set; }
 }
 
-public sealed class OrderDetail
+public sealed class OrderDetail : OrderHeader
 {
-    [JsonPropertyName("code")] public string? Code { get; set; }
-    [JsonPropertyName("status")] public string? Status { get; set; }
-    [JsonPropertyName("order_date")] public string? OrderDate { get; set; }
-    [JsonPropertyName("school")] public SchoolInfo? School { get; set; }
     [JsonPropertyName("items")] public List<OrderDetailItem>? Items { get; set; }
     [JsonPropertyName("menus")] public List<OrderMenu>? Menus { get; set; }
-    // Bắt các trường header chưa chắc tên (người giao, địa chỉ giao...) để dò sau.
-    [JsonExtensionData] public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
 }
 
+[JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
 public sealed class OrderDetailItem
 {
     [JsonPropertyName("code")] public string? Code { get; set; }
@@ -80,6 +141,7 @@ public sealed class OrderDetailItem
     public decimal? SoLuongCuoi => SoLuong ?? Quantity;
 }
 
+[JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
 public sealed class OrderAllocation
 {
     [JsonPropertyName("supplier_food_code")] public string? SupplierFoodCode { get; set; }

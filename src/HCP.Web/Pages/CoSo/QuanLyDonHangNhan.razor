@@ -84,12 +84,52 @@ else
     <DialogContent>
         @if (_chon is not null)
         {
-            <MudGrid Class="mb-2">
+            <MudGrid Class="mb-2" Spacing="1">
                 <MudItem xs="12" sm="6"><b>Trường:</b> @(_chon.TenTruong ?? "-")</MudItem>
                 <MudItem xs="12" sm="6"><b>Trạng thái:</b> @TenTrangThai(_chon.TrangThai)</MudItem>
                 <MudItem xs="12" sm="6"><b>Ngày giao:</b> @(_chon.NgayGiao?.ToString("dd/MM/yyyy") ?? "-")</MudItem>
-                <MudItem xs="12" sm="6"><b>Người giao:</b> @(_chon.MaNguoiGiao ?? "-")</MudItem>
-                <MudItem xs="12"><b>Địa chỉ giao:</b> @(_chon.DiaChiGiao ?? "-")</MudItem>
+                <MudItem xs="12" sm="6"><b>Điểm trường:</b> @(_chon.DiemTruong ?? "-")</MudItem>
+                <MudItem xs="12" sm="6"><b>Loại đơn:</b> @(_chon.LoaiDon ?? "-")</MudItem>
+                <MudItem xs="12" sm="6"><b>Trường tạo đơn lúc:</b> @(_chon.NgayTaoTrenHnC?.ToString("dd/MM/yyyy HH:mm") ?? "-")</MudItem>
+                <MudItem xs="12" sm="6"><b>Kho xuất:</b> @(_chon.KhoXuat ?? "-")</MudItem>
+                <MudItem xs="12" sm="6"><b>Địa chỉ giao:</b> @(_chon.DiaChiGiao ?? "-")</MudItem>
+                <MudItem xs="12">
+                    <b>Người giao:</b>
+                    @if (string.IsNullOrEmpty(_chon.TenNguoiGiao) && string.IsNullOrEmpty(_chon.MaNguoiGiao))
+                    {
+                        <span class="mud-text-secondary">Chưa phân công</span>
+                    }
+                    else
+                    {
+                        <span>
+                            @(_chon.TenNguoiGiao ?? _chon.MaNguoiGiao)
+                            @if (!string.IsNullOrEmpty(_chon.TenNguoiGiao) && !string.IsNullOrEmpty(_chon.MaNguoiGiao))
+                            {
+                                <span class="mud-text-secondary">(@_chon.MaNguoiGiao)</span>
+                            }
+                            @if (!string.IsNullOrEmpty(_chon.SdtNguoiGiao))
+                            {
+                                <span> · @_chon.SdtNguoiGiao</span>
+                            }
+                            @if (!string.IsNullOrEmpty(_chon.PhuongTienGiao) || !string.IsNullOrEmpty(_chon.BienSoXe))
+                            {
+                                <span> · @_chon.PhuongTienGiao @_chon.BienSoXe</span>
+                            }
+                        </span>
+                    }
+                </MudItem>
+                @if (!string.IsNullOrEmpty(_chon.GhiChu))
+                {
+                    <MudItem xs="12"><b>Ghi chú:</b> @_chon.GhiChu</MudItem>
+                }
+                @* Chỉ nhận http(s) - link lấy từ dữ liệu ngoài, không để lọt javascript: *@
+                @if (_chon.LinkTruyXuat is { } link && (link.StartsWith("https://") || link.StartsWith("http://")))
+                {
+                    <MudItem xs="12">
+                        <b>Truy xuất:</b>
+                        <MudLink Href="@_chon.LinkTruyXuat" Target="_blank" Typo="Typo.body2">Mở trang truy xuất trên HanoiCheck</MudLink>
+                    </MudItem>
+                }
             </MudGrid>
             @if (!_chon.DaLayChiTiet)
             {

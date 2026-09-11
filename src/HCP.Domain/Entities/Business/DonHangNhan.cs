@@ -30,11 +30,41 @@ public class DonHangNhan : AuditableEntity
     /// <summary>Ngày giao (order_date) nếu HnC trả về.</summary>
     public DateOnly? NgayGiao { get; set; }
 
-    /// <summary>Người giao hàng (từ chi tiết đơn).</summary>
+    /// <summary>transporter.code - ma_nhan_su của người giao.</summary>
     public string? MaNguoiGiao { get; set; }
 
-    /// <summary>Địa chỉ/điểm giao (từ chi tiết đơn).</summary>
+    /// <summary>transporter.name</summary>
+    public string? TenNguoiGiao { get; set; }
+
+    /// <summary>transporter.phone</summary>
+    public string? SdtNguoiGiao { get; set; }
+
+    /// <summary>transporter.transport_mean (vd "Xe máy").</summary>
+    public string? PhuongTienGiao { get; set; }
+
+    /// <summary>transporter.license_plate</summary>
+    public string? BienSoXe { get; set; }
+
+    /// <summary>delivery_address</summary>
     public string? DiaChiGiao { get; set; }
+
+    /// <summary>school_point - điểm trường nhận hàng.</summary>
+    public string? DiemTruong { get; set; }
+
+    /// <summary>warehouses[] - kho xuất, dạng "K-01 - Kho số 1; ...".</summary>
+    public string? KhoXuat { get; set; }
+
+    /// <summary>product_type_label (Thực phẩm / Món ăn).</summary>
+    public string? LoaiDon { get; set; }
+
+    /// <summary>note - ghi chú của đơn (vd lý do trường huỷ).</summary>
+    public string? GhiChu { get; set; }
+
+    /// <summary>traceability_url - trang truy xuất công khai của đơn trên HanoiCheck.</summary>
+    public string? LinkTruyXuat { get; set; }
+
+    /// <summary>created_at - thời điểm trường tạo đơn (giờ Việt Nam, như HnC trả).</summary>
+    public DateTime? NgayTaoTrenHnC { get; set; }
 
     /// <summary>Đã kéo chi tiết đơn (items + phân bổ) hay chưa.</summary>
     public bool DaLayChiTiet { get; set; }

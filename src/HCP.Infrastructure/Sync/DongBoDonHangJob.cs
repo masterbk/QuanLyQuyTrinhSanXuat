@@ -78,9 +78,8 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
                 don.UpdatedAtUtc = now;
             }
 
-            don.TenTruong = item.School?.Name;
-            don.TrangThai = item.Status;
-            don.NgayGiao = DateOnly.TryParse(item.OrderDate, out var ngay) ? ngay : null;
+            // Danh sách là nguồn chuẩn cho phần đầu đơn: ghi đè cả giá trị null (vd bỏ phân công người giao).
+            ApDungPhanDau(don, item, ghiDeKhiNull: true);
             don.LanDongBoUtc = now;
 
             // Kéo chi tiết khi: đơn mới, chưa lấy chi tiết, trạng thái vừa đổi, hoặc còn đang biến động.
@@ -113,8 +112,8 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
                                     SoLuong = a.SoLuongCuoi
                                 }).ToList()
                         }).ToList();
-                    don.MaNguoiGiao = LayChuoi(detail.Extra, "transporter_code", "deliverer_code", "ma_nguoi_giao");
-                    don.DiaChiGiao = LayChuoi(detail.Extra, "delivery_address", "address", "dia_chi", "diem_giao");
+                    // Chi tiết chỉ bổ sung, không xoá thông tin danh sách đã có nếu chi tiết thiếu trường.
+                    ApDungPhanDau(don, detail, ghiDeKhiNull: false);
                     don.DaLayChiTiet = true;
                     xongChiTiet = true;
                 }
@@ -128,6 +127,14 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
                     .Select(p => new DonHangNhanDong { TenantId = tenantId, MaSanPham = p.Code!, TenSanPham = p.Name })
                     .ToList();
             }
+
+            // Tên sản phẩm: products[] của danh sách luôn có name - bù cho dòng chưa có tên (kể cả
+            // đơn cũ đã chốt không kéo lại chi tiết).
+            var tenTheoMa = (item.Products ?? new List<ProductInfo>())
+                .Where(p => !string.IsNullOrWhiteSpace(p.Code) && !string.IsNullOrWhiteSpace(p.Name))
+                .GroupBy(p => p.Code!).ToDictionary(g => g.Key, g => g.First().Name);
+            foreach (var dong in don.Dong.Where(d => string.IsNullOrWhiteSpace(d.TenSanPham)))
+                dong.TenSanPham = tenTheoMa.GetValueOrDefault(dong.MaSanPham);
             soDon++;
         }
 
@@ -139,13 +146,48 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
     private static bool LaTrangThaiCuoi(string? status) => status is
         "DA_GIAO" or "GIAO_HANG_THANH_CONG" or "HUY" or "TU_CHOI" or "TRA_HANG";
 
-    /// <summary>Lấy giá trị chuỗi đầu tiên tìm được trong Extra theo danh sách khoá ứng viên (dò tên trường chưa chắc).</summary>
-    private static string? LayChuoi(Dictionary<string, System.Text.Json.JsonElement>? extra, params string[] keys)
+    /// <summary>
+    /// Chép phần đầu đơn (trường, trạng thái, người giao, kho, điểm trường...) vào entity.
+    /// ghiDeKhiNull=false: chỉ ghi các giá trị có mặt - dùng khi bổ sung từ chi tiết đơn.
+    /// </summary>
+    private static void ApDungPhanDau(DonHangNhan don, OrderHeader h, bool ghiDeKhiNull)
     {
-        if (extra is null) return null;
-        foreach (var k in keys)
-            if (extra.TryGetValue(k, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String)
-                return v.GetString();
-        return null;
+        void Gan(string? giaTri, Action<string?> gan)
+        {
+            var v = string.IsNullOrWhiteSpace(giaTri) ? null : giaTri.Trim();
+            if (v is not null || ghiDeKhiNull) gan(v);
+        }
+
+        Gan(h.School?.Name, v => don.TenTruong = v);
+        Gan(h.Status, v => don.TrangThai = v);
+        if (DateOnly.TryParse(h.OrderDate, out var ngay)) don.NgayGiao = ngay;
+        else if (ghiDeKhiNull) don.NgayGiao = null;
+
+        if (h.Transporter is not null || ghiDeKhiNull)
+        {
+            var t = h.Transporter;
+            don.MaNguoiGiao = t?.Code;
+            don.TenNguoiGiao = t?.Name;
+            don.SdtNguoiGiao = t?.Phone;
+            don.PhuongTienGiao = t?.TransportMean;
+            don.BienSoXe = t?.LicensePlate;
+        }
+
+        var kho = (h.Warehouses ?? new List<WarehouseInfo>())
+            .Where(k => !string.IsNullOrWhiteSpace(k.Code) || !string.IsNullOrWhiteSpace(k.Name))
+            .Select(k => string.IsNullOrWhiteSpace(k.Name) ? k.Code : $"{k.Code} - {k.Name}")
+            .ToList();
+        if (kho.Count > 0 || ghiDeKhiNull) don.KhoXuat = kho.Count == 0 ? null : string.Join("; ", kho);
+
+        Gan(h.DeliveryAddress, v => don.DiaChiGiao = v);
+        Gan(h.SchoolPoint, v => don.DiemTruong = v);
+        Gan(h.ProductTypeLabel ?? h.ProductType, v => don.LoaiDon = v);
+        Gan(h.Note, v => don.GhiChu = v);
+        Gan(h.TraceabilityUrl, v => don.LinkTruyXuat = v);
+
+        if (DateTime.TryParseExact(h.CreatedAt, "yyyy-MM-dd HH:mm:ss",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var tao))
+            don.NgayTaoTrenHnC = tao;
+        else if (ghiDeKhiNull) don.NgayTaoTrenHnC = null;
     }
 }

@@ -526,6 +526,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dhNhan.Property(d => d.MaDonHang).HasMaxLength(255).IsRequired();
         dhNhan.Property(d => d.TenTruong).HasMaxLength(500);
         dhNhan.Property(d => d.TrangThai).HasMaxLength(50);
+        dhNhan.Property(d => d.MaNguoiGiao).HasMaxLength(255);
+        dhNhan.Property(d => d.TenNguoiGiao).HasMaxLength(255);
+        dhNhan.Property(d => d.SdtNguoiGiao).HasMaxLength(30);
+        dhNhan.Property(d => d.PhuongTienGiao).HasMaxLength(100);
+        dhNhan.Property(d => d.BienSoXe).HasMaxLength(50);
+        dhNhan.Property(d => d.DiaChiGiao).HasMaxLength(1000);
+        dhNhan.Property(d => d.DiemTruong).HasMaxLength(255);
+        dhNhan.Property(d => d.KhoXuat).HasMaxLength(1000);
+        dhNhan.Property(d => d.LoaiDon).HasMaxLength(100);
+        dhNhan.Property(d => d.GhiChu).HasMaxLength(2000);
+        dhNhan.Property(d => d.LinkTruyXuat).HasMaxLength(1000);
         dhNhan.HasMany(d => d.Dong).WithOne(l => l.DonHangNhan!)
               .HasForeignKey(l => l.DonHangNhanId).OnDelete(DeleteBehavior.Cascade);
         dhNhan.HasIndex(d => new { d.TenantId, d.MaDonHang }).IsUnique();
