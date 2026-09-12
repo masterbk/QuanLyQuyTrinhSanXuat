@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'tinh_nang/lenh_san_xuat/man_danh_sach.dart';
 import 'tinh_nang/xac_thuc/xac_thuc.dart';
 
 /// Khung chính sau khi đăng nhập: 2 mục đúng phạm vi app - Lệnh sản xuất và Đơn hàng.
@@ -62,7 +63,7 @@ class _ManChinhState extends ConsumerState<ManChinh> {
       body: IndexedStack(
         index: _tab,
         children: const [
-          _ChuaLam('Lệnh sản xuất', Icons.factory_outlined),
+          ManDanhSachLenh(),
           _ChuaLam('Đơn hàng', Icons.receipt_long_outlined),
         ],
       ),
