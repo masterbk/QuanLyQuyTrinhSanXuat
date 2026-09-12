@@ -16,7 +16,12 @@ namespace HCP.Web.Services;
 /// </summary>
 public interface ILuuTruAnhService
 {
+    /// <summary>Ảnh chọn từ giao diện web (Blazor).</summary>
     Task<AnhLoSanXuat> LuuAsync(IBrowserFile file, CancellationToken ct = default);
+
+    /// <summary>Ảnh do ứng dụng di động tải lên qua API (multipart).</summary>
+    Task<AnhLoSanXuat> LuuAsync(Stream noiDung, string tenFile, string? kieuNoiDung, long kichThuoc,
+                                CancellationToken ct = default);
 }
 
 /// <inheritdoc cref="ILuuTruAnhService"/>
@@ -42,6 +47,15 @@ public sealed class LuuTruAnhService : ILuuTruAnhService
 
     public async Task<AnhLoSanXuat> LuuAsync(IBrowserFile file, CancellationToken ct = default)
     {
+        await using var luong = file.OpenReadStream(GioiHanByte, ct);
+        return await LuuAsync(luong, file.Name, file.ContentType, file.Size, ct);
+    }
+
+    public async Task<AnhLoSanXuat> LuuAsync(Stream noiDung, string tenFile, string? kieuNoiDung,
+                                             long kichThuoc, CancellationToken ct = default)
+    {
+        var file = new { Name = tenFile, ContentType = kieuNoiDung ?? "", Size = kichThuoc };
+
         var tenantId = _tenantAccessor.MultiTenantContext?.TenantInfo?.Id;
         if (string.IsNullOrWhiteSpace(tenantId))
             throw new InvalidOperationException("Không xác định được cơ sở khi tải ảnh lên.");
@@ -71,9 +85,8 @@ public sealed class LuuTruAnhService : ILuuTruAnhService
         var duongDanDia = Path.Combine(thuMuc, tenLuu);
 
         await using (var dich = File.Create(duongDanDia))
-        await using (var nguon = file.OpenReadStream(GioiHanByte, ct))
         {
-            await nguon.CopyToAsync(dich, ct);
+            await noiDung.CopyToAsync(dich, ct);
         }
 
         var duongDan = "/" + Path.Combine(thuMucTuongDoi, tenLuu).Replace('\\', '/');

@@ -25,7 +25,8 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             .ToListAsync(ct);
 
     public Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
-        _db.LenhSanXuats.Include(l => l.TieuHao).FirstOrDefaultAsync(l => l.Id == id, ct);
+        _db.LenhSanXuats.Include(l => l.TieuHao).Include(l => l.DanhSachAnh)
+            .FirstOrDefaultAsync(l => l.Id == id, ct);
 
     public async Task<IReadOnlyList<NguyenLieuCanDto>> TinhNguyenLieuCanAsync(
         string maThanhPham, decimal soLuong, string maKho, CancellationToken ct = default)

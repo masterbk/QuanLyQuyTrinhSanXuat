@@ -61,6 +61,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<TenantOAuthToken> TenantOAuthTokens => Set<TenantOAuthToken>();
     public DbSet<SyncOutboxItem> SyncOutboxItems => Set<SyncOutboxItem>();
     public DbSet<SystemLogEntry> SystemLogs => Set<SystemLogEntry>();
+    public DbSet<MobileRefreshToken> MobileRefreshTokens => Set<MobileRefreshToken>();
 
     // Đơn hàng NHẬN VỀ từ HnC (chiều kéo). Job nền ghi -> KHÔNG lọc theo tenant tự động,
     // TenantId gán/lọc tường minh (giống SyncOutbox/SystemLog).
@@ -516,6 +517,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         orderExport.Property(x => x.SoLuong).HasPrecision(18, 3);
         orderExport.HasIndex(x => x.OrderId);
         orderExport.IsMultiTenant().AdjustUniqueIndexes();
+
+        // --- Refresh token của ứng dụng di động (bảng hạ tầng, không lọc theo tenant) ---
+        var refreshToken = builder.Entity<MobileRefreshToken>();
+        refreshToken.ToTable("MobileRefreshTokens");
+        refreshToken.Property(t => t.UserId).HasMaxLength(450).IsRequired();
+        refreshToken.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
+        refreshToken.Property(t => t.ThietBi).HasMaxLength(255);
+        refreshToken.HasIndex(t => t.TokenHash).IsUnique();
+        refreshToken.HasIndex(t => t.UserId);
 
         // --- Đơn hàng nhận về (chiều kéo từ HnC) ---
         // KHÔNG gọi IsMultiTenant(): job nền ghi không có tenant context nên TenantId

@@ -16,7 +16,12 @@ using HCP.Infrastructure.Services.DonHangNhan;
 using HCP.Infrastructure.Services.Kho;
 using HCP.Infrastructure.Services.NhatKyDongBo;
 using HCP.Infrastructure.Sync;
+using HCP.Web.Api;
+using Microsoft.AspNetCore.Authentication;
 using HCP.Web.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -47,6 +52,17 @@ builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString
 builder.Services
     .AddMultiTenant<Tenant>()
     .WithClaimStrategy(AppClaimTypes.TenantIdentifier)
+    // Request từ ứng dụng di động mang JWT chứ không mang cookie, nên lúc UseMultiTenant chạy
+    // thì HttpContext.User vẫn rỗng (UseAuthentication chỉ giải mã scheme mặc định là cookie).
+    // Chiến lược này tự xác thực JWT cho các đường dẫn /api để lấy ra cơ sở - nhờ vậy toàn bộ
+    // bộ lọc tenant của EF hoạt động y hệt bản web.
+    .WithDelegateStrategy(async context =>
+    {
+        if (context is not HttpContext http) return null;
+        if (!http.Request.Path.StartsWithSegments("/api")) return null;
+        var kq = await http.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme);
+        return kq.Succeeded ? kq.Principal?.FindFirst(AppClaimTypes.TenantIdentifier)?.Value : null;
+    })
     .WithEFCoreStore<TenantStoreDbContext, Tenant>();
 
 // --- Identity ---
@@ -163,12 +179,38 @@ builder.Services.AddHangfire(cfg => cfg
     .UseSqlServerStorage(connectionString));
 builder.Services.AddHangfireServer();
 
+// --- Xác thực cho ứng dụng di động (chạy SONG SONG với cookie của web, không thay đổi web) ---
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "";
+builder.Services.AddScoped<IMobileTokenService, MobileTokenService>();
+builder.Services.AddAuthentication().AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "HanoiCheckPlatform",
+        ValidateAudience = true,
+        ValidAudience = builder.Configuration["Jwt:Audience"] ?? "HanoiCheckPlatform.Mobile",
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtKey.Length >= 32 ? jwtKey : new string('x', 32))),
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.FromMinutes(1)
+    };
+});
+
 // --- Phân quyền ---
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("QuanTriNenTang", p => p.RequireRole(AppRoles.PlatformSuperAdmin));
     options.AddPolicy("QuanTriCoSo", p => p.RequireRole(AppRoles.TenantAdmin));
     options.AddPolicy("NguoiDungCoSo", p => p.RequireRole(AppRoles.TenantAdmin, AppRoles.TenantStaff));
+
+    // API di động: CHỈ nhận JWT (không nhận cookie) để tránh bị gọi chéo từ trình duyệt đang
+    // đăng nhập web - đó cũng là lý do không cần chống CSRF cho nhóm API này.
+    options.AddPolicy(ApiAuth.ChinhSach, p => p
+        .AddAuthenticationSchemes(ApiAuth.Scheme)
+        .RequireAuthenticatedUser()
+        .RequireRole(AppRoles.TenantAdmin, AppRoles.TenantStaff));
 });
 
 // --- UI ---
@@ -203,6 +245,10 @@ app.UseAuthentication();
 app.UseMultiTenant();
 
 app.UseAuthorization();
+
+app.MapAuthApi();
+app.MapLenhSanXuatApi();
+app.MapDonHangApi();
 
 app.MapRazorPages();
 app.MapBlazorHub();
