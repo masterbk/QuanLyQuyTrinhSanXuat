@@ -198,6 +198,15 @@ builder.Services.AddAuthentication().AddJwtBearer(options =>
     };
 });
 
+// --- CORS chỉ cho môi trường phát triển ---
+// App Flutter chạy thử trên trình duyệt nằm ở cổng khác nên bị chặn bởi CORS.
+// Bản Android/iOS thật KHÔNG cần CORS, và bản phát hành cũng không bật chính sách này.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddCors(o => o.AddPolicy("ApiDev", p => p
+        .SetIsOriginAllowed(_ => true).AllowAnyHeader().AllowAnyMethod()));
+}
+
 // --- Phân quyền ---
 builder.Services.AddAuthorization(options =>
 {
@@ -245,6 +254,8 @@ app.UseAuthentication();
 app.UseMultiTenant();
 
 app.UseAuthorization();
+
+if (app.Environment.IsDevelopment()) app.UseCors("ApiDev");
 
 app.MapAuthApi();
 app.MapLenhSanXuatApi();
