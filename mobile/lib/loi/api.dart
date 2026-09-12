@@ -20,6 +20,10 @@ class LoiApi implements Exception {
 /// Tự gắn access token vào mỗi request. Gặp 401 thì thử làm mới token đúng MỘT lần rồi
 /// gửi lại request - người dùng không bị đá ra màn đăng nhập giữa chừng ca làm.
 class ApiClient {
+  /// Đánh dấu request KHÔNG gắn token (đăng nhập, làm mới, đăng xuất).
+  /// Không lọc theo đường dẫn: '/auth/toi' cũng chứa '/auth/' nhưng lại CẦN token.
+  static const _khongToken = 'khongToken';
+
   final Dio _dio;
   final LuuTru _luuTru;
 
@@ -30,15 +34,14 @@ class ApiClient {
     _dio.options
       ..connectTimeout = const Duration(seconds: 20)
       ..receiveTimeout = const Duration(seconds: 60)
-      ..sendTimeout = const Duration(minutes: 3)   // gửi ảnh qua 4G có thể lâu
       ..validateStatus = (ma) => ma != null && ma < 500;
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (opt, handler) async {
         opt.baseUrl = await _mayChu();
-        final token = await _luuTru.accessToken();
-        if (token != null && !opt.path.contains('/auth/')) {
-          opt.headers['Authorization'] = 'Bearer $token';
+        if (opt.extra[_khongToken] != true) {
+          final token = await _luuTru.accessToken();
+          if (token != null) opt.headers['Authorization'] = 'Bearer $token';
         }
         handler.next(opt);
       },
@@ -62,14 +65,16 @@ class ApiClient {
 
   Future<dynamic> delete(String duongDan) => _goi(() => _dio.delete(duongDan));
 
+  /// Gửi ảnh: cho thời gian gửi rộng rãi vì mạng di động có thể chậm.
   Future<dynamic> postFile(String duongDan, FormData form) =>
-      _goi(() => _dio.post(duongDan, data: form));
+      _goi(() => _dio.post(duongDan, data: form,
+          options: Options(sendTimeout: const Duration(minutes: 3))));
 
   /// Gọi KHÔNG kèm token và KHÔNG tự làm mới - dùng cho chính các API xác thực.
   Future<dynamic> postKhongToken(String duongDan, Object than) async {
     try {
       final r = await _dio.post(duongDan, data: than,
-          options: Options(headers: {'Authorization': null}));
+          options: Options(extra: {_khongToken: true}));
       return _docKetQua(r);
     } on DioException catch (e) {
       throw _tuDio(e);
@@ -102,7 +107,7 @@ class ApiClient {
       if (refresh == null) return false;
       final r = await _dio.post('/api/v1/auth/lam-moi',
           data: {'refreshToken': refresh},
-          options: Options(headers: {'Authorization': null}));
+          options: Options(extra: {_khongToken: true}));
       if (r.statusCode != 200 || r.data is! Map) return false;
       await _luuTru.capNhatToken(
         accessToken: r.data['accessToken'] as String,

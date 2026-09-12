@@ -247,6 +247,10 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
+// CORS PHẢI nằm giữa UseRouting và UseAuthorization: nếu đặt sau, phản hồi 401 do phân
+// quyền sinh ra sẽ không kèm header CORS và trình duyệt báo lỗi kết nối thay vì 401.
+if (app.Environment.IsDevelopment()) app.UseCors("ApiDev");
+
 app.UseAuthentication();
 
 // PHẢI đặt sau UseAuthentication (ClaimStrategy cần danh tính đã xác thực)
@@ -254,8 +258,6 @@ app.UseAuthentication();
 app.UseMultiTenant();
 
 app.UseAuthorization();
-
-if (app.Environment.IsDevelopment()) app.UseCors("ApiDev");
 
 app.MapAuthApi();
 app.MapLenhSanXuatApi();

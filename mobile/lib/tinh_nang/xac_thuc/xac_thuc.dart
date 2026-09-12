@@ -71,9 +71,13 @@ class XacThucNotifier extends Notifier<TrangThaiXacThuc> {
       }
       final j = await _api.get('/api/v1/auth/toi') as Map<String, dynamic>;
       state = TrangThaiXacThuc(nguoiDung: NguoiDung.tuJson(j));
-    } catch (_) {
-      await _luuTru.xoaPhien();
-      state = const TrangThaiXacThuc();
+    } on LoiApi catch (e) {
+      // CHỈ xoá phiên khi máy chủ thực sự từ chối token. Mất sóng lúc mở app mà xoá
+      // phiên thì người dùng phải đăng nhập lại oan, dù token vẫn còn hạn.
+      if (e.hetPhien) await _luuTru.xoaPhien();
+      state = TrangThaiXacThuc(loi: e.hetPhien ? null : e.thongBao);
+    } catch (e) {
+      state = TrangThaiXacThuc(loi: 'Không khôi phục được phiên: $e');
     }
   }
 

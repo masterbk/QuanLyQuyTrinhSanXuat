@@ -48,6 +48,24 @@ class MayChuGia extends Interceptor {
       ));
     }
 
+    if (options.path.endsWith('/auth/dang-nhap')) {
+      return handler.resolve(Response(
+        requestOptions: options,
+        statusCode: 200,
+        data: {'accessToken': 'token-moi', 'refreshToken': 'refresh-moi', 'nguoiDung': {}},
+      ));
+    }
+
+    if (options.path.endsWith('/auth/toi')) {
+      soLanGoiDuLieu++;
+      final hopLe = options.headers['Authorization'] == 'Bearer token-moi' || tokenConHan;
+      return handler.resolve(Response(
+        requestOptions: options,
+        statusCode: hopLe ? 200 : 401,
+        data: hopLe ? {'email': 'tho@example.vn'} : {'thongBao': 'Chưa đăng nhập'},
+      ));
+    }
+
     if (options.path.endsWith('/lenh-san-xuat')) {
       soLanGoiDuLieu++;
       final hopLe = options.headers['Authorization'] == 'Bearer token-moi' || tokenConHan;
@@ -93,6 +111,19 @@ void main() {
     expect(req.headers['Authorization'], 'Bearer token-cu');
   });
 
+  test('/auth/toi CŨNG phải mang token - lọc theo chuỗi "/auth/" sẽ bỏ sót chính nó', () async {
+    mayChu.tokenConHan = true;
+    await api.get('/api/v1/auth/toi');
+
+    expect(mayChu.daNhan.last.headers['Authorization'], 'Bearer token-cu');
+    expect(mayChu.soLanGoiDuLieu, 1, reason: 'có token ngay từ đầu nên không phải làm mới rồi gọi lại');
+  });
+
+  test('Đăng nhập và làm mới thì KHÔNG gắn token cũ', () async {
+    await api.postKhongToken('/api/v1/auth/dang-nhap', {'email': 'a', 'matKhau': 'b'});
+    expect(mayChu.daNhan.last.headers.containsKey('Authorization'), false);
+  });
+
   test('Token hết hạn thì tự làm mới rồi gửi lại đúng một lần', () async {
     final kq = await api.get('/api/v1/lenh-san-xuat') as Map;
 
@@ -120,6 +151,18 @@ void main() {
       api.get('/api/v1/lenh-san-xuat'),
       throwsA(isA<LoiApi>().having((e) => e.thongBao, 'thongBao', contains('địa chỉ máy chủ'))),
     );
+  });
+
+  test('Mất mạng KHÔNG được xoá token đã lưu', () async {
+    // Máy chủ không trả lời -> lỗi kết nối, không phải 401.
+    final dio = Dio();
+    final apiHong = ApiClient(luuTru, dio: dio);
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) => h.reject(
+        DioException(requestOptions: o, type: DioExceptionType.connectionError))));
+
+    await expectLater(apiHong.get('/api/v1/auth/toi'),
+        throwsA(isA<LoiApi>().having((e) => e.hetPhien, 'hetPhien', false)));
+    expect(duLieuKho['access_token'], isNotNull, reason: 'token phải còn nguyên khi chỉ là lỗi mạng');
   });
 
   test('Đăng xuất giữ lại địa chỉ máy chủ, chỉ xoá token', () async {
