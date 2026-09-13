@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.BanHang;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -16,28 +17,44 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
     private readonly IHanoiCheckOrderQueryClient _client;
     private readonly TimeProvider _clock;
     private readonly ILogger<DongBoDonHangJob> _logger;
+    private readonly IDonHangHnCTheoCoSo? _donBanTheoCoSo;
 
     public DongBoDonHangJob(AppDbContext db,
                             IHanoiCheckOrderQueryClient client,
                             TimeProvider clock,
-                            ILogger<DongBoDonHangJob> logger)
+                            ILogger<DongBoDonHangJob> logger,
+                            IDonHangHnCTheoCoSo? donBanTheoCoSo = null)
     {
         _db = db;
         _client = client;
         _clock = clock;
         _logger = logger;
+        _donBanTheoCoSo = donBanTheoCoSo;
     }
 
     public async Task DongBoTatCaAsync(CancellationToken ct = default)
     {
         // TenantHnCCredentials là bảng hạ tầng (không lọc theo tenant) -> lấy được mọi cơ sở.
-        var tenantIds = await _db.TenantHnCCredentials.Select(c => c.TenantId).ToListAsync(ct);
+        var tenantIds = await _db.TenantHnCCredentials.Where(c => c.BatDongBo).Select(c => c.TenantId).ToListAsync(ct);
         foreach (var tenantId in tenantIds)
         {
             if (ct.IsCancellationRequested) break;
             var kq = await DongBoMotCoSoAsync(tenantId, ct);
             if (!kq.ThanhCong && !kq.ChuaCauHinh)
                 _logger.LogWarning("Đồng bộ đơn hàng cơ sở {TenantId} lỗi: {ThongBao}", tenantId, kq.ThongBao);
+
+            // Job nền không có ngữ cảnh cơ sở -> chạy bước tạo Đơn hàng bán trong phạm vi riêng của cơ sở đó.
+            if (kq.ThanhCong && _donBanTheoCoSo is not null)
+            {
+                try
+                {
+                    await _donBanTheoCoSo.DongBoAsync(tenantId, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Tạo đơn hàng bán từ đơn HanoiCheck của cơ sở {TenantId} lỗi.", tenantId);
+                }
+            }
         }
     }
 

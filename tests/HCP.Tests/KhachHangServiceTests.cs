@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
 
-/// <summary>Kiểm chứng danh mục khách hàng: thêm/sửa, chặn trùng mã, chặn xoá khi đã có phiếu bán.</summary>
+/// <summary>Kiểm chứng danh mục khách hàng: thêm/sửa, chặn trùng mã, chặn xoá khi đã có đơn hàng.</summary>
 public class KhachHangServiceTests
 {
     private const string CoSo = "coso-a";
@@ -68,15 +68,15 @@ public class KhachHangServiceTests
     }
 
     [Fact]
-    public async Task Chan_Xoa_Khi_Da_Co_Phieu_Xuat()
+    public async Task Chan_Xoa_Khi_Da_Co_Don_Hang()
     {
         int id;
         using (var db = MoDb())
         {
             await new KhachHangService(db).LuuAsync(new KhachHang { MaKhachHang = "KH01", TenKhachHang = "A" });
             id = (await db.KhachHangs.SingleAsync()).Id;
-            db.PhieuXuatBans.Add(new PhieuXuatBan { MaPhieu = "XB-1", MaKhachHang = "KH01", MaKho = "KHO01",
-                                                    NgayXuat = new DateOnly(2026, 9, 6) });
+            db.DonHangBans.Add(new DonHangBan { MaDonHang = "DH-1", MaKhachHang = "KH01", MaKho = "KHO01",
+                                                NgayDat = new DateOnly(2026, 9, 6) });
             await db.SaveChangesAsync();
         }
 
@@ -84,7 +84,7 @@ public class KhachHangServiceTests
         {
             var kq = await new KhachHangService(db).XoaAsync(id);
             Assert.False(kq.ThanhCong);
-            Assert.Contains("phiếu xuất bán", kq.ThongBao);
+            Assert.Contains("đơn hàng", kq.ThongBao);
         }
     }
 }

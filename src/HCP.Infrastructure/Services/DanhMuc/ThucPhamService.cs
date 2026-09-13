@@ -46,10 +46,9 @@ public class ThucPhamService : IDanhMucService<Product>
         await _db.SaveChangesAsync(ct);
 
         // Chỉ thành phẩm mới đồng bộ sang HanoiCheck (foods/merge); nguyên liệu quản lý nội bộ.
-        if (entity.LoaiSanPham == LoaiSanPham.ThanhPham)
-            await _outbox.ThemAsync("Product", entity.MaSanPham, HnCPayloadMapper.ThucPham(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);   // chỉ thành phẩm được gửi
 
-        return KetQuaThaoTac.Ok($"Đã thêm \"{entity.TenSanPham}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm \"{entity.TenSanPham}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(Product entity, CancellationToken ct = default)
@@ -80,14 +79,14 @@ public class ThucPhamService : IDanhMucService<Product>
         hienTai.LoaiSanPham = entity.LoaiSanPham;
         hienTai.DonViTinh = entity.DonViTinh;
         hienTai.TonToiThieu = entity.TonToiThieu;
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
 
-        if (hienTai.LoaiSanPham == LoaiSanPham.ThanhPham)
-            await _outbox.ThemAsync("Product", hienTai.MaSanPham, HnCPayloadMapper.ThucPham(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);   // chỉ thành phẩm được gửi
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật \"{hienTai.TenSanPham}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật \"{hienTai.TenSanPham}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)
@@ -109,9 +108,17 @@ public class ThucPhamService : IDanhMucService<Product>
     {
         // Mã loại (danh mục thực phẩm chuẩn) chỉ bắt buộc với THÀNH PHẨM (gửi HnC). Nguyên liệu
         // quản lý nội bộ nên không cần.
-        if (p.LoaiSanPham == LoaiSanPham.ThanhPham && string.IsNullOrWhiteSpace(p.MaLoaiSp))
+        // Chỉ bắt buộc khi thành phẩm này thật sự gửi HanoiCheck (công tắc tổng bật + tick đồng bộ).
+        if (p.LoaiSanPham == LoaiSanPham.ThanhPham && p.DongBoHnC && await _outbox.DangBatAsync(ct))
         {
-            return "Vui lòng chọn loại thực phẩm (mã danh mục thực phẩm chuẩn).";
+            if (string.IsNullOrWhiteSpace(p.MaLoaiSp))
+                return "Vui lòng chọn loại thực phẩm (mã danh mục thực phẩm chuẩn).";
+
+            // HanoiCheck thực tế bắt buộc ma_quy_trinh (422 "Mã quy trình sản xuất mẫu là bắt buộc"),
+            // dù tài liệu v2.2 ghi "không bắt buộc".
+            if (string.IsNullOrWhiteSpace(p.MaQuyTrinh))
+                return "Vui lòng chọn quy trình sản xuất - HanoiCheck bắt buộc quy trình mẫu cho thực phẩm đồng bộ. "
+                       + "Nếu thực phẩm này không gửi HanoiCheck thì bỏ tick \"Đồng bộ HanoiCheck\".";
         }
 
         if (!string.IsNullOrWhiteSpace(p.MaQuyTrinh))
@@ -129,7 +136,7 @@ public class ThucPhamService : IDanhMucService<Product>
     private static void ChuanHoa(Product p)
     {
         p.TenSanPham = p.TenSanPham.Trim();
-        p.MaLoaiSp = p.MaLoaiSp.Trim();
+        p.MaLoaiSp = p.MaLoaiSp?.Trim() ?? "";
         p.MaThucPhamChuan = p.MaThucPhamChuan?.Trim();
         p.Gtin = p.Gtin?.Trim();
         p.QuocGia = p.QuocGia?.Trim();

@@ -151,14 +151,13 @@ class _TheLenh extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              Text(lenh.tenHienThi, style: Theme.of(context).textTheme.bodyLarge),
+              Text(lenh.tomTat, style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 16,
                 runSpacing: 4,
                 children: [
-                  _Dong(Icons.numbers, soGon(lenh.soLuong)),
-                  _Dong(Icons.inventory_2_outlined, lenh.maLoThanhPham),
+                  _Dong(Icons.inventory_2_outlined, '${lenh.sanPham.length} lô'),
                   _Dong(Icons.warehouse_outlined, lenh.maKho),
                   _Dong(Icons.event_outlined, _ngayVn.format(lenh.ngaySanXuat)),
                 ],

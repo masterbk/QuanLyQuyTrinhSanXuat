@@ -11,8 +11,8 @@ public class LenhSanXuatAnh : TenantEntity
 {
     public int Id { get; set; }
 
-    public int LenhSanXuatId { get; set; }
-    public LenhSanXuat? LenhSanXuat { get; set; }
+    public int LenhSanXuatSanPhamId { get; set; }
+    public LenhSanXuatSanPham? LenhSanXuatSanPham { get; set; }
 
     /// <summary>Mã file (khoá nghiệp vụ gửi sang HanoiCheck), vd LSX-001-A1.</summary>
     public string MaFile { get; set; } = string.Empty;

@@ -1,4 +1,5 @@
 using HCP.Domain.Entities.Business;
+using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,6 +25,9 @@ public sealed class KhachHangService : IKhachHangService
         kh.DienThoai = kh.DienThoai?.Trim();
         kh.DiaChi = kh.DiaChi?.Trim();
         kh.GhiChu = kh.GhiChu?.Trim();
+        kh.MaTruongHnC = kh.Loai == LoaiKhachHang.TruongHoc && !string.IsNullOrWhiteSpace(kh.MaTruongHnC)
+            ? kh.MaTruongHnC.Trim()
+            : null;
 
         if (string.IsNullOrWhiteSpace(kh.MaKhachHang)) return KetQuaThaoTac.Loi("Vui lòng nhập mã khách hàng.");
         if (string.IsNullOrWhiteSpace(kh.TenKhachHang)) return KetQuaThaoTac.Loi("Vui lòng nhập tên khách hàng.");
@@ -46,6 +50,7 @@ public sealed class KhachHangService : IKhachHangService
             db.DienThoai = kh.DienThoai;
             db.DiaChi = kh.DiaChi;
             db.GhiChu = kh.GhiChu;
+            db.MaTruongHnC = kh.MaTruongHnC;
         }
 
         await _db.SaveChangesAsync(ct);
@@ -57,9 +62,9 @@ public sealed class KhachHangService : IKhachHangService
         var kh = await _db.KhachHangs.FirstOrDefaultAsync(k => k.Id == id, ct);
         if (kh is null) return KetQuaThaoTac.Loi("Không tìm thấy khách hàng.");
 
-        // Chặn xoá khi đã có phiếu xuất bán tham chiếu (giữ toàn vẹn lịch sử bán hàng).
-        if (await _db.PhieuXuatBans.AnyAsync(p => p.MaKhachHang == kh.MaKhachHang, ct))
-            return KetQuaThaoTac.Loi("Không xoá được: khách hàng đã có phiếu xuất bán.");
+        // Chặn xoá khi đã có đơn hàng tham chiếu (giữ toàn vẹn lịch sử bán hàng).
+        if (await _db.DonHangBans.AnyAsync(d => d.MaKhachHang == kh.MaKhachHang, ct))
+            return KetQuaThaoTac.Loi("Không xoá được: khách hàng đã có đơn hàng.");
 
         _db.KhachHangs.Remove(kh);
         await _db.SaveChangesAsync(ct);

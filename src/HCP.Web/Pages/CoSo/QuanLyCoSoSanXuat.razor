@@ -64,10 +64,9 @@ else
     </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" Model="_input">
-            <MudTextField @bind-Value="_input.MaCoSo" Label="Mã cơ sở" Class="mb-3"
-                          Variant="Variant.Outlined" MaxLength="255"
-                          HelperText="Khoá nghiệp vụ đối chiếu với HanoiCheck, vd CS001."
-                          Required="true" RequiredError="Vui lòng nhập mã cơ sở" />
+            <MudTextField T="string" Value="@(_dangSua ? _input.MaCoSo : "(tự sinh khi lưu)")" Label="Mã cơ sở"
+                          Class="mb-3" Variant="Variant.Outlined" ReadOnly="true"
+                          HelperText="Hệ thống tự sinh dạng CS-0001, không sửa được (khoá đối chiếu với HanoiCheck)." />
 
             <MudTextField @bind-Value="_input.TenCoSo" Label="Tên cơ sở" Class="mb-3"
                           Variant="Variant.Outlined" MaxLength="255"
@@ -76,6 +75,7 @@ else
             <MudTextField @bind-Value="_input.DiaChi" Label="Địa chỉ"
                           Variant="Variant.Outlined" MaxLength="255"
                           HelperText="Không bắt buộc." />
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -114,7 +114,7 @@ else
             ? new Facility()
             : new Facility
             {
-                Id = coSo.Id,
+                Id = coSo.Id, DongBoHnC = coSo.DongBoHnC,
                 MaCoSo = coSo.MaCoSo,
                 TenCoSo = coSo.TenCoSo,
                 DiaChi = coSo.DiaChi

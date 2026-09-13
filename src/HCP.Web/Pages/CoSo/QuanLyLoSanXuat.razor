@@ -58,7 +58,7 @@ else
             <MudTh>Ngày nhập</MudTh>
             <MudTh>HSD</MudTh>
             <MudTh Style="text-align:center">Kho / Khâu / File</MudTh>
-            <MudTh Style="width:120px"></MudTh>
+            <MudTh Style="width:150px"></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
@@ -71,6 +71,7 @@ else
                 @context.DanhSachKho.Count / @context.DanhSachKhau.Count / @context.DanhSachFile.Count
             </MudTd>
             <MudTd>
+                <NutQrTraCuu Loai="LoaiTraCuu.Lo" Id="@context.Id" Ma="@context.MaLo" />
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                OnClick="@(() => MoForm(context))" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
@@ -102,9 +103,9 @@ else
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" sm="6">
-                            <MudTextField @bind-Value="_input.MaLo" Label="Mã lô"
-                                          Variant="Variant.Outlined" MaxLength="255"
-                                          Required="true" RequiredError="Vui lòng nhập mã lô" />
+                            <MudTextField T="string" Value="@(_dangSua ? _input.MaLo : "(tự sinh khi lưu)")" Label="Mã lô"
+                                          Variant="Variant.Outlined" ReadOnly="true"
+                                          HelperText="Tự sinh LO-yyyyMMdd-001 theo ngày sản xuất (chưa có thì ngày nhập)." />
                         </MudItem>
                         <MudItem xs="12">
                             <MudTextField @bind-Value="_input.TenLo" Label="Tên lô"
@@ -141,7 +142,7 @@ else
                         <MudItem xs="12" sm="6">
                             <MudSelect T="string" @bind-Value="_input.MaNccDauVao" Label="Nhà cung ứng đầu vào"
                                        Variant="Variant.Outlined" Clearable="true"
-                                       HelperText="Không bắt buộc.">
+                                       HelperText="Không bắt buộc. Nếu chọn, NCC phải có danh mục của thực phẩm này trong nhóm thực phẩm cung ứng (HanoiCheck kiểm tra).">
                                 @foreach (var ncc in _ncc)
                                 {
                                     <MudSelectItem T="string" Value="@ncc.MaNccDauVao">@ncc.MaNccDauVao — @ncc.Ten</MudSelectItem>
@@ -153,6 +154,7 @@ else
                                           Variant="Variant.Outlined" MaxLength="2000" />
                         </MudItem>
                     </MudGrid>
+                    <ODongBoHnC @bind-Value="_input.DongBoHnC" />
                 </MudForm>
             </MudTabPanel>
 
@@ -260,9 +262,14 @@ else
                     <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
                                OnClick="ThemFile">Thêm file</MudButton>
                 </div>
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                    Theo đặc tả HanoiCheck v2.2: <b>ảnh chung của lô</b> (bắt buộc 1–3 ảnh) là file để trống Mã bước SX,
+                    đường dẫn là URL ảnh .jpg/.jpeg/.png/.gif/.webp. <b>Tệp minh chứng</b> (giấy kiểm dịch, chứng nhận…)
+                    thì chọn Mã bước SX của khâu tương ứng, tối đa 3 tệp mỗi khâu, nhận ảnh/PDF/Word/Google Drive.
+                </MudAlert>
                 @if (_input.DanhSachFile.Count == 0)
                 {
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Chưa có file nào (không bắt buộc).</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-warning">Chưa có file nào - lô cần ít nhất 1 ảnh chung.</MudText>
                 }
                 @foreach (var file in _input.DanhSachFile)
                 {
@@ -290,7 +297,7 @@ else
                                               Variant="Variant.Outlined" MaxLength="255" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
-                                <MudTextField @bind-Value="file.MaBuocSx" Label="Mã bước SX (nếu có)"
+                                <MudTextField @bind-Value="file.MaBuocSx" Label="Mã bước SX (trống = ảnh chung của lô)"
                                               Variant="Variant.Outlined" MaxLength="255" />
                             </MudItem>
                         </MudGrid>
@@ -381,7 +388,7 @@ else
             // Sao chép sâu để bấm Huỷ không làm bẩn dữ liệu đang hiển thị.
             _input = new Batch
             {
-                Id = lo.Id,
+                Id = lo.Id, DongBoHnC = lo.DongBoHnC,
                 MaSanPham = lo.MaSanPham,
                 MaLo = lo.MaLo,
                 TenLo = lo.TenLo,

@@ -1,0 +1,16 @@
+@model HCP.Infrastructure.Services.TraCuu.TraCuuCoSo
+
+@if (!string.IsNullOrWhiteSpace(Model.Ten))
+{
+    <div class="text-center mb-3">
+        <h5 class="mb-0">@Model.Ten</h5>
+        @if (!string.IsNullOrWhiteSpace(Model.DiaChi))
+        {
+            <div class="nhan">@Model.DiaChi</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.DienThoai))
+        {
+            <div class="nhan">ĐT: <a href="tel:@Model.DienThoai">@Model.DienThoai</a></div>
+        }
+    </div>
+}

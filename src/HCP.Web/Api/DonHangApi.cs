@@ -1,13 +1,16 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services.DanhMuc;
+using HCP.Domain.Enums;
+using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.DonHangNhan;
+using HCP.Infrastructure.Services.Kho;
 
 namespace HCP.Web.Api;
 
 /// <summary>
 /// API đơn hàng cho ứng dụng di động:
 ///   - /don-hang-nhan: đơn các trường đặt, kéo về từ HanoiCheck (CHỈ ĐỌC).
-///   - /don-hang: đơn do cơ sở tự lập để đẩy lên HanoiCheck.
+///   - /don-hang-ban: đơn hàng bán của nhà cung cấp cho mọi khách hàng (chỉ đọc trên app).
 /// </summary>
 public static class DonHangApi
 {
@@ -56,27 +59,56 @@ public static class DonHangApi
                 : Results.BadRequest(new LoiDto(kq.ThongBao ?? "Không đồng bộ được đơn hàng."));
         });
 
-        // ---------- Đơn cơ sở tự lập (chiều đẩy) ----------
-        var day = app.MapGroup("/api/v1/don-hang")
+        // ---------- Đơn hàng bán của nhà cung cấp (mọi khách hàng) ----------
+        var ban = app.MapGroup("/api/v1/don-hang-ban")
             .RequireAuthorization(ApiAuth.ChinhSach)
-            .WithTags("Đơn hàng & xuất kho");
+            .WithTags("Đơn hàng bán");
 
-        day.MapGet("", async (IDanhMucService<Order> svc, int trang = 1, int soDong = 20) =>
+        ban.MapGet("", async (IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp,
+                              string? trangThai, int trang = 1, int soDong = 20) =>
         {
-            var tatCa = (await svc.LayTatCaAsync()).ToList();
+            IEnumerable<DonHangBan> ds = await svc.LayTatCaAsync();
+            if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiDonHangBan>(trangThai, true, out var tt))
+                ds = ds.Where(d => d.TrangThai == tt);
+            var tatCa = ds.ToList();
+            var (tenKhach, tenSp) = await LayTenAsync(kh, sp);
             var (t, n) = LenhSanXuatApi.ChuanHoaTrang(trang, soDong);
-            return Results.Ok(new TrangDuLieu<DonHangDto>(
-                tatCa.Skip((t - 1) * n).Take(n).Select(MapDon).ToList(), t, n, tatCa.Count));
+            return Results.Ok(new TrangDuLieu<DonHangBanDto>(
+                tatCa.Skip((t - 1) * n).Take(n).Select(d => MapDonBan(d, tenKhach, tenSp)).ToList(), t, n, tatCa.Count));
         });
 
-        day.MapGet("/{id:int}", async (int id, IDanhMucService<Order> svc) =>
+        ban.MapGet("/{id:int}", async (int id, IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp) =>
         {
             var don = await svc.LayTheoIdAsync(id);
-            return don is null
-                ? Results.NotFound(new LoiDto("Không tìm thấy đơn hàng."))
-                : Results.Ok(MapDon(don));
+            if (don is null) return Results.NotFound(new LoiDto("Không tìm thấy đơn hàng."));
+            var (tenKhach, tenSp) = await LayTenAsync(kh, sp);
+            return Results.Ok(MapDonBan(don, tenKhach, tenSp));
         });
     }
+
+    private static async Task<(Dictionary<string, string> Khach, Dictionary<string, string> SanPham)> LayTenAsync(
+        IKhachHangService kh, IDanhMucService<Product> sp) =>
+        ((await kh.LayTatCaAsync()).GroupBy(k => k.MaKhachHang).ToDictionary(g => g.Key, g => g.First().TenKhachHang),
+         (await sp.LayTatCaAsync()).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham));
+
+    private static DonHangBanDto MapDonBan(DonHangBan d, IReadOnlyDictionary<string, string> tenKhach,
+                                           IReadOnlyDictionary<string, string> tenSp) => new(
+        d.Id, d.MaDonHang, d.MaKhachHang, tenKhach.GetValueOrDefault(d.MaKhachHang), d.MaKho, d.NgayDat, d.NgayGiao,
+        d.DiaChiGiao, d.MaNguoiGiao, d.TrangThai.ToString(), TenTrangThaiBan(d.TrangThai), d.Nguon.ToString(),
+        d.MaDonHnC, d.GhiChu, d.LyDoHuy, d.TongTien, d.ThoiGianXuatKhoUtc, d.ThoiGianGiaoUtc,
+        d.Dong.OrderBy(l => l.Id).Select(l => new DonHangBanDongDto(
+            l.Id, l.MaThanhPham, tenSp.GetValueOrDefault(l.MaThanhPham), l.SoLuong, l.DonGia, l.ThanhTien,
+            l.XuatLo.Select(x => new XuatLoDto(x.MaLo, x.HanSuDung, x.SoLuong)).ToList())).ToList());
+
+    private static string TenTrangThaiBan(TrangThaiDonHangBan t) => t switch
+    {
+        TrangThaiDonHangBan.ChoXacNhan => "Chờ xác nhận",
+        TrangThaiDonHangBan.DaXacNhan => "Đã xác nhận",
+        TrangThaiDonHangBan.DangGiao => "Đang giao",
+        TrangThaiDonHangBan.DaGiao => "Đã giao",
+        TrangThaiDonHangBan.DaHuy => "Đã huỷ",
+        _ => t.ToString()
+    };
 
     private static DonHangNhanDto Map(DonHangNhan d) => new(
         d.Id, d.MaDonHang, d.TenTruong, d.TrangThai, TenTrangThai(d.TrangThai), d.NgayGiao,
@@ -102,9 +134,4 @@ public static class DonHangApi
         _ => s ?? "-"
     };
 
-    private static DonHangDto MapDon(Order o) => new(
-        o.Id, o.MaDonHang, o.LoaiDonHang, o.MaTruong, o.NgayDonHang, o.DiemGiao, o.DiaChiNhan,
-        o.MaNguoiGiao, o.TrangThai, TenTrangThai(o.TrangThai), o.GhiChu,
-        o.ChiTiet.Select(l => new DonHangDongDto(
-            l.MaSanPham, l.MaLoaiSp, l.MaMonAn, l.SoLuong)).ToList());
 }

@@ -65,10 +65,9 @@ else
     </TitleContent>
     <DialogContent>
         <MudForm @ref="_form" Model="_input">
-            <MudTextField @bind-Value="_input.MaKhau" Label="Mã khâu" Class="mb-3"
-                          Variant="Variant.Outlined" MaxLength="255"
-                          HelperText="Viết hoa không dấu, vd GIET_MO, SO_CHE."
-                          Required="true" RequiredError="Vui lòng nhập mã khâu" />
+            <MudTextField T="string" Value="@(_dangSua ? _input.MaKhau : "(tự sinh khi lưu)")" Label="Mã khâu"
+                          Class="mb-3" Variant="Variant.Outlined" ReadOnly="true"
+                          HelperText="Hệ thống tự sinh dạng KHAU-0001, không sửa được." />
 
             <MudTextField @bind-Value="_input.TenKhau" Label="Tên khâu" Class="mb-3"
                           Variant="Variant.Outlined" MaxLength="255"
@@ -76,6 +75,7 @@ else
 
             <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Lines="2"
                           Variant="Variant.Outlined" MaxLength="1000" />
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
         </MudForm>
 
         @if (_dangSua)
@@ -122,7 +122,7 @@ else
             ? new ProductionStep()
             : new ProductionStep
             {
-                Id = khau.Id,
+                Id = khau.Id, DongBoHnC = khau.DongBoHnC,
                 MaKhau = khau.MaKhau,
                 TenKhau = khau.TenKhau,
                 GhiChu = khau.GhiChu

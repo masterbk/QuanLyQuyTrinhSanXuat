@@ -1,0 +1,19 @@
+@using HCP.Infrastructure.Sync
+@inject TrangThaiHnC DongBoHnC
+
+@* Chỉ hiển thị nội dung khi cơ sở đang BẬT đồng bộ HanoiCheck (hoặc khi đang tắt nếu HienKhiBat=false). *@
+@if (_dangBat is { } bat && bat == HienKhiBat)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>true (mặc định): hiện khi HanoiCheck đang bật; false: hiện khi đang tắt.</summary>
+    [Parameter] public bool HienKhiBat { get; set; } = true;
+
+    private bool? _dangBat;
+
+    protected override async Task OnInitializedAsync() => _dangBat = await DongBoHnC.DangBatAsync();
+}

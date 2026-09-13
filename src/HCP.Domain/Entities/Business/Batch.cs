@@ -7,9 +7,15 @@ namespace HCP.Domain.Entities.Business;
 /// (bất đồng bộ, trả 202). Đây là một trong hai entity phức tạp nhất: gồm thông tin lô,
 /// danh sách kho chứa, danh sách khâu (bước sản xuất) và file minh chứng.
 /// </summary>
-public class Batch : TenantEntity
+public class Batch : TenantEntity, ICoDongBoHnC, ICoMaTraCuu
 {
     public int Id { get; set; }
+
+    /// <summary>Mã tra cứu công khai (QR) - chuỗi ngẫu nhiên, sinh khi mở mã QR lần đầu.</summary>
+    public string? MaTraCuu { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_san_pham - thực phẩm sở hữu lô.</summary>
     public string MaSanPham { get; set; } = string.Empty;

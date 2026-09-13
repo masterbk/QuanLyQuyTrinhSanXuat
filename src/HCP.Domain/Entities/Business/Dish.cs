@@ -6,9 +6,12 @@ namespace HCP.Domain.Entities.Business;
 /// Món ăn của cơ sở (suất ăn). Đồng bộ qua POST /supplier/dishes/merge (bất đồng bộ, trả 202).
 /// Gồm thông tin món, công thức (nguyên liệu), các khâu chế biến và file minh chứng.
 /// </summary>
-public class Dish : TenantEntity
+public class Dish : TenantEntity, ICoDongBoHnC
 {
     public int Id { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_mon_an - khoá nghiệp vụ.</summary>
     public string MaMonAn { get; set; } = string.Empty;

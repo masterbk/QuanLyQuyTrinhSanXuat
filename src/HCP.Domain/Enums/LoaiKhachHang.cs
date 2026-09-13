@@ -12,6 +12,9 @@ public enum LoaiKhachHang
     /// <summary>Khách lẻ vãng lai.</summary>
     KhachLe = 2,
 
-    /// <summary>Khác (trường học, bếp ăn tập thể...).</summary>
-    Khac = 3
+    /// <summary>Khác (bếp ăn tập thể...).</summary>
+    Khac = 3,
+
+    /// <summary>Trường học - có thể đặt hàng qua HanoiCheck (gắn mã trường HanoiCheck).</summary>
+    TruongHoc = 4
 }

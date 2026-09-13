@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,13 +16,21 @@ public class LoSanXuatService : IDanhMucService<Batch>
     /// <summary>danh_sach_nguoi_thuc_hien tối đa 20 mã theo đặc tả.</summary>
     private const int MaxNguoiThucHien = 20;
 
+    /// <summary>Album ảnh chung của lô: 1-3 ảnh (đặc tả v2.2).</summary>
+    public const int SoAnhLoToiDa = 3;
+
+    /// <summary>Tệp minh chứng mỗi khâu: tối đa 3 (đặc tả v2.2).</summary>
+    public const int SoTepMoiKhauToiDa = 3;
+
     private readonly AppDbContext _db;
     private readonly ISyncOutboxWriter _outbox;
+    private readonly IMaTuSinhService _maTuSinh;
 
-    public LoSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    public LoSanXuatService(AppDbContext db, ISyncOutboxWriter outbox, IMaTuSinhService maTuSinh)
     {
         _db = db;
         _outbox = outbox;
+        _maTuSinh = maTuSinh;
     }
 
     private IQueryable<Batch> QueryDayDu() => _db.Batches
@@ -37,24 +46,21 @@ public class LoSanXuatService : IDanhMucService<Batch>
 
     public async Task<KetQuaThaoTac> ThemAsync(Batch entity, CancellationToken ct = default)
     {
-        entity.MaLo = entity.MaLo.Trim();
-
-        if (await _db.Batches.AnyAsync(b => b.MaLo == entity.MaLo, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã lô \"{entity.MaLo}\" đã tồn tại.");
-        }
-
         var loi = await KiemTraAsync(entity, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
         ChuanHoa(entity);
 
+        // Mã lô LO-yyyyMMdd-001 theo ngày sản xuất (chưa có thì ngày nhập) - chung dãy với lô trong lệnh SX.
+        var ngay = entity.NgaySanXuat ?? (entity.NgayNhap == default ? null : entity.NgayNhap);
+        entity.MaLo = await _maTuSinh.SinhAsync(LoaiMaTuSinh.LoSanXuat, ngay, ct);
+
         _db.Batches.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Batch", entity.MaLo, HnCPayloadMapper.LoSanXuat(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm lô \"{entity.TenLo}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm lô \"{entity.TenLo}\" (mã {entity.MaLo}).").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(Batch entity, CancellationToken ct = default)
@@ -62,20 +68,13 @@ public class LoSanXuatService : IDanhMucService<Batch>
         var hienTai = await LayTheoIdAsync(entity.Id, ct);
         if (hienTai is null) return KetQuaThaoTac.Loi("Không tìm thấy lô cần sửa.");
 
-        var maMoi = entity.MaLo.Trim();
-
-        if (await _db.Batches.AnyAsync(b => b.MaLo == maMoi && b.Id != entity.Id, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã lô \"{maMoi}\" đã được dùng cho lô khác.");
-        }
-
+        // Mã lô KHÔNG sửa được: là khoá đối chiếu với HanoiCheck và được sổ kho/đơn hàng tham chiếu.
         var loi = await KiemTraAsync(entity, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
         ChuanHoa(entity);
 
         hienTai.MaSanPham = entity.MaSanPham;
-        hienTai.MaLo = maMoi;
         hienTai.TenLo = entity.TenLo;
         hienTai.NgayNhap = entity.NgayNhap;
         hienTai.NgaySanXuat = entity.NgaySanXuat;
@@ -84,6 +83,7 @@ public class LoSanXuatService : IDanhMucService<Batch>
         hienTai.MaCoSo = entity.MaCoSo;
         hienTai.MaNccDauVao = entity.MaNccDauVao;
         hienTai.GhiChu = entity.GhiChu;
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         // Thay toàn bộ các bảng con: đơn giản và tránh sai lệch khi vừa thêm vừa xoá.
@@ -97,9 +97,9 @@ public class LoSanXuatService : IDanhMucService<Batch>
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Batch", hienTai.MaLo, HnCPayloadMapper.LoSanXuat(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật lô \"{hienTai.TenLo}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật lô \"{hienTai.TenLo}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)
@@ -159,7 +159,12 @@ public class LoSanXuatService : IDanhMucService<Batch>
             }
         }
 
-        // File: nếu có thì bắt buộc đủ mã/tên/đường dẫn/loại.
+        // File theo đặc tả HanoiCheck v2.2:
+        //  - File KHÔNG gắn bước SX = ảnh chung của lô (album): bắt buộc 1-3 ảnh, đuôi ảnh, không Google Drive.
+        //  - File có mã bước SX = tệp minh chứng của đúng khâu đó: ảnh/PDF/Word/Google Drive, tối đa 3 tệp/khâu.
+        // Các quy định file của HanoiCheck chỉ áp khi lô này thật sự gửi HanoiCheck (công tắc tổng bật + tick đồng bộ).
+        var apHnC = b.DongBoHnC && await _outbox.DangBatAsync(ct);
+        var maBuocCuaLo = b.DanhSachKhau.Select(s => s.MaBuocSx.Trim()).ToHashSet(StringComparer.Ordinal);
         foreach (var f in b.DanhSachFile)
         {
             if (string.IsNullOrWhiteSpace(f.MaFile) || string.IsNullOrWhiteSpace(f.TenFile)
@@ -167,7 +172,59 @@ public class LoSanXuatService : IDanhMucService<Batch>
             {
                 return "Mỗi file phải có đủ mã file, tên, đường dẫn và loại.";
             }
+
+            if (!apHnC) continue;
+
+            if (HnCPayloadMapper.LaAnhLo(f))
+            {
+                if (!HnCPayloadMapper.LaDuongDanAnhLo(f.DuongDan))
+                    return $"File \"{f.TenFile}\": ảnh chung của lô phải là đường dẫn ảnh (.jpg, .jpeg, .png, .gif, "
+                           + ".webp), không dùng Google Drive. Tệp minh chứng khác thì chọn Mã bước SX.";
+            }
+            else
+            {
+                if (!maBuocCuaLo.Contains(f.MaBuocSx!.Trim()))
+                    return $"File \"{f.TenFile}\": mã bước SX \"{f.MaBuocSx}\" không có trong các khâu của lô.";
+                if (!HnCPayloadMapper.LaDuongDanTepKhau(f.DuongDan))
+                    return $"File \"{f.TenFile}\": tệp minh chứng phải là ảnh, PDF, Word (.pdf, .doc, .docx) "
+                           + "hoặc đường dẫn Google Drive.";
+            }
         }
+
+        if (!apHnC) return null;
+
+        // HanoiCheck thực tế chặn (422 "Nhà cung cấp phụ không cung ứng danh mục của thực phẩm", dù tài liệu v2.2 ghi
+        // "không kiểm tra"): nhom_thuc_pham của NCC đầu vào của lô phải chứa ma_loai_sp của thực phẩm.
+        if (!string.IsNullOrWhiteSpace(b.MaNccDauVao))
+        {
+            var maNcc = b.MaNccDauVao.Trim();
+            var maSp = b.MaSanPham.Trim();
+            var ncc = await _db.SubSuppliers.AsNoTracking().Include(s => s.NhomThucPham)
+                .FirstOrDefaultAsync(s => s.MaNccDauVao == maNcc, ct);
+            var maLoai = (await _db.Products.Where(p => p.MaSanPham == maSp)
+                .Select(p => p.MaLoaiSp).FirstOrDefaultAsync(ct))?.Trim();
+
+            if (ncc is not null && !string.IsNullOrWhiteSpace(maLoai)
+                && !ncc.NhomThucPham.Any(g => g.MaNhom.Trim() == maLoai))
+            {
+                var idLoai = int.TryParse(maLoai, out var id) ? id : -1;
+                var tenLoai = await _db.StandardFoodCategories.AsNoTracking()
+                    .Where(c => c.Id == idLoai || c.Code == maLoai).Select(c => c.Name).FirstOrDefaultAsync(ct) ?? maLoai;
+                return $"Nhà cung ứng \"{ncc.Ten}\" ({maNcc}) chưa khai cung ứng danh mục \"{tenLoai}\" của thực phẩm "
+                       + $"{maSp} - HanoiCheck sẽ từ chối lô. Bổ sung danh mục này vào nhóm thực phẩm của nhà cung ứng "
+                       + "(và để NCC đồng bộ xong), hoặc bỏ trống Nhà cung ứng đầu vào của lô.";
+            }
+        }
+
+        var soAnhLo = b.DanhSachFile.Count(HnCPayloadMapper.LaAnhLo);
+        if (soAnhLo is < 1 or > SoAnhLoToiDa)
+            return $"Lô phải có từ 1 đến {SoAnhLoToiDa} ảnh chung (đang có {soAnhLo}) - HanoiCheck bắt buộc album ảnh "
+                   + "của lô. Ảnh chung là file để trống Mã bước SX.";
+
+        var buocNhieuTep = b.DanhSachFile.Where(f => !HnCPayloadMapper.LaAnhLo(f))
+            .GroupBy(f => f.MaBuocSx!.Trim()).FirstOrDefault(g => g.Count() > SoTepMoiKhauToiDa);
+        if (buocNhieuTep is not null)
+            return $"Bước \"{buocNhieuTep.Key}\" có {buocNhieuTep.Count()} tệp, tối đa {SoTepMoiKhauToiDa} tệp mỗi khâu.";
 
         return null;
     }

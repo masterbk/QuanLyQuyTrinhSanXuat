@@ -112,5 +112,13 @@ public class NhanSuServiceTests
             PayloadCuoi = JsonSerializer.Serialize(payload, HnCPayloadMapper.Json);
             return Task.CompletedTask;
         }
+
+        public Task<bool> DangBatAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+        public async Task<string?> GuiAsync(object banGhi, CancellationToken ct = default)
+        {
+            if (banGhi is Staff s) await ThemAsync("Staff", s.MaNhanSu, HnCPayloadMapper.NhanSu(s), ct);
+            return null;
+        }
     }
 }

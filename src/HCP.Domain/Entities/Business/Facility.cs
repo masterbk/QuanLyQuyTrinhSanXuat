@@ -9,9 +9,12 @@ namespace HCP.Domain.Entities.Business;
 /// Lưu ý phân biệt: "Tenant" là pháp nhân nhà cung cấp (có tài khoản HanoiCheck riêng),
 /// còn entity này là địa điểm sản xuất bên trong pháp nhân đó. Một tenant có thể có nhiều cơ sở.
 /// </summary>
-public class Facility : TenantEntity
+public class Facility : TenantEntity, ICoDongBoHnC
 {
     public int Id { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_co_so - khoá nghiệp vụ. Tối đa 255 ký tự.</summary>
     public string MaCoSo { get; set; } = string.Empty;

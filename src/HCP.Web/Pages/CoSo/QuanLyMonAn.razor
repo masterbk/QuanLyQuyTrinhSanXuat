@@ -117,6 +117,7 @@ else
                                           Variant="Variant.Outlined" MaxLength="2000" Lines="2" />
                         </MudItem>
                     </MudGrid>
+                    <ODongBoHnC @bind-Value="_input.DongBoHnC" />
                 </MudForm>
             </MudTabPanel>
 
@@ -343,7 +344,7 @@ else
         {
             _input = new Dish
             {
-                Id = mon.Id,
+                Id = mon.Id, DongBoHnC = mon.DongBoHnC,
                 MaMonAn = mon.MaMonAn,
                 TenMonAn = mon.TenMonAn,
                 NhomTuoiId = mon.NhomTuoiId,

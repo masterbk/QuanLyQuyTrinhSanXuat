@@ -1,0 +1,75 @@
+@page "/tra-cuu/lo/{ma}"
+@model HCP.Web.Pages.TraCuu.LoModel
+@{
+    Layout = "_LayoutTraCuu";
+    var lo = Model.Lo;
+    ViewData["Title"] = lo is null ? "Không tìm thấy lô" : $"Lô {lo.MaLo} - {lo.TenSanPham}";
+}
+
+@if (lo is null)
+{
+    <div class="alert alert-warning mt-4">Không tìm thấy lô sản xuất. Mã QR có thể không đúng hoặc lô đã bị xoá.</div>
+    return;
+}
+
+<partial name="_CoSoTraCuu" model="lo.CoSo" />
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="nhan">Sản phẩm</div>
+        <h5 class="mb-1">@lo.TenSanPham</h5>
+        <div class="nhan mb-2">Mã: @lo.MaSanPham</div>
+        <div class="row g-2">
+            <div class="col-12"><span class="nhan">Lô:</span> <strong>@lo.MaLo</strong> - @lo.TenLo</div>
+            @if (lo.NgaySanXuat is { } nsx)
+            {
+                <div class="col-6"><span class="nhan">Ngày sản xuất:</span> @nsx.ToString("dd/MM/yyyy")</div>
+            }
+            @if (lo.HanSuDung is { } hsd)
+            {
+                <div class="col-6">
+                    <span class="nhan">Hạn sử dụng:</span>
+                    <span class="@(hsd < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)) ? "text-danger fw-bold" : "")">@hsd.ToString("dd/MM/yyyy")</span>
+                </div>
+            }
+            <div class="col-6"><span class="nhan">Ngày nhập kho:</span> @lo.NgayNhap.ToString("dd/MM/yyyy")</div>
+        </div>
+    </div>
+</div>
+
+@if (lo.Anh.Count > 0)
+{
+    <div class="row g-2 mb-3">
+        @foreach (var anh in lo.Anh)
+        {
+            <div class="col-4"><a href="@anh" target="_blank"><img src="@anh" alt="Ảnh lô @lo.MaLo" class="anh-lo" loading="lazy" /></a></div>
+        }
+    </div>
+}
+
+@if (lo.Khau.Count > 0)
+{
+    <h6 class="mb-2">Quy trình sản xuất</h6>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            @foreach (var k in lo.Khau)
+            {
+                <div class="buoc mb-3">
+                    <strong>@k.ThuTu. @k.TenKhau</strong>
+                    @if (k.ThoiGian is { } tg)
+                    {
+                        <div class="nhan">@tg.ToString("dd/MM/yyyy")</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(k.TenCoSo))
+                    {
+                        <div class="small">Nơi thực hiện: @k.TenCoSo</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(k.MaLoNguyenLieu))
+                    {
+                        <div class="small">Lô nguyên liệu: @k.MaLoNguyenLieu</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}

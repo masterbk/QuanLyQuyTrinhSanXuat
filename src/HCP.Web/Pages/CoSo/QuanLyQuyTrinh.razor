@@ -109,6 +109,7 @@ else
                     </MudText>
                 </MudAlert>
             }
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
         </MudForm>
 
         <MudDivider Class="my-3" />
@@ -237,7 +238,7 @@ else
         {
             _input = new ProductionProcess
             {
-                Id = quyTrinh.Id,
+                Id = quyTrinh.Id, DongBoHnC = quyTrinh.DongBoHnC,
                 MaQuyTrinh = quyTrinh.MaQuyTrinh,
                 TenQuyTrinh = quyTrinh.TenQuyTrinh,
                 MaDanhMucThucPham = quyTrinh.MaDanhMucThucPham

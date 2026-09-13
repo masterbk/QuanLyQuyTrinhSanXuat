@@ -167,6 +167,7 @@ else
                     </MudItem>
                 </MudGrid>
             }
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
         </MudForm>
 
         <MudDivider Class="my-4" />
@@ -272,7 +273,7 @@ else
             // Sao chép sang đối tượng riêng để bấm Huỷ không làm bẩn dữ liệu đang hiển thị.
             _input = new Staff
             {
-                Id = ns.Id,
+                Id = ns.Id, DongBoHnC = ns.DongBoHnC,
                 MaNhanSu = ns.MaNhanSu,
                 HoTen = ns.HoTen,
                 ViTri = ns.ViTri,

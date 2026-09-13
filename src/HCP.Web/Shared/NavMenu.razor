@@ -45,12 +45,6 @@
             <MudNavLink Href="/app/mon-an" Icon="@Icons.Material.Filled.RestaurantMenu">
                 Món ăn
             </MudNavLink>
-            <MudNavLink Href="/app/don-hang" Icon="@Icons.Material.Filled.ReceiptLong">
-                Đơn hàng &amp; xuất kho
-            </MudNavLink>
-            <MudNavLink Href="/app/don-hang-nhan" Icon="@Icons.Material.Filled.CloudDownload">
-                Đơn hàng từ trường
-            </MudNavLink>
         </MudNavGroup>
 
         <MudNavGroup Title="Kho & Sản xuất" Icon="@Icons.Material.Filled.Inventory" Expanded="true">
@@ -63,25 +57,37 @@
             <MudNavLink Href="/app/lenh-san-xuat" Icon="@Icons.Material.Filled.Factory">
                 Lệnh sản xuất
             </MudNavLink>
+        </MudNavGroup>
+
+        <MudNavGroup Title="Bán hàng" Icon="@Icons.Material.Filled.PointOfSale" Expanded="true">
             <MudNavLink Href="/app/khach-hang" Icon="@Icons.Material.Filled.People">
                 Khách hàng
             </MudNavLink>
-            <MudNavLink Href="/app/xuat-ban" Icon="@Icons.Material.Filled.PointOfSale">
-                Xuất bán
+            <MudNavLink Href="/app/don-hang-ban" Icon="@Icons.Material.Filled.ReceiptLong">
+                Đơn hàng bán
             </MudNavLink>
+            <ChiKhiBatHnC>
+                <MudNavLink Href="/app/don-hang-nhan" Icon="@Icons.Material.Filled.CloudDownload">
+                    Đơn hàng từ trường (HanoiCheck)
+                </MudNavLink>
+            </ChiKhiBatHnC>
         </MudNavGroup>
 
-        <MudNavLink Href="/app/nhat-ky-dong-bo" Icon="@Icons.Material.Filled.Sync">
-            Nhật ký đồng bộ
-        </MudNavLink>
+        <ChiKhiBatHnC>
+            <MudNavLink Href="/app/nhat-ky-dong-bo" Icon="@Icons.Material.Filled.Sync">
+                Nhật ký đồng bộ
+            </MudNavLink>
+        </ChiKhiBatHnC>
     </AuthorizeView>
 
     <AuthorizeView Roles="@AppRoles.TenantAdmin">
         <MudNavLink Href="/app/cai-dat-ket-noi" Icon="@Icons.Material.Filled.Link">
             Cài đặt kết nối HanoiCheck
         </MudNavLink>
-        <MudNavLink Href="/app/kiem-tra-api" Icon="@Icons.Material.Filled.Api">
-            Kiểm tra API HanoiCheck
-        </MudNavLink>
+        <ChiKhiBatHnC>
+            <MudNavLink Href="/app/kiem-tra-api" Icon="@Icons.Material.Filled.Api">
+                Kiểm tra API HanoiCheck
+            </MudNavLink>
+        </ChiKhiBatHnC>
     </AuthorizeView>
 </MudNavMenu>

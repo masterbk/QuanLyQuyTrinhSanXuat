@@ -1,10 +1,14 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using HCP.Domain.Entities.Infrastructure;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck;
+using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Logging;
 using HCP.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace HCP.Infrastructure.Sync;
@@ -24,17 +28,22 @@ public sealed class SyncOutboxProcessor : ISyncOutboxProcessor
     private readonly TimeProvider _clock;
     private readonly ILogger<SyncOutboxProcessor> _logger;
 
+    /// <summary>Tên miền công khai của app (khoá "Uploads:BaseUrl") để đổi đường dẫn tệp tương đối thành URL.</summary>
+    private readonly string? _baseUrl;
+
     public SyncOutboxProcessor(AppDbContext db,
                                IHanoiCheckSyncClient syncClient,
                                ISystemLogWriter logWriter,
                                TimeProvider clock,
-                               ILogger<SyncOutboxProcessor> logger)
+                               ILogger<SyncOutboxProcessor> logger,
+                               IConfiguration? cauHinh = null)
     {
         _db = db;
         _syncClient = syncClient;
         _logWriter = logWriter;
         _clock = clock;
         _logger = logger;
+        _baseUrl = cauHinh?["Uploads:BaseUrl"]?.Trim().TrimEnd('/');
     }
 
     public async Task<int> XuLyCacBanGhiDenHanAsync(int gioiHan = 50, CancellationToken ct = default)
@@ -56,6 +65,23 @@ public sealed class SyncOutboxProcessor : ISyncOutboxProcessor
         foreach (var item in denHan)
         {
             if (ct.IsCancellationRequested) break;
+
+            // Tệp lưu dạng /uploads/... chỉ app mở được: HanoiCheck cần URL tuyệt đối để tải ảnh/tệp.
+            // Làm ở bước gửi nên cả bản ghi xếp hàng từ trước lúc khai cấu hình cũng được sửa khi gửi lại.
+            var (payload, duongDanTuongDoi) = ChuanHoaDuongDan(item.PayloadJson, _baseUrl);
+            if (duongDanTuongDoi is not null)
+            {
+                item.Attempts++;
+                item.Status = SyncOutboxStatus.NeedsManualReview;
+                item.NextRetryAtUtc = null;
+                item.LastError = "Chưa khai cấu hình \"Uploads:BaseUrl\" (tên miền công khai của ứng dụng, vd "
+                                 + $"https://app.congty.vn) nên đường dẫn tệp \"{duongDanTuongDoi}\" chỉ là đường dẫn "
+                                 + "tương đối - HanoiCheck không tải được. Khai cấu hình rồi bấm Gửi lại.";
+                await _db.SaveChangesAsync(ct);
+                daXuLy++;
+                continue;
+            }
+            item.PayloadJson = payload;
 
             var ketQua = await _syncClient.GuiMergeAsync(item.TenantId, item.EntityType, item.PayloadJson, ct);
             ApDungKetQua(item, ketQua, now);
@@ -152,6 +178,63 @@ public sealed class SyncOutboxProcessor : ISyncOutboxProcessor
             ResponsePayload = ketQua.ResponseBody,
             HttpStatusCode = ketQua.HttpStatusCode
         }, ct);
+    }
+
+    private static readonly HashSet<string> TruongDuongDan = new(StringComparer.Ordinal) { "duong_dan", "path_file" };
+
+    /// <summary>
+    /// Đổi mọi đường dẫn tệp tương đối ("/uploads/...") trong payload thành URL tuyệt đối theo
+    /// <paramref name="baseUrl"/>. Nếu còn đường dẫn tương đối mà chưa có baseUrl thì trả kèm đường dẫn đó
+    /// để bên gọi dừng lại (gửi đi chắc chắn bị HanoiCheck từ chối hoặc không hiển thị được ảnh).
+    /// </summary>
+    public static (string Payload, string? DuongDanTuongDoi) ChuanHoaDuongDan(string payloadJson, string? baseUrl)
+    {
+        if (!payloadJson.Contains("\"duong_dan\"", StringComparison.Ordinal)
+            && !payloadJson.Contains("\"path_file\"", StringComparison.Ordinal))
+            return (payloadJson, null);
+
+        JsonNode? goc;
+        try
+        {
+            goc = JsonNode.Parse(payloadJson);
+        }
+        catch (JsonException)
+        {
+            return (payloadJson, null);
+        }
+
+        string? conTuongDoi = null;
+        var daDoi = false;
+
+        void Duyet(JsonNode? nut)
+        {
+            switch (nut)
+            {
+                case JsonObject obj:
+                    foreach (var (ten, con) in obj.ToList())
+                    {
+                        if (TruongDuongDan.Contains(ten) && con is JsonValue gt && gt.TryGetValue<string>(out var s)
+                            && s.StartsWith('/') && !s.StartsWith("//", StringComparison.Ordinal))
+                        {
+                            if (string.IsNullOrWhiteSpace(baseUrl)) conTuongDoi ??= s;
+                            else { obj[ten] = baseUrl.TrimEnd('/') + s; daDoi = true; }
+                        }
+                        else
+                        {
+                            Duyet(con);
+                        }
+                    }
+                    break;
+                case JsonArray mang:
+                    foreach (var con in mang) Duyet(con);
+                    break;
+            }
+        }
+
+        Duyet(goc);
+
+        if (conTuongDoi is not null) return (payloadJson, conTuongDoi);
+        return (daDoi ? goc!.ToJsonString(HnCPayloadMapper.Json) : payloadJson, null);
     }
 
     // Ẩn CCCD trong payload trước khi ghi nhật ký: log giữ tối thiểu 2 năm, không được lưu

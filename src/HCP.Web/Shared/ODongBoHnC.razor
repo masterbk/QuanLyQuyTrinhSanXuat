@@ -1,0 +1,15 @@
+@* Ô tick "Đồng bộ HanoiCheck" cho từng bản ghi danh mục - chỉ hiện khi cơ sở bật đồng bộ. *@
+<ChiKhiBatHnC>
+    <div class="mt-3">
+        <MudCheckBox T="bool" Value="Value" ValueChanged="ValueChanged" Color="Color.Primary" Dense="true"
+                     Label="Đồng bộ HanoiCheck" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+            Bỏ tick nếu đây là dữ liệu nội bộ, không gửi HanoiCheck. Dữ liệu liên quan cần cho bản ghi này sẽ tự được bật theo.
+        </MudText>
+    </div>
+</ChiKhiBatHnC>
+
+@code {
+    [Parameter] public bool Value { get; set; }
+    [Parameter] public EventCallback<bool> ValueChanged { get; set; }
+}

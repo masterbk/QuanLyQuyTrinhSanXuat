@@ -1,0 +1,225 @@
+using Finbuckle.MultiTenant.Abstractions;
+using HCP.Domain.Entities.Business;
+using HCP.Domain.Entities.Common;
+using HCP.Domain.Entities.Infrastructure;
+using HCP.Domain.Enums;
+using HCP.Infrastructure.HanoiCheck.Mapping;
+using HCP.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace HCP.Infrastructure.Services.TraCuu;
+
+public enum LoaiTraCuu
+{
+    DonHang,
+    Lo
+}
+
+/// <summary>
+/// Nội dung mã QR: <see cref="LinkNgoai"/> (trang truy xuất HanoiCheck) nếu có, ngược lại trang tra cứu công khai của
+/// chính hệ thống theo <see cref="MaTraCuu"/>.
+/// </summary>
+public record QrTraCuu(string Ma, string? LinkNgoai, string? MaTraCuu, string MoTa);
+
+public record TraCuuCoSo(string? Ten, string? DiaChi, string? DienThoai);
+
+public record TraCuuLoTomTat(string MaLo, DateOnly? NgaySanXuat, DateOnly? HanSuDung, decimal SoLuong, string? MaTraCuu);
+
+public record TraCuuDongDon(string MaSanPham, string TenSanPham, string? DonViTinh, decimal SoLuong,
+                            IReadOnlyList<TraCuuLoTomTat> Lo);
+
+public record TraCuuDonHang(TraCuuCoSo CoSo, string MaDonHang, string TenKhachHang, DateOnly NgayDat,
+                            DateOnly? NgayGiao, string TrangThai, DateTime? ThoiGianGiaoUtc,
+                            IReadOnlyList<TraCuuDongDon> Dong);
+
+public record TraCuuKhau(int ThuTu, string TenKhau, DateTime? ThoiGian, string? TenCoSo, string? MaLoNguyenLieu);
+
+public record TraCuuLo(TraCuuCoSo CoSo, string MaLo, string TenLo, string MaSanPham, string TenSanPham,
+                       DateOnly NgayNhap, DateOnly? NgaySanXuat, DateOnly? HanSuDung,
+                       IReadOnlyList<string> Anh, IReadOnlyList<TraCuuKhau> Khau);
+
+/// <summary>
+/// Mã QR và trang tra cứu công khai của đơn hàng bán và lô sản xuất.
+///  - <see cref="LayQrDonHangAsync"/>/<see cref="LayQrLoAsync"/>: gọi trong phiên đăng nhập của cơ sở.
+///  - <see cref="TraCuuDonHangAsync"/>/<see cref="TraCuuLoAsync"/>: gọi từ trang công khai KHÔNG có tenant - tìm theo mã tra
+///    cứu ngẫu nhiên, bỏ bộ lọc tenant rồi lọc tường minh theo TenantId của bản ghi tìm được. Chỉ đọc, không trả giá
+///    tiền, số điện thoại/địa chỉ khách hay nhân sự.
+/// </summary>
+public interface ITraCuuCongKhaiService
+{
+    Task<QrTraCuu?> LayQrDonHangAsync(int id, CancellationToken ct = default);
+
+    Task<QrTraCuu?> LayQrLoAsync(int id, CancellationToken ct = default);
+
+    Task<TraCuuDonHang?> TraCuuDonHangAsync(string maTraCuu, CancellationToken ct = default);
+
+    Task<TraCuuLo?> TraCuuLoAsync(string maTraCuu, CancellationToken ct = default);
+}
+
+/// <inheritdoc cref="ITraCuuCongKhaiService"/>
+public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
+{
+    private readonly AppDbContext _db;
+    private readonly IMultiTenantStore<Tenant>? _tenantStore;
+
+    public TraCuuCongKhaiService(AppDbContext db, IMultiTenantStore<Tenant>? tenantStore = null)
+    {
+        _db = db;
+        _tenantStore = tenantStore;
+    }
+
+    public async Task<QrTraCuu?> LayQrDonHangAsync(int id, CancellationToken ct = default)
+    {
+        var don = await _db.DonHangBans.Include(d => d.Dong).ThenInclude(l => l.XuatLo)
+            .FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (don is null) return null;
+
+        // Đơn từ HanoiCheck: QR là trang truy xuất (traceability_url) HanoiCheck cấp cho đơn.
+        if (don.Nguon == NguonDonHang.HanoiCheck && !string.IsNullOrWhiteSpace(don.MaDonHnC))
+        {
+            var tenantId = don.TenantId;
+            var maDonHnC = don.MaDonHnC;
+            var link = await _db.DonHangNhans.AsNoTracking()
+                .Where(n => n.TenantId == tenantId && n.MaDonHang == maDonHnC)
+                .Select(n => n.LinkTruyXuat).FirstOrDefaultAsync(ct);
+            if (LaLinkWeb(link))
+                return new QrTraCuu(don.MaDonHang, link!.Trim(), null, "Trang truy xuất của đơn trên HanoiCheck.");
+        }
+
+        // Đơn nội bộ (hoặc đơn HanoiCheck chưa có link): trang tra cứu của hệ thống. Sinh luôn mã tra cứu cho các lô đã
+        // xuất để trang đơn dẫn sang được trang từng lô.
+        GanMa(don);
+        var maLo = don.Dong.SelectMany(l => l.XuatLo).Select(x => x.MaLo).Distinct().ToList();
+        if (maLo.Count > 0)
+        {
+            foreach (var lo in await _db.Batches.Where(b => maLo.Contains(b.MaLo) && b.MaTraCuu == null).ToListAsync(ct))
+                GanMa(lo);
+        }
+        await _db.SaveChangesAsync(ct);
+
+        return new QrTraCuu(don.MaDonHang, null, don.MaTraCuu,
+            don.Nguon == NguonDonHang.HanoiCheck
+                ? "Đơn HanoiCheck chưa có link truy xuất - dùng trang tra cứu của hệ thống."
+                : "Trang tra cứu đơn hàng trên hệ thống.");
+    }
+
+    public async Task<QrTraCuu?> LayQrLoAsync(int id, CancellationToken ct = default)
+    {
+        var lo = await _db.Batches.FirstOrDefaultAsync(b => b.Id == id, ct);
+        if (lo is null) return null;
+
+        if (GanMa(lo)) await _db.SaveChangesAsync(ct);
+        return new QrTraCuu(lo.MaLo, null, lo.MaTraCuu, "Trang tra cứu lô sản xuất trên hệ thống.");
+    }
+
+    public async Task<TraCuuDonHang?> TraCuuDonHangAsync(string maTraCuu, CancellationToken ct = default)
+    {
+        if (!LaMaHopLe(maTraCuu)) return null;
+
+        var don = await _db.DonHangBans.IgnoreQueryFilters().AsNoTracking()
+            .Include(d => d.Dong).ThenInclude(l => l.XuatLo)
+            .FirstOrDefaultAsync(d => d.MaTraCuu == maTraCuu, ct);
+        if (don is null) return null;
+
+        var tenantId = don.TenantId;
+        var maSp = don.Dong.Select(l => l.MaThanhPham).Distinct().ToList();
+        var sanPham = await _db.Products.IgnoreQueryFilters().AsNoTracking()
+            .Where(p => p.TenantId == tenantId && maSp.Contains(p.MaSanPham))
+            .ToDictionaryAsync(p => p.MaSanPham, ct);
+
+        var maLo = don.Dong.SelectMany(l => l.XuatLo).Select(x => x.MaLo).Distinct().ToList();
+        var lo = await _db.Batches.IgnoreQueryFilters().AsNoTracking()
+            .Where(b => b.TenantId == tenantId && maLo.Contains(b.MaLo))
+            .ToDictionaryAsync(b => b.MaLo, ct);
+
+        var maKhach = don.MaKhachHang;
+        var tenKhach = await _db.KhachHangs.IgnoreQueryFilters().AsNoTracking()
+            .Where(k => k.TenantId == tenantId && k.MaKhachHang == maKhach)
+            .Select(k => k.TenKhachHang).FirstOrDefaultAsync(ct);
+
+        var dong = don.Dong.OrderBy(l => l.Id).Select(l =>
+        {
+            sanPham.TryGetValue(l.MaThanhPham, out var sp);
+            var cacLo = l.XuatLo.OrderBy(x => x.Id).Select(x =>
+            {
+                lo.TryGetValue(x.MaLo, out var b);
+                return new TraCuuLoTomTat(x.MaLo, b?.NgaySanXuat, x.HanSuDung ?? b?.HanSuDung, x.SoLuong, b?.MaTraCuu);
+            }).ToList();
+            return new TraCuuDongDon(l.MaThanhPham, sp?.TenSanPham ?? l.MaThanhPham, sp?.DonViTinh, l.SoLuong, cacLo);
+        }).ToList();
+
+        return new TraCuuDonHang(await CoSoAsync(tenantId), don.MaDonHang, tenKhach ?? don.MaKhachHang, don.NgayDat,
+            don.NgayGiao, TenTrangThai(don.TrangThai), don.ThoiGianGiaoUtc, dong);
+    }
+
+    public async Task<TraCuuLo?> TraCuuLoAsync(string maTraCuu, CancellationToken ct = default)
+    {
+        if (!LaMaHopLe(maTraCuu)) return null;
+
+        var lo = await _db.Batches.IgnoreQueryFilters().AsNoTracking()
+            .Include(b => b.DanhSachKhau).Include(b => b.DanhSachFile)
+            .FirstOrDefaultAsync(b => b.MaTraCuu == maTraCuu, ct);
+        if (lo is null) return null;
+
+        var tenantId = lo.TenantId;
+        var maSp = lo.MaSanPham;
+        var tenSp = await _db.Products.IgnoreQueryFilters().AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.MaSanPham == maSp)
+            .Select(p => p.TenSanPham).FirstOrDefaultAsync(ct);
+
+        var maKhau = lo.DanhSachKhau.Select(s => s.MaKhau).Distinct().ToList();
+        var tenKhau = await _db.ProductionSteps.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.TenantId == tenantId && maKhau.Contains(s.MaKhau))
+            .ToDictionaryAsync(s => s.MaKhau, s => s.TenKhau, ct);
+
+        var maCoSo = lo.DanhSachKhau.Where(s => s.MaCoSo != null).Select(s => s.MaCoSo!).Distinct().ToList();
+        var tenCoSo = await _db.Facilities.IgnoreQueryFilters().AsNoTracking()
+            .Where(f => f.TenantId == tenantId && maCoSo.Contains(f.MaCoSo))
+            .ToDictionaryAsync(f => f.MaCoSo, f => f.TenCoSo, ct);
+
+        var khau = lo.DanhSachKhau.OrderBy(s => s.ThuTu).Select(s => new TraCuuKhau(
+            s.ThuTu,
+            tenKhau.GetValueOrDefault(s.MaKhau) ?? s.MaKhau,
+            s.ThoiGian,
+            s.MaCoSo is null ? null : tenCoSo.GetValueOrDefault(s.MaCoSo) ?? s.MaCoSo,
+            s.MaLoNguyenLieu)).ToList();
+
+        var anh = lo.DanhSachFile.Where(f => HnCPayloadMapper.LaAnhLo(f) && HnCPayloadMapper.LaDuongDanAnhLo(f.DuongDan))
+            .Select(f => f.DuongDan).ToList();
+
+        return new TraCuuLo(await CoSoAsync(tenantId), lo.MaLo, lo.TenLo, lo.MaSanPham, tenSp ?? lo.MaSanPham,
+            lo.NgayNhap, lo.NgaySanXuat, lo.HanSuDung, anh, khau);
+    }
+
+    private async Task<TraCuuCoSo> CoSoAsync(string tenantId)
+    {
+        var t = _tenantStore is null ? null : await _tenantStore.TryGetAsync(tenantId);
+        return new TraCuuCoSo(t?.Name, t?.DiaChi, t?.SoDienThoai);
+    }
+
+    /// <summary>Sinh mã tra cứu nếu bản ghi chưa có; trả true khi vừa sinh.</summary>
+    private static bool GanMa(ICoMaTraCuu banGhi)
+    {
+        if (!string.IsNullOrEmpty(banGhi.MaTraCuu)) return false;
+        banGhi.MaTraCuu = Guid.NewGuid().ToString("N");
+        return true;
+    }
+
+    private static bool LaMaHopLe(string? ma) =>
+        ma is { Length: 32 } && ma.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static bool LaLinkWeb(string? link) =>
+        !string.IsNullOrWhiteSpace(link)
+        && (link.Trim().StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || link.Trim().StartsWith("http://", StringComparison.OrdinalIgnoreCase));
+
+    private static string TenTrangThai(TrangThaiDonHangBan t) => t switch
+    {
+        TrangThaiDonHangBan.ChoXacNhan => "Chờ xác nhận",
+        TrangThaiDonHangBan.DaXacNhan => "Đã xác nhận",
+        TrangThaiDonHangBan.DangGiao => "Đang giao",
+        TrangThaiDonHangBan.DaGiao => "Đã giao",
+        TrangThaiDonHangBan.DaHuy => "Đã huỷ",
+        _ => t.ToString()
+    };
+}

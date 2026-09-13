@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -6,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../loi/api.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'mo_hinh.dart';
+
+/// Ảnh đã chọn, giữ sẵn byte để gửi đi.
+typedef AnhDaChon = ({String ten, Uint8List byte});
 
 /// Gọi nhóm API /api/v1/lenh-san-xuat và /api/v1/danh-muc.
 class KhoLenhSanXuat {
@@ -45,32 +49,39 @@ class KhoLenhSanXuat {
     return j['thongBao'] as String? ?? 'Đã huỷ lệnh.';
   }
 
-  /// Hoàn thành lệnh kèm ảnh lô thành phẩm (bắt buộc ít nhất 1 ảnh).
-  Future<String> hoanThanh(int id, List<({String ten, Uint8List byte})> anh) async {
+  /// Hoàn thành lệnh. [anh]: ảnh theo Id dòng sản phẩm (mỗi dòng bắt buộc ≥ 1 ảnh), gửi trong
+  /// trường "anh_{id}". [khau]: người thực hiện / cơ sở sửa lại lúc hoàn thành (nếu có).
+  Future<String> hoanThanh(int id, Map<int, List<AnhDaChon>> anh, List<Map<String, dynamic>> khau) async {
     final form = FormData();
-    for (final a in anh) {
-      form.files.add(MapEntry('anh', MultipartFile.fromBytes(a.byte, filename: a.ten)));
-    }
+    anh.forEach((idSanPham, ds) {
+      for (final a in ds) {
+        form.files.add(MapEntry('anh_$idSanPham', MultipartFile.fromBytes(a.byte, filename: a.ten)));
+      }
+    });
+    if (khau.isNotEmpty) form.fields.add(MapEntry('khau', jsonEncode(khau)));
     final j = await _api.postFile('/api/v1/lenh-san-xuat/$id/hoan-thanh', form) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã hoàn thành lệnh.';
   }
 
-  Future<List<NguyenLieuCan>> nguyenLieuCan(String maThanhPham, double soLuong, String maKho) async {
-    final j = await _api.get('/api/v1/lenh-san-xuat/nguyen-lieu-can', thamSo: {
-      'maThanhPham': maThanhPham,
-      'soLuong': soLuong,
+  /// Nguyên liệu cần cho nhiều dòng sản phẩm - nhu cầu được cộng dồn phía máy chủ.
+  Future<List<NguyenLieuCan>> nguyenLieuCan(
+      List<({String maThanhPham, double soLuong})> dong, String maKho) async {
+    final j = await _api.post('/api/v1/lenh-san-xuat/nguyen-lieu-can', than: {
       'maKho': maKho,
+      'dong': dong.map((d) => {'maThanhPham': d.maThanhPham, 'soLuong': d.soLuong}).toList(),
     }) as List;
     return j.map((e) => NguyenLieuCan.tuJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<List<ThanhPham>> thanhPham() async =>
-      ((await _api.get('/api/v1/danh-muc/thanh-pham')) as List)
-          .map((e) => ThanhPham.tuJson(e as Map<String, dynamic>)).toList();
+  Future<List<ThanhPham>> thanhPham() => _dm('thanh-pham', ThanhPham.tuJson);
+  Future<List<Kho>> kho() => _dm('kho', Kho.tuJson);
+  Future<List<QuyTrinh>> quyTrinh() => _dm('quy-trinh', QuyTrinh.tuJson);
+  Future<List<CoSo>> coSo() => _dm('co-so', CoSo.tuJson);
+  Future<List<NhanSu>> nhanSu() => _dm('nhan-su', NhanSu.tuJson);
 
-  Future<List<Kho>> kho() async =>
-      ((await _api.get('/api/v1/danh-muc/kho')) as List)
-          .map((e) => Kho.tuJson(e as Map<String, dynamic>)).toList();
+  Future<List<T>> _dm<T>(String duongDan, T Function(Map<String, dynamic>) doc) async =>
+      ((await _api.get('/api/v1/danh-muc/$duongDan')) as List)
+          .map((e) => doc(e as Map<String, dynamic>)).toList();
 }
 
 final khoLenhProvider = Provider<KhoLenhSanXuat>((ref) => KhoLenhSanXuat(ref.watch(apiProvider)));
@@ -134,3 +145,9 @@ class DanhSachLenhNotifier extends AsyncNotifier<List<LenhSanXuat>> {
 
 final thanhPhamProvider = FutureProvider<List<ThanhPham>>((ref) => ref.watch(khoLenhProvider).thanhPham());
 final khoProvider = FutureProvider<List<Kho>>((ref) => ref.watch(khoLenhProvider).kho());
+
+/// Chỉ giữ quy trình có ít nhất một khâu - quy trình rỗng không lập lệnh được.
+final quyTrinhProvider = FutureProvider<List<QuyTrinh>>(
+    (ref) async => (await ref.watch(khoLenhProvider).quyTrinh()).where((q) => q.khau.isNotEmpty).toList());
+final coSoProvider = FutureProvider<List<CoSo>>((ref) => ref.watch(khoLenhProvider).coSo());
+final nhanSuProvider = FutureProvider<List<NhanSu>>((ref) => ref.watch(khoLenhProvider).nhanSu());

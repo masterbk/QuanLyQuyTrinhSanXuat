@@ -19,5 +19,8 @@ public enum LoaiGiaoDichKho
     DieuChinh = 4,
 
     /// <summary>Bút toán đảo khi huỷ lệnh sản xuất đã thực hiện: trả nguyên liệu (+), thu hồi thành phẩm (−).</summary>
-    HoanTacSanXuat = 5
+    HoanTacSanXuat = 5,
+
+    /// <summary>Bút toán đảo khi huỷ đơn hàng bán đã xuất kho: trả thành phẩm về đúng lô (+).</summary>
+    HoanTacXuatBan = 6
 }

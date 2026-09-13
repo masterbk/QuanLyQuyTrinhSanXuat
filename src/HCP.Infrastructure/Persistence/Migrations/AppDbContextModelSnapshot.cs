@@ -40,6 +40,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
+
                     b.Property<string>("GhiChu")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
@@ -65,6 +68,10 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("MaTraCuu")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<DateOnly>("NgayNhap")
                         .HasColumnType("date");
 
@@ -88,6 +95,8 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("MaTraCuu");
 
                     b.HasIndex("MaLo", "TenantId")
                         .IsUnique()
@@ -304,6 +313,51 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.BoDemMa", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("GiaTri")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<string>("Khoa")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Khoa", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_BoDemMa_Khoa");
+
+                    b.ToTable("BoDemMa", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.DinhMucNguyenLieu", b =>
                 {
                     b.Property<int>("Id")
@@ -369,6 +423,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
 
                     b.Property<string>("MaCoSo")
                         .HasMaxLength(255)
@@ -611,6 +668,218 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.HasIndex("DishId", "ThuTu");
 
                     b.ToTable("DishSteps", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangBan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DiaChiGiao")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("GhiChu")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("HnCCoThayDoi")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LyDoHuy")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaDonHang")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaDonHnC")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaKhachHang")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaKho")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaNguoiGiao")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaTraCuu")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateOnly>("NgayDat")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("NgayGiao")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Nguon")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("ThoiGianGiaoUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ThoiGianHuyUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ThoiGianXuatKhoUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TrangThai")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TrangThaiHnC")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MaDonHnC");
+
+                    b.HasIndex("MaKhachHang");
+
+                    b.HasIndex("MaTraCuu");
+
+                    b.HasIndex("MaDonHang", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DonHangBan_MaDonHang");
+
+                    b.ToTable("DonHangBan", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangBanDong", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("DonGia")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("DonHangBanId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("GhiChu")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaThanhPham")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal>("SoLuong")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonHangBanId");
+
+                    b.ToTable("DonHangBanDong", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangBanXuatLo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DonHangBanDongId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("HanSuDung")
+                        .HasColumnType("date");
+
+                    b.Property<string>("MaLo")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal>("SoLuong")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonHangBanDongId");
+
+                    b.ToTable("DonHangBanXuatLo", (string)null);
 
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
@@ -862,6 +1131,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
+
                     b.Property<string>("MaCoSo")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -925,6 +1197,10 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("MaKhachHang")
                         .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaTruongHnC")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
@@ -1047,9 +1323,6 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<DateOnly?>("HanSuDungThanhPham")
-                        .HasColumnType("date");
-
                     b.Property<string>("LyDoHuy")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -1064,26 +1337,8 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
-                    b.Property<string>("MaLoDaTao")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaLoThanhPham")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaThanhPham")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
                     b.Property<DateOnly>("NgaySanXuat")
                         .HasColumnType("date");
-
-                    b.Property<decimal>("SoLuong")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
 
                     b.Property<bool>("TaoLoDongBo")
                         .HasColumnType("bit");
@@ -1138,7 +1393,7 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<int>("LenhSanXuatId")
+                    b.Property<int>("LenhSanXuatSanPhamId")
                         .HasColumnType("int");
 
                     b.Property<string>("MaFile")
@@ -1167,9 +1422,131 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LenhSanXuatId");
+                    b.HasIndex("LenhSanXuatSanPhamId");
 
                     b.ToTable("LenhSanXuatAnh", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatKhau", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GhiChu")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("LenhSanXuatSanPhamId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaCoSo")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaKhau")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("NguoiThucHienCsv")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("ThuTu")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LenhSanXuatSanPhamId");
+
+                    b.ToTable("LenhSanXuatKhau", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatSanPham", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly?>("HanSuDung")
+                        .HasColumnType("date");
+
+                    b.Property<int>("LenhSanXuatId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaLoDaTao")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaLoThanhPham")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaQuyTrinh")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaThanhPham")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal>("SoLuong")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LenhSanXuatId");
+
+                    b.ToTable("LenhSanXuatSanPham", (string)null);
 
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
@@ -1188,7 +1565,7 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("LenhSanXuatId")
+                    b.Property<int>("LenhSanXuatSanPhamId")
                         .HasColumnType("int");
 
                     b.Property<string>("MaLo")
@@ -1218,364 +1595,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LenhSanXuatId");
+                    b.HasIndex("LenhSanXuatSanPhamId");
 
                     b.ToTable("LenhSanXuatTieuHao", (string)null);
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.Order", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DiaChiNhan")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("DiemGiao")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("GhiChu")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<string>("LoaiDonHang")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("MaDonHang")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaNguoiGiao")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaTruong")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<DateOnly?>("NgayDonHang")
-                        .HasColumnType("date");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("TrangThai")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MaDonHang", "TenantId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Orders_MaDonHang");
-
-                    b.ToTable("Orders", (string)null);
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.OrderExport", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MaKho")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaLo")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaLoaiSp")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("MaSanPham")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaXuatKho")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("SoLuong")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId");
-
-                    b.ToTable("OrderExports", (string)null);
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.OrderImage", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PathFile")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId", "SortOrder", "TenantId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_OrderImages_OrderId_SortOrder");
-
-                    b.ToTable("OrderImages", (string)null);
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.OrderLine", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MaLoaiSp")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("MaMonAn")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaSanPham")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PathFile")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<decimal>("SoLuong")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId");
-
-                    b.ToTable("OrderLines", (string)null);
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.PhieuXuatBan", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("GhiChu")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("MaKhachHang")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaKho")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaPhieu")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<DateOnly>("NgayXuat")
-                        .HasColumnType("date");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<DateTime?>("ThoiGianHoanThanhUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("TrangThai")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MaPhieu", "TenantId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_PhieuXuatBan_MaPhieu");
-
-                    b.ToTable("PhieuXuatBan", (string)null);
-
-                    b.HasAnnotation("Finbuckle:MultiTenant", true);
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.PhieuXuatBanChiTiet", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MaThanhPham")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<int>("PhieuXuatBanId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("SoLuong")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PhieuXuatBanId", "MaThanhPham", "TenantId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_PhieuXuatBanChiTiet_PhieuXuatBanId_MaThanhPham");
-
-                    b.ToTable("PhieuXuatBanChiTiet", (string)null);
 
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
@@ -1642,6 +1664,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<string>("DonViTinh")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Gtin")
                         .HasMaxLength(50)
@@ -1721,6 +1746,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
+
                     b.Property<int?>("MaDanhMucThucPham")
                         .HasColumnType("int");
 
@@ -1769,6 +1797,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
 
                     b.Property<string>("GhiChu")
                         .HasMaxLength(1000)
@@ -1847,6 +1878,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<string>("DienThoai")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
 
                     b.Property<string>("HoTen")
                         .IsRequired()
@@ -1986,6 +2020,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
+
                     b.Property<DateOnly?>("HopDongNgayHetHan")
                         .HasColumnType("date");
 
@@ -2098,6 +2135,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("DienTich")
                         .HasPrecision(8, 2)
                         .HasColumnType("decimal(8,2)");
+
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
 
                     b.Property<string>("MaKho")
                         .IsRequired()
@@ -2293,6 +2333,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("BatDongBo")
+                        .HasColumnType("bit");
 
                     b.Property<string>("ClientId")
                         .IsRequired()
@@ -2649,6 +2692,28 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Navigation("Dish");
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangBanDong", b =>
+                {
+                    b.HasOne("HCP.Domain.Entities.Business.DonHangBan", "DonHangBan")
+                        .WithMany("Dong")
+                        .HasForeignKey("DonHangBanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DonHangBan");
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangBanXuatLo", b =>
+                {
+                    b.HasOne("HCP.Domain.Entities.Business.DonHangBanDong", "DonHangBanDong")
+                        .WithMany("XuatLo")
+                        .HasForeignKey("DonHangBanDongId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DonHangBanDong");
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangNhanDong", b =>
                 {
                     b.HasOne("HCP.Domain.Entities.Business.DonHangNhan", "DonHangNhan")
@@ -2673,8 +2738,30 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatAnh", b =>
                 {
+                    b.HasOne("HCP.Domain.Entities.Business.LenhSanXuatSanPham", "LenhSanXuatSanPham")
+                        .WithMany("Anh")
+                        .HasForeignKey("LenhSanXuatSanPhamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LenhSanXuatSanPham");
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatKhau", b =>
+                {
+                    b.HasOne("HCP.Domain.Entities.Business.LenhSanXuatSanPham", "LenhSanXuatSanPham")
+                        .WithMany("Khau")
+                        .HasForeignKey("LenhSanXuatSanPhamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LenhSanXuatSanPham");
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatSanPham", b =>
+                {
                     b.HasOne("HCP.Domain.Entities.Business.LenhSanXuat", "LenhSanXuat")
-                        .WithMany("DanhSachAnh")
+                        .WithMany("SanPham")
                         .HasForeignKey("LenhSanXuatId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -2684,57 +2771,13 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatTieuHao", b =>
                 {
-                    b.HasOne("HCP.Domain.Entities.Business.LenhSanXuat", "LenhSanXuat")
+                    b.HasOne("HCP.Domain.Entities.Business.LenhSanXuatSanPham", "LenhSanXuatSanPham")
                         .WithMany("TieuHao")
-                        .HasForeignKey("LenhSanXuatId")
+                        .HasForeignKey("LenhSanXuatSanPhamId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("LenhSanXuat");
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.OrderExport", b =>
-                {
-                    b.HasOne("HCP.Domain.Entities.Business.Order", "Order")
-                        .WithMany("XuatKho")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.OrderImage", b =>
-                {
-                    b.HasOne("HCP.Domain.Entities.Business.Order", "Order")
-                        .WithMany("Images")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.OrderLine", b =>
-                {
-                    b.HasOne("HCP.Domain.Entities.Business.Order", "Order")
-                        .WithMany("ChiTiet")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.PhieuXuatBanChiTiet", b =>
-                {
-                    b.HasOne("HCP.Domain.Entities.Business.PhieuXuatBan", "PhieuXuatBan")
-                        .WithMany("ChiTiet")
-                        .HasForeignKey("PhieuXuatBanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PhieuXuatBan");
+                    b.Navigation("LenhSanXuatSanPham");
                 });
 
             modelBuilder.Entity("HCP.Domain.Entities.Business.ProcessStepLine", b =>
@@ -2828,6 +2871,16 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Navigation("DanhSachNguyenLieu");
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangBan", b =>
+                {
+                    b.Navigation("Dong");
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangBanDong", b =>
+                {
+                    b.Navigation("XuatLo");
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.DonHangNhan", b =>
                 {
                     b.Navigation("Dong");
@@ -2840,23 +2893,16 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuat", b =>
                 {
-                    b.Navigation("DanhSachAnh");
+                    b.Navigation("SanPham");
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatSanPham", b =>
+                {
+                    b.Navigation("Anh");
+
+                    b.Navigation("Khau");
 
                     b.Navigation("TieuHao");
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.Order", b =>
-                {
-                    b.Navigation("ChiTiet");
-
-                    b.Navigation("Images");
-
-                    b.Navigation("XuatKho");
-                });
-
-            modelBuilder.Entity("HCP.Domain.Entities.Business.PhieuXuatBan", b =>
-                {
-                    b.Navigation("ChiTiet");
                 });
 
             modelBuilder.Entity("HCP.Domain.Entities.Business.Product", b =>

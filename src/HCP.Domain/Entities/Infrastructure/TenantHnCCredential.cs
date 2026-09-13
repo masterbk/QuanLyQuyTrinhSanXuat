@@ -28,4 +28,10 @@ public class TenantHnCCredential
     public bool DaXacThuc { get; set; }
     public DateTime? NgayXacThucUtc { get; set; }
     public string? LoiXacThucGanNhat { get; set; }
+
+    /// <summary>
+    /// Công tắc tổng: cơ sở có gửi dữ liệu sang / kéo đơn từ HanoiCheck không.
+    /// Tắt = dùng phần mềm như hệ thống quản lý nội bộ.
+    /// </summary>
+    public bool BatDongBo { get; set; } = true;
 }

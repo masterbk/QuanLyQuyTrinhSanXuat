@@ -1,0 +1,74 @@
+@page "/tra-cuu/don-hang/{ma}"
+@model HCP.Web.Pages.TraCuu.DonHangModel
+@{
+    Layout = "_LayoutTraCuu";
+    var d = Model.Don;
+    ViewData["Title"] = d is null ? "Không tìm thấy đơn hàng" : $"Đơn hàng {d.MaDonHang}";
+}
+
+@if (d is null)
+{
+    <div class="alert alert-warning mt-4">Không tìm thấy đơn hàng. Mã QR có thể không đúng hoặc đơn đã bị xoá.</div>
+    return;
+}
+
+<partial name="_CoSoTraCuu" model="d.CoSo" />
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <div class="nhan">Đơn hàng</div>
+                <h5 class="mb-1">@d.MaDonHang</h5>
+            </div>
+            <span class="badge @(d.TrangThai == "Đã huỷ" ? "bg-danger" : d.TrangThai == "Đã giao" ? "bg-success" : "bg-primary") fs-6">@d.TrangThai</span>
+        </div>
+        <div class="row g-2 mt-1">
+            <div class="col-12"><span class="nhan">Khách hàng:</span> @d.TenKhachHang</div>
+            <div class="col-6"><span class="nhan">Ngày đặt:</span> @d.NgayDat.ToString("dd/MM/yyyy")</div>
+            @if (d.NgayGiao is { } ngayGiao)
+            {
+                <div class="col-6"><span class="nhan">Hẹn giao:</span> @ngayGiao.ToString("dd/MM/yyyy")</div>
+            }
+            @if (d.ThoiGianGiaoUtc is { } giaoUtc)
+            {
+                <div class="col-12"><span class="nhan">Đã giao lúc:</span> @giaoUtc.AddHours(7).ToString("HH:mm dd/MM/yyyy")</div>
+            }
+        </div>
+    </div>
+</div>
+
+<h6 class="mb-2">Sản phẩm (@d.Dong.Count)</h6>
+@foreach (var dong in d.Dong)
+{
+    <div class="card shadow-sm mb-2">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between">
+                <strong>@dong.TenSanPham</strong>
+                <span>@dong.SoLuong.ToString("#,0.###") @dong.DonViTinh</span>
+            </div>
+            <div class="nhan">Mã: @dong.MaSanPham</div>
+            @if (dong.Lo.Count == 0)
+            {
+                <div class="nhan fst-italic">Chưa xuất kho.</div>
+            }
+            @foreach (var lo in dong.Lo)
+            {
+                <div class="border-top mt-2 pt-2 small">
+                    Lô
+                    @if (lo.MaTraCuu is not null)
+                    {
+                        <a href="/tra-cuu/lo/@lo.MaTraCuu"><strong>@lo.MaLo</strong></a>
+                    }
+                    else
+                    {
+                        <strong>@lo.MaLo</strong>
+                    }
+                    · SL @lo.SoLuong.ToString("#,0.###")
+                    @if (lo.NgaySanXuat is { } nsx) { <span> · NSX @nsx.ToString("dd/MM/yyyy")</span> }
+                    @if (lo.HanSuDung is { } hsd) { <span> · HSD @hsd.ToString("dd/MM/yyyy")</span> }
+                </div>
+            }
+        </div>
+    </div>
+}

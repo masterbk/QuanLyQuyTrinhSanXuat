@@ -6,9 +6,12 @@ namespace HCP.Domain.Entities.Business;
 /// Quy trình sản xuất: một chuỗi khâu sản xuất có thứ tự, gắn với một danh mục thực phẩm.
 /// Đồng bộ qua POST /supplier/processes/merge (đồng bộ, trả 200).
 /// </summary>
-public class ProductionProcess : TenantEntity
+public class ProductionProcess : TenantEntity, ICoDongBoHnC
 {
     public int Id { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_quy_trinh - khoá nghiệp vụ.</summary>
     public string MaQuyTrinh { get; set; } = string.Empty;

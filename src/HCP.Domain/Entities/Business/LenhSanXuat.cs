@@ -14,20 +14,8 @@ public class LenhSanXuat : TenantEntity
     /// <summary>Mã lệnh (khoá nghiệp vụ).</summary>
     public string MaLenh { get; set; } = string.Empty;
 
-    /// <summary>Thành phẩm cần sản xuất.</summary>
-    public string MaThanhPham { get; set; } = string.Empty;
-
-    /// <summary>Số lượng thành phẩm cần làm.</summary>
-    public decimal SoLuong { get; set; }
-
-    /// <summary>Kho xuất nguyên liệu và nhập thành phẩm.</summary>
+    /// <summary>Kho xuất nguyên liệu và nhập thành phẩm (dùng chung cho mọi sản phẩm trong lệnh).</summary>
     public string MaKho { get; set; } = string.Empty;
-
-    /// <summary>Mã lô thành phẩm tạo ra.</summary>
-    public string MaLoThanhPham { get; set; } = string.Empty;
-
-    /// <summary>Hạn sử dụng của lô thành phẩm.</summary>
-    public DateOnly? HanSuDungThanhPham { get; set; }
 
     public DateOnly NgaySanXuat { get; set; }
 
@@ -39,9 +27,6 @@ public class LenhSanXuat : TenantEntity
     /// </summary>
     public bool TaoLoDongBo { get; set; }
 
-    /// <summary>Mã lô sản xuất (Batch) đã sinh tự động khi thực hiện (nếu có) - để hiển thị/tra cứu.</summary>
-    public string? MaLoDaTao { get; set; }
-
     public DateTime? ThoiGianHoanThanhUtc { get; set; }
 
     /// <summary>Thời điểm huỷ lệnh (đã ghi bút toán đảo kho).</summary>
@@ -52,9 +37,6 @@ public class LenhSanXuat : TenantEntity
 
     public string? GhiChu { get; set; }
 
-    /// <summary>Nguyên liệu (theo lô) đã tiêu hao khi thực hiện lệnh - lưu để truy xuất.</summary>
-    public List<LenhSanXuatTieuHao> TieuHao { get; set; } = new();
-
-    /// <summary>Ảnh lô thành phẩm chụp lúc hoàn thành lệnh (bắt buộc ít nhất 1).</summary>
-    public List<LenhSanXuatAnh> DanhSachAnh { get; set; } = new();
+    /// <summary>Các thành phẩm của lệnh - mỗi dòng là một lô riêng, có quy trình và khâu riêng.</summary>
+    public List<LenhSanXuatSanPham> SanPham { get; set; } = new();
 }

@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,11 +15,13 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
 {
     private readonly AppDbContext _db;
     private readonly ISyncOutboxWriter _outbox;
+    private readonly IMaTuSinhService _maTuSinh;
 
-    public KhauSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    public KhauSanXuatService(AppDbContext db, ISyncOutboxWriter outbox, IMaTuSinhService maTuSinh)
     {
         _db = db;
         _outbox = outbox;
+        _maTuSinh = maTuSinh;
     }
 
     public async Task<IReadOnlyList<ProductionStep>> LayTatCaAsync(CancellationToken ct = default) =>
@@ -29,22 +32,18 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
 
     public async Task<KetQuaThaoTac> ThemAsync(ProductionStep entity, CancellationToken ct = default)
     {
-        entity.MaKhau = entity.MaKhau.Trim();
-
-        if (await _db.ProductionSteps.AnyAsync(s => s.MaKhau == entity.MaKhau, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã khâu \"{entity.MaKhau}\" đã tồn tại.");
-        }
-
         entity.TenKhau = entity.TenKhau.Trim();
         entity.GhiChu = entity.GhiChu?.Trim();
+
+        // Mã do hệ thống cấp (KHAU-0001...), bỏ qua mọi mã gửi lên.
+        entity.MaKhau = await _maTuSinh.SinhAsync(LoaiMaTuSinh.Khau, ct: ct);
 
         _db.ProductionSteps.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("ProductionStep", entity.MaKhau, HnCPayloadMapper.Khau(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm khâu \"{entity.TenKhau}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm khâu \"{entity.TenKhau}\" (mã {entity.MaKhau}).").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(ProductionStep entity, CancellationToken ct = default)
@@ -52,50 +51,17 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
         var hienTai = await LayTheoIdAsync(entity.Id, ct);
         if (hienTai is null) return KetQuaThaoTac.Loi("Không tìm thấy khâu sản xuất cần sửa.");
 
-        var maMoi = entity.MaKhau.Trim();
-
-        if (await _db.ProductionSteps.AnyAsync(s => s.MaKhau == maMoi && s.Id != entity.Id, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã khâu \"{maMoi}\" đã được dùng cho khâu khác.");
-        }
-
-        // Đổi mã khâu sẽ làm các quy trình đang tham chiếu mã cũ trở nên sai.
-        // Cập nhật đồng thời để không gửi sang HanoiCheck mã khâu không tồn tại (lỗi 422).
-        var idQuyTrinhAnhHuong = new List<int>();
-        if (!string.Equals(hienTai.MaKhau, maMoi, StringComparison.Ordinal))
-        {
-            var maCu = hienTai.MaKhau;
-            var dongLienQuan = await _db.ProcessStepLines
-                .Where(l => l.MaKhau == maCu)
-                .ToListAsync(ct);
-
-            foreach (var dong in dongLienQuan) dong.MaKhau = maMoi;
-            idQuyTrinhAnhHuong = dongLienQuan.Select(l => l.ProductionProcessId).Distinct().ToList();
-        }
-
-        hienTai.MaKhau = maMoi;
+        // Mã khâu KHÔNG sửa được: quy trình, lô, lệnh sản xuất và HanoiCheck đều tham chiếu theo mã.
         hienTai.TenKhau = entity.TenKhau.Trim();
         hienTai.GhiChu = entity.GhiChu?.Trim();
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("ProductionStep", hienTai.MaKhau, HnCPayloadMapper.Khau(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        // Mã khâu đổi -> các quy trình đang dùng nó cũng phải đồng bộ lại, nếu không dữ liệu
-        // quy trình phía HanoiCheck sẽ giữ mã khâu cũ (sai âm thầm).
-        if (idQuyTrinhAnhHuong.Count > 0)
-        {
-            var quyTrinhLienQuan = await _db.ProductionProcesses
-                .Include(p => p.DanhSachKhau)
-                .Where(p => idQuyTrinhAnhHuong.Contains(p.Id))
-                .ToListAsync(ct);
-
-            foreach (var qt in quyTrinhLienQuan)
-                await _outbox.ThemAsync("ProductionProcess", qt.MaQuyTrinh, HnCPayloadMapper.QuyTrinh(qt), ct);
-        }
-
-        return KetQuaThaoTac.Ok($"Đã cập nhật khâu \"{hienTai.TenKhau}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật khâu \"{hienTai.TenKhau}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)

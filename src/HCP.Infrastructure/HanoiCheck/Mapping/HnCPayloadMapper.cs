@@ -110,6 +110,47 @@ public static class HnCPayloadMapper
         }
     };
 
+    // ---------- Quy định đường dẫn tệp (đặc tả v2.2, Phần III mục 5) ----------
+
+    private static readonly HashSet<string> DuoiAnh =
+        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+
+    private static readonly HashSet<string> DuoiTepKhau =
+        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".doc", ".docx" };
+
+    /// <summary>Đuôi file của đường dẫn, bỏ phần sau dấu ? hoặc # (đặc tả cho phép kèm query).</summary>
+    public static string DuoiDuongDan(string? duongDan)
+    {
+        if (string.IsNullOrWhiteSpace(duongDan)) return "";
+        var phanChinh = duongDan.Split('?', '#')[0];
+        return Path.GetExtension(phanChinh).ToLowerInvariant();
+    }
+
+    private static bool LaGoogleDrive(string? duongDan) =>
+        duongDan?.Contains("drive.google.com", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>Ảnh album của lô: đuôi ảnh, KHÔNG nhận Google Drive.</summary>
+    public static bool LaDuongDanAnhLo(string? duongDan) =>
+        DuoiAnh.Contains(DuoiDuongDan(duongDan)) && !LaGoogleDrive(duongDan);
+
+    /// <summary>Tệp minh chứng theo khâu: ảnh, PDF, Word, hoặc đường dẫn Google Drive.</summary>
+    public static bool LaDuongDanTepKhau(string? duongDan) =>
+        DuoiTepKhau.Contains(DuoiDuongDan(duongDan)) || LaGoogleDrive(duongDan);
+
+    /// <summary>
+    /// File thuộc album ảnh chung của lô = file KHÔNG gắn bước sản xuất. File có mã bước SX là tệp minh
+    /// chứng của đúng khâu đó (danh_sach_khau[].danh_sach_files).
+    /// </summary>
+    public static bool LaAnhLo(BatchFile f) => string.IsNullOrWhiteSpace(f.MaBuocSx);
+
+    private static string MimeAnh(string duongDan) => DuoiDuongDan(duongDan) switch
+    {
+        ".png" => "image/png",
+        ".gif" => "image/gif",
+        ".webp" => "image/webp",
+        _ => "image/jpeg"
+    };
+
     public static object LoSanXuat(Batch b) => new[]
     {
         new
@@ -121,12 +162,17 @@ public static class HnCPayloadMapper
             ngay_san_xuat = Ngay(b.NgaySanXuat),
             han_su_dung = Ngay(b.HanSuDung),
             dia_chi_thu_mua = b.DiaChiThuMua,
-            ma_co_so = b.MaCoSo,
             ma_ncc_dau_vao = b.MaNccDauVao,
             ghi_chu = b.GhiChu,
+            // v2.2: ma_co_so cấp lô đã bỏ - cơ sở chỉ khai theo từng khâu.
 
             // danh_sach_kho bắt buộc ≥1 (service đã kiểm tra), luôn gửi.
             danh_sach_kho = b.DanhSachKho.Select(w => new { ma_kho = w.MaKho }).ToArray(),
+
+            // Album ảnh của lô: BẮT BUỘC 1-3 ảnh, THAY THẾ TOÀN BỘ mỗi lần gửi -> luôn gửi đủ.
+            danh_sach_anh = b.DanhSachFile.Where(LaAnhLo)
+                .Select(f => new { ten_anh = f.TenFile, duong_dan = f.DuongDan, loai = MimeAnh(f.DuongDan) })
+                .ToArray(),
 
             // Các mảng tuỳ chọn: rỗng thì bỏ hẳn thay vì gửi [].
             danh_sach_khau = b.DanhSachKhau.Count == 0 ? null : b.DanhSachKhau
@@ -146,67 +192,22 @@ public static class HnCPayloadMapper
                     ma_qr_truy_vet = s.MaQrTruyVet,
                     ghi_chu = s.GhiChu,
                     ma_co_so = s.MaCoSo,
-                    ma_ncc_dau_vao = s.MaNccDauVao
-                })
-                .ToArray(),
-
-            danh_sach_file = b.DanhSachFile.Count == 0 ? null : b.DanhSachFile
-                .Select(f => new
-                {
-                    ma_file = f.MaFile,
-                    ma_khau = f.MaKhau,
-                    ma_buoc_sx = f.MaBuocSx,
-                    ten_file = f.TenFile,
-                    duong_dan = f.DuongDan,
-                    loai = f.Loai
+                    ma_ncc_dau_vao = s.MaNccDauVao,
+                    // v2.2: tệp minh chứng nằm TRONG khâu sở hữu nó (tối đa 3 tệp/khâu).
+                    danh_sach_files = TepCuaBuoc(b, s)
                 })
                 .ToArray()
         }
     };
 
-    public static object DonHang(Order o) => new[]
+    private static object[]? TepCuaBuoc(Batch b, BatchStep s)
     {
-        new
-        {
-            ma_don_hang = o.MaDonHang,
-            loai_don_hang = o.LoaiDonHang,
-            ma_truong = o.MaTruong,
-            dia_chi_nhan = o.DiaChiNhan,
-            diem_giao = o.DiemGiao,
-            ma_nguoi_giao = o.MaNguoiGiao,
-            trang_thai = o.TrangThai,
-            ngay_don_hang = Ngay(o.NgayDonHang),
-            ghi_chu = o.GhiChu,
-
-            images = o.Images.Count == 0 ? null : o.Images
-                .OrderBy(i => i.SortOrder)
-                .Select(i => new { path_file = i.PathFile, sort_order = i.SortOrder })
-                .ToArray(),
-
-            // chi_tiet bắt buộc ≥1 (service đã kiểm tra). Đơn food gửi ma_loai_sp, đơn dish gửi
-            // ma_mon_an; trường null bị bỏ nên mỗi dòng chỉ mang đúng khoá theo loại đơn.
-            chi_tiet = o.ChiTiet.Select(l => new
-            {
-                ma_loai_sp = l.MaLoaiSp,
-                ma_mon_an = l.MaMonAn,
-                so_luong = l.SoLuong,
-                path_file = l.PathFile
-            }).ToArray(),
-
-            // xuat_kho chỉ gửi khi có (chỉ đơn food mới có - service chặn đơn dish).
-            xuat_kho = o.XuatKho.Count == 0 ? null : o.XuatKho
-                .Select(x => new
-                {
-                    ma_xuat_kho = x.MaXuatKho,
-                    ma_loai_sp = x.MaLoaiSp,
-                    ma_san_pham = x.MaSanPham,
-                    ma_kho = x.MaKho,
-                    ma_lo = x.MaLo,
-                    so_luong = x.SoLuong
-                })
-                .ToArray()
-        }
-    };
+        var tep = b.DanhSachFile
+            .Where(f => !LaAnhLo(f) && string.Equals(f.MaBuocSx!.Trim(), s.MaBuocSx.Trim(), StringComparison.Ordinal))
+            .Select(f => (object)new { ma_file = f.MaFile, ten_file = f.TenFile, duong_dan = f.DuongDan, loai = f.Loai })
+            .ToArray();
+        return tep.Length == 0 ? null : tep;
+    }
 
     public static object MonAn(Dish d) => new[]
     {

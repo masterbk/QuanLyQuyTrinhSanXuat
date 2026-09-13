@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.DanhMuc;
+using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,6 +39,10 @@ public class DanhMucIsolationTests
     {
         public Task ThemAsync(string entityType, string entityKey, object payload, CancellationToken ct = default)
             => Task.CompletedTask;
+
+        public Task<bool> DangBatAsync(CancellationToken ct = default) => Task.FromResult(true);
+
+        public Task<string?> GuiAsync(object banGhi, CancellationToken ct = default) => Task.FromResult<string?>(null);
     }
 
     /// <summary>Tạo sẵn cho mỗi cơ sở một khâu cùng mã và một quy trình dùng khâu đó.</summary>
@@ -82,38 +87,36 @@ public class DanhMucIsolationTests
     }
 
     [Fact]
-    public async Task Doi_Ma_Khau_O_Mot_Co_So_Khong_Dung_Toi_Co_So_Khac()
+    public async Task Sua_Khau_Giu_Nguyen_Ma_Va_Khong_Dung_Toi_Co_So_Khac()
     {
         TaoDuLieuHaiCoSoCungMaKhau();
 
         using (var db = OpenAs(CoSoA))
         {
-            var service = new KhauSanXuatService(db, new NoOpOutbox());
+            var service = new KhauSanXuatService(db, new NoOpOutbox(), new MaTuSinhService(db));
             var khau = await db.ProductionSteps.FirstAsync();
 
+            // Gửi kèm mã mới: mã khâu bị khoá nên chỉ tên được cập nhật.
             var ketQua = await service.CapNhatAsync(new ProductionStep
             {
                 Id = khau.Id,
                 MaKhau = "SO_CHE_MOI",
-                TenKhau = khau.TenKhau
+                TenKhau = "Sơ chế (đã sửa)"
             });
 
             Assert.True(ketQua.ThanhCong, ketQua.ThongBao);
         }
 
-        // Cơ sở A đổi mã thì dòng khâu của A phải đổi theo.
         using (var db = OpenAs(CoSoA))
         {
-            var dong = await db.ProcessStepLines.SingleAsync();
-            Assert.Equal("SO_CHE_MOI", dong.MaKhau);
+            var khau = await db.ProductionSteps.SingleAsync();
+            Assert.Equal("SO_CHE", khau.MaKhau);
+            Assert.Equal("Sơ chế (đã sửa)", khau.TenKhau);
+            Assert.Equal("SO_CHE", (await db.ProcessStepLines.SingleAsync()).MaKhau);
         }
 
-        // Còn dữ liệu cơ sở B phải nguyên vẹn.
         using (var db = OpenAs(CoSoB))
-        {
-            var dong = await db.ProcessStepLines.SingleAsync();
-            Assert.Equal("SO_CHE", dong.MaKhau);
-        }
+            Assert.Equal($"Sơ chế ({CoSoB})", (await db.ProductionSteps.SingleAsync()).TenKhau);
     }
 
     [Fact]
@@ -140,7 +143,7 @@ public class DanhMucIsolationTests
 
         using (var db = OpenAs(CoSoA))
         {
-            var service = new KhauSanXuatService(db, new NoOpOutbox());
+            var service = new KhauSanXuatService(db, new NoOpOutbox(), new MaTuSinhService(db));
             var khau = await db.ProductionSteps.FirstAsync();
 
             var ketQua = await service.XoaAsync(khau.Id);
@@ -220,28 +223,34 @@ public class DanhMucIsolationTests
     }
 
     [Fact]
-    public void Don_Hang_Va_Bang_Con_Bi_Loc_Theo_Co_So()
+    public void Don_Hang_Ban_Va_Bang_Con_Bi_Loc_Theo_Co_So()
     {
         foreach (var tenant in new[] { CoSoA, CoSoB })
         {
             using var db = OpenAs(tenant);
-            db.Orders.Add(new Order
+            db.DonHangBans.Add(new DonHangBan
             {
-                MaDonHang = "DH001", LoaiDonHang = "food", MaTruong = "TH_A", TrangThai = "DANG_GIAO",
-                ChiTiet = { new OrderLine { MaLoaiSp = "THIT", SoLuong = 50 } },
-                XuatKho = { new OrderExport { MaSanPham = "SP001", MaKho = "KHO01", MaLo = "LO01", SoLuong = 50 } }
+                MaDonHang = "DH001", MaKhachHang = "KH01", MaKho = "KHO01", NgayDat = new DateOnly(2026, 9, 13),
+                Dong =
+                {
+                    new DonHangBanDong
+                    {
+                        MaThanhPham = "SP001", SoLuong = 50, DonGia = 1000,
+                        XuatLo = { new DonHangBanXuatLo { MaLo = "LO01", SoLuong = 50 } }
+                    }
+                }
             });
             db.SaveChanges();
         }
 
         using var dbA = OpenAs(CoSoA);
-        Assert.Single(dbA.Orders.ToList());
-        Assert.Equal(CoSoA, dbA.Orders.Single().TenantId);
+        Assert.Single(dbA.DonHangBans.ToList());
+        Assert.Equal(CoSoA, dbA.DonHangBans.Single().TenantId);
 
-        // Bảng con xuất kho (mã lô trùng nhau giữa cơ sở) phải bị lọc.
-        var xk = dbA.OrderExports.Where(x => x.MaLo == "LO01").ToList();
-        Assert.Single(xk);
-        Assert.Equal(CoSoA, xk[0].TenantId);
+        // Bảng con phân bổ lô (mã lô trùng nhau giữa cơ sở) phải bị lọc.
+        var lo = dbA.DonHangBanXuatLos.Where(x => x.MaLo == "LO01").ToList();
+        Assert.Single(lo);
+        Assert.Equal(CoSoA, lo[0].TenantId);
     }
 
     [Fact]

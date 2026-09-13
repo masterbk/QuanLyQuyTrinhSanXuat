@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,13 +33,21 @@ class KhoGia implements KhoLenhSanXuat {
   @override
   Future<String> huy(int id, String lyDo) async => 'Đã huỷ';
   @override
-  Future<String> hoanThanh(int id, List<({String ten, Uint8List byte})> anh) async => 'Đã hoàn thành';
+  Future<String> hoanThanh(int id, Map<int, List<AnhDaChon>> anh, List<Map<String, dynamic>> khau) async =>
+      'Đã hoàn thành';
   @override
-  Future<List<NguyenLieuCan>> nguyenLieuCan(String maThanhPham, double soLuong, String maKho) async => [];
+  Future<List<NguyenLieuCan>> nguyenLieuCan(
+          List<({String maThanhPham, double soLuong})> dong, String maKho) async => [];
   @override
   Future<List<ThanhPham>> thanhPham() async => [];
   @override
   Future<List<Kho>> kho() async => [];
+  @override
+  Future<List<QuyTrinh>> quyTrinh() async => [];
+  @override
+  Future<List<CoSo>> coSo() async => [];
+  @override
+  Future<List<NhanSu>> nhanSu() async => [];
 }
 
 LenhSanXuat _lenh({
@@ -54,14 +60,20 @@ LenhSanXuat _lenh({
     LenhSanXuat(
       id: id,
       maLenh: ma,
-      maThanhPham: 'BANH_MI',
-      tenThanhPham: 'Bánh mì',
-      soLuong: soLuong,
       maKho: 'KHO01',
-      maLoThanhPham: 'LO-$id',
       ngaySanXuat: DateTime(2026, 9, 13),
       trangThai: trangThai,
       trangThaiHienThi: hienThi,
+      sanPham: [
+        SanPhamLenh(
+          id: id * 10,
+          maThanhPham: 'BANH_MI',
+          tenThanhPham: 'Bánh mì',
+          soLuong: soLuong,
+          maLoThanhPham: 'LO-$id',
+          maQuyTrinh: 'QT01',
+        ),
+      ],
     );
 
 Widget _app(KhoGia kho) => ProviderScope(
@@ -70,7 +82,7 @@ Widget _app(KhoGia kho) => ProviderScope(
     );
 
 void main() {
-  testWidgets('Hiện danh sách lệnh với mã, tên thành phẩm và trạng thái', (t) async {
+  testWidgets('Hiện danh sách lệnh với mã, tóm tắt sản phẩm và trạng thái', (t) async {
     await t.pumpWidget(_app(KhoGia(duLieu: [
       _lenh(id: 1, ma: 'LSX-001'),
       _lenh(id: 2, ma: 'LSX-002', trangThai: 'HoanThanh', hienThi: 'Hoàn thành'),
@@ -81,8 +93,8 @@ void main() {
     expect(find.text('LSX-002'), findsOneWidget);
     expect(find.text('Mới tạo'), findsWidgets);
     expect(find.text('Hoàn thành'), findsWidgets);
-    expect(find.text('Bánh mì'), findsNWidgets(2));
-    expect(find.text('LO-1'), findsOneWidget);          // mã lô hiện trên thẻ
+    expect(find.text('Bánh mì ×10'), findsNWidgets(2));  // tóm tắt sản phẩm + số lượng
+    expect(find.text('1 lô'), findsNWidgets(2));
   });
 
   testWidgets('Chưa có lệnh nào thì hiện lời nhắc, không hiện danh sách trống trơn', (t) async {

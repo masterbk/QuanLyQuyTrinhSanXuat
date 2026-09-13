@@ -84,6 +84,7 @@ else
             <MudNumericField @bind-Value="_input.DienTich" Label="Diện tích (m²)"
                              Variant="Variant.Outlined" Min="0m" Max="999999.99m"
                              HelperText="Không bắt buộc. Tối đa 999999.99." />
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -123,7 +124,7 @@ else
             ? new Warehouse()
             : new Warehouse
             {
-                Id = kho.Id,
+                Id = kho.Id, DongBoHnC = kho.DongBoHnC,
                 MaKho = kho.MaKho,
                 TenKho = kho.TenKho,
                 DiaChi = kho.DiaChi,

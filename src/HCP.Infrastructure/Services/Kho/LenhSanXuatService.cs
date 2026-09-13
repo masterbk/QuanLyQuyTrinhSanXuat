@@ -2,6 +2,8 @@ using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.DanhMuc;
+using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,163 +14,322 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
 {
     private readonly AppDbContext _db;
     private readonly ISyncOutboxWriter _outbox;
+    private readonly IMaTuSinhService _maTuSinh;
 
-    public LenhSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    public LenhSanXuatService(AppDbContext db, ISyncOutboxWriter outbox, IMaTuSinhService maTuSinh)
     {
         _db = db;
         _outbox = outbox;
+        _maTuSinh = maTuSinh;
     }
 
     public async Task<IReadOnlyList<LenhSanXuat>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.LenhSanXuats.AsNoTracking()
+            .Include(l => l.SanPham)
             .OrderByDescending(l => l.NgaySanXuat).ThenByDescending(l => l.Id)
             .ToListAsync(ct);
 
     public Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
-        _db.LenhSanXuats.Include(l => l.TieuHao).Include(l => l.DanhSachAnh)
-            .FirstOrDefaultAsync(l => l.Id == id, ct);
+        QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
+
+    private IQueryable<LenhSanXuat> QueryDayDu() =>
+        _db.LenhSanXuats
+            .Include(l => l.SanPham).ThenInclude(s => s.Khau)
+            .Include(l => l.SanPham).ThenInclude(s => s.TieuHao)
+            .Include(l => l.SanPham).ThenInclude(s => s.Anh);
+
+    // ==================== Xem trước nguyên liệu ====================
 
     public async Task<IReadOnlyList<NguyenLieuCanDto>> TinhNguyenLieuCanAsync(
-        string maThanhPham, decimal soLuong, string maKho, CancellationToken ct = default)
+        IReadOnlyList<(string MaThanhPham, decimal SoLuong)> dong, string maKho, CancellationToken ct = default)
     {
-        var tp = await _db.Products
-            .Include(p => p.DanhSachDinhMuc)
-            .FirstOrDefaultAsync(p => p.MaSanPham == maThanhPham, ct);
-        if (tp is null || tp.DanhSachDinhMuc.Count == 0) return Array.Empty<NguyenLieuCanDto>();
+        var can = await GopNhuCauAsync(dong, ct);
+        if (can.Count == 0) return Array.Empty<NguyenLieuCanDto>();
 
         var sanPham = await _db.Products.AsNoTracking().ToListAsync(ct);
-        var tenTheoMa = sanPham.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First());
+        var theoMa = sanPham.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First());
 
         var ket = new List<NguyenLieuCanDto>();
-        foreach (var dm in tp.DanhSachDinhMuc)
+        foreach (var (maNl, luong) in can.OrderBy(x => x.Key))
         {
-            var can = NhuCau(dm, soLuong);
-            var ton = await TonAsync(dm.MaNguyenLieu, maKho, ct);
-            var p = tenTheoMa.GetValueOrDefault(dm.MaNguyenLieu);
-            ket.Add(new NguyenLieuCanDto(dm.MaNguyenLieu, p?.TenSanPham ?? dm.MaNguyenLieu,
-                p?.DonViTinh, can, ton, ton >= can));
+            var ton = await TonAsync(maNl, maKho, ct);
+            var p = theoMa.GetValueOrDefault(maNl);
+            ket.Add(new NguyenLieuCanDto(maNl, p?.TenSanPham ?? maNl, p?.DonViTinh, luong, ton, ton >= luong));
         }
         return ket;
     }
 
+    /// <summary>Nhu cầu nguyên liệu của RIÊNG từng dòng sản phẩm, theo thứ tự dòng truyền vào.</summary>
+    private async Task<List<Dictionary<string, decimal>>> NhuCauTungDongAsync(
+        IReadOnlyList<(string MaThanhPham, decimal SoLuong)> dong, CancellationToken ct)
+    {
+        var ket = new List<Dictionary<string, decimal>>();
+        foreach (var d in dong)
+        {
+            var can = new Dictionary<string, decimal>();
+            ket.Add(can);
+            if (string.IsNullOrWhiteSpace(d.MaThanhPham) || d.SoLuong <= 0) continue;
+            var tp = await _db.Products.AsNoTracking().Include(p => p.DanhSachDinhMuc)
+                .FirstOrDefaultAsync(p => p.MaSanPham == d.MaThanhPham, ct);
+            if (tp is null) continue;
+            foreach (var dm in tp.DanhSachDinhMuc)
+                can[dm.MaNguyenLieu] = can.GetValueOrDefault(dm.MaNguyenLieu) + NhuCau(dm, d.SoLuong);
+        }
+        return ket;
+    }
+
+    /// <summary>
+    /// Cộng dồn nhu cầu nguyên liệu của mọi dòng sản phẩm. PHẢI cộng dồn trước khi so tồn:
+    /// hai dòng cùng dùng bột mì mà so riêng lẻ thì mỗi dòng đều "đủ" nhưng tổng lại thiếu.
+    /// </summary>
+    private async Task<Dictionary<string, decimal>> GopNhuCauAsync(
+        IReadOnlyList<(string MaThanhPham, decimal SoLuong)> dong, CancellationToken ct)
+    {
+        var tong = new Dictionary<string, decimal>();
+        foreach (var can in await NhuCauTungDongAsync(dong, ct))
+            foreach (var (ma, luong) in can)
+                tong[ma] = tong.GetValueOrDefault(ma) + luong;
+        return tong;
+    }
+
+    // ==================== Tạo / sửa ====================
+
     public async Task<KetQuaThaoTac> TaoAsync(LenhSanXuat lenh, CancellationToken ct = default)
     {
-        var loi = await KiemTraAsync(lenh, idDangSua: null, ct);
+        // Mã lệnh và mã lô do hệ thống cấp: bỏ qua mọi mã gửi lên.
+        foreach (var sp in lenh.SanPham) sp.MaLoThanhPham = "";
+        if (lenh.NgaySanXuat == default) lenh.NgaySanXuat = MaTuSinhService.HomNay;
+
+        var loi = await KiemTraAsync(lenh, maLoDuocGiu: null, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
+
+        // Sinh SAU khi dữ liệu hợp lệ (không phí số) và TRƯỚC khi Add (hàm sinh tự SaveChanges bộ đếm).
+        lenh.MaLenh = await _maTuSinh.SinhAsync(LoaiMaTuSinh.LenhSanXuat, lenh.NgaySanXuat, ct);
+        await GanMaLoChoDongMoiAsync(lenh, ct);
 
         lenh.TrangThai = TrangThaiLenhSX.MoiTao;
         _db.LenhSanXuats.Add(lenh);
         await _db.SaveChangesAsync(ct);
-        return KetQuaThaoTac.Ok($"Đã tạo lệnh sản xuất \"{lenh.MaLenh}\". Bấm \"Hoàn thành\" để trừ nguyên liệu.");
+        return KetQuaThaoTac.Ok($"Đã tạo lệnh sản xuất \"{lenh.MaLenh}\" với {lenh.SanPham.Count} sản phẩm. "
+                                + "Bấm \"Hoàn thành\" để trừ nguyên liệu.");
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(LenhSanXuat lenh, CancellationToken ct = default)
     {
-        var goc = await _db.LenhSanXuats.FirstOrDefaultAsync(l => l.Id == lenh.Id, ct);
+        var goc = await QueryDayDu().FirstOrDefaultAsync(l => l.Id == lenh.Id, ct);
         if (goc is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
         // Kiểm tra trên bản trong DB chứ không tin trạng thái màn hình gửi lên: lệnh có thể vừa
         // được hoàn thành ở tab khác - khi đó kho đã trừ, sửa số lượng sẽ lệch sổ kho.
         if (goc.TrangThai != TrangThaiLenhSX.MoiTao)
             return KetQuaThaoTac.Loi("Chỉ sửa được lệnh chưa hoàn thành. Lệnh đã hoàn thành thì dùng \"Huỷ lệnh\" rồi tạo lệnh mới.");
 
-        var loi = await KiemTraAsync(lenh, idDangSua: goc.Id, ct);
+        // Dòng cũ phải giữ đúng mã lô đã cấp; dòng mới để trống và được cấp mã khi lưu.
+        var maLoCu = goc.SanPham.Select(s => s.MaLoThanhPham)
+            .ToDictionary(m => m, m => m, StringComparer.OrdinalIgnoreCase);
+        var loi = await KiemTraAsync(lenh, maLoCu, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
-        goc.MaLenh = lenh.MaLenh;
-        goc.MaThanhPham = lenh.MaThanhPham;
-        goc.SoLuong = lenh.SoLuong;
+        await GanMaLoChoDongMoiAsync(lenh, ct);
+
+        // Mã lệnh KHÔNG đổi.
         goc.MaKho = lenh.MaKho;
-        goc.MaLoThanhPham = lenh.MaLoThanhPham;
-        goc.HanSuDungThanhPham = lenh.HanSuDungThanhPham;
         goc.NgaySanXuat = lenh.NgaySanXuat;
         goc.GhiChu = lenh.GhiChu;
         goc.TaoLoDongBo = lenh.TaoLoDongBo;
+
+        // Lệnh chưa hoàn thành nên chưa có tiêu hao/ảnh: thay nguyên danh sách sản phẩm cho gọn.
+        _db.LenhSanXuatSanPhams.RemoveRange(goc.SanPham);
+        goc.SanPham = lenh.SanPham;
+
         await _db.SaveChangesAsync(ct);
         return KetQuaThaoTac.Ok($"Đã cập nhật lệnh sản xuất \"{goc.MaLenh}\".");
     }
 
     /// <summary>
-    /// Chuẩn hoá + kiểm tra dữ liệu lệnh (dùng chung cho tạo và sửa). Trả về thông báo lỗi, hoặc null
-    /// nếu hợp lệ. idDangSua: bỏ qua chính lệnh đó khi kiểm tra trùng mã.
+    /// Chuẩn hoá + kiểm tra dữ liệu lệnh (dùng chung cho tạo và sửa). Trả về thông báo lỗi, hoặc null nếu hợp lệ.
+    /// <paramref name="maLoDuocGiu"/>: mã lô đã cấp của lệnh đang sửa (null khi tạo mới) - dòng nào mang mã
+    /// thì mã đó phải thuộc tập này, vì mã lô do hệ thống sinh và không sửa được.
     /// </summary>
-    private async Task<string?> KiemTraAsync(LenhSanXuat lenh, int? idDangSua, CancellationToken ct)
+    private async Task<string?> KiemTraAsync(LenhSanXuat lenh, IReadOnlyDictionary<string, string>? maLoDuocGiu,
+                                             CancellationToken ct)
     {
-        lenh.MaLenh = lenh.MaLenh?.Trim() ?? "";
-        lenh.MaThanhPham = lenh.MaThanhPham?.Trim() ?? "";
         lenh.MaKho = lenh.MaKho?.Trim() ?? "";
-        lenh.MaLoThanhPham = lenh.MaLoThanhPham?.Trim() ?? "";
         lenh.GhiChu = string.IsNullOrWhiteSpace(lenh.GhiChu) ? null : lenh.GhiChu.Trim();
 
-        if (string.IsNullOrWhiteSpace(lenh.MaLenh)) return "Vui lòng nhập mã lệnh.";
-        if (await _db.LenhSanXuats.AnyAsync(l => l.MaLenh == lenh.MaLenh && l.Id != idDangSua, ct))
-            return $"Mã lệnh \"{lenh.MaLenh}\" đã tồn tại.";
-        if (lenh.SoLuong <= 0) return "Số lượng sản xuất phải lớn hơn 0.";
-        if (string.IsNullOrWhiteSpace(lenh.MaLoThanhPham)) return "Vui lòng nhập mã lô thành phẩm.";
-
-        var tp = await _db.Products.Include(p => p.DanhSachDinhMuc)
-            .FirstOrDefaultAsync(p => p.MaSanPham == lenh.MaThanhPham, ct);
-        if (tp is null || tp.LoaiSanPham != LoaiSanPham.ThanhPham)
-            return "Vui lòng chọn thành phẩm hợp lệ.";
-        if (tp.DanhSachDinhMuc.Count == 0)
-            return $"\"{tp.TenSanPham}\" chưa có định mức. Khai định mức trước khi sản xuất.";
         if (!await _db.Warehouses.AnyAsync(k => k.MaKho == lenh.MaKho, ct))
             return "Vui lòng chọn kho hợp lệ.";
+        if (lenh.SanPham.Count == 0) return "Lệnh phải có ít nhất một sản phẩm.";
+
+        foreach (var sp in lenh.SanPham)
+        {
+            var ma = sp.MaLoThanhPham?.Trim() ?? "";
+            if (ma.Length == 0) { sp.MaLoThanhPham = ""; continue; }
+            if (maLoDuocGiu is null || !maLoDuocGiu.TryGetValue(ma, out var maGoc))
+                return $"Mã lô \"{ma}\" không thuộc lệnh này. Mã lô do hệ thống tự sinh, không sửa được.";
+            sp.MaLoThanhPham = maGoc;   // giữ đúng cách viết của mã đã cấp
+        }
+
+        var maLoTrung = lenh.SanPham.Where(s => s.MaLoThanhPham.Length > 0)
+            .GroupBy(s => s.MaLoThanhPham, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (maLoTrung is not null)
+            return $"Mã lô \"{maLoTrung.Key}\" bị lặp giữa các sản phẩm trong cùng lệnh.";
+
+        foreach (var sp in lenh.SanPham)
+        {
+            var loi = await KiemTraSanPhamAsync(sp, ct);
+            if (loi is not null) return loi;
+        }
         return null;
     }
 
-    public async Task<KetQuaThaoTac> ThucHienAsync(
-        int id, IReadOnlyList<AnhLoSanXuat> anhLo, CancellationToken ct = default)
+    /// <summary>Cấp mã lô LO-yyyyMMdd-NNN (theo ngày sản xuất của lệnh) cho các dòng chưa có mã.</summary>
+    private async Task GanMaLoChoDongMoiAsync(LenhSanXuat lenh, CancellationToken ct)
     {
-        // Kiểm tra ảnh TRƯỚC mọi thứ khác: thiếu chứng từ thì không được động vào kho.
-        anhLo = (anhLo ?? Array.Empty<AnhLoSanXuat>())
-            .Where(a => !string.IsNullOrWhiteSpace(a.DuongDan)).ToList();
-        if (anhLo.Count == 0)
-            return KetQuaThaoTac.Loi("Cần tải lên ít nhất 1 ảnh lô thành phẩm trước khi hoàn thành lệnh.");
+        var dongMoi = lenh.SanPham.Where(s => string.IsNullOrEmpty(s.MaLoThanhPham)).ToList();
+        if (dongMoi.Count == 0) return;
+        var ma = await _maTuSinh.SinhNhieuAsync(LoaiMaTuSinh.LoSanXuat, dongMoi.Count, lenh.NgaySanXuat, ct);
+        for (var i = 0; i < dongMoi.Count; i++) dongMoi[i].MaLoThanhPham = ma[i];
+    }
 
-        var lenh = await _db.LenhSanXuats.Include(l => l.TieuHao).Include(l => l.DanhSachAnh)
-            .FirstOrDefaultAsync(l => l.Id == id, ct);
+    private async Task<string?> KiemTraSanPhamAsync(LenhSanXuatSanPham sp, CancellationToken ct)
+    {
+        sp.MaThanhPham = sp.MaThanhPham?.Trim() ?? "";
+        sp.MaLoThanhPham = sp.MaLoThanhPham?.Trim() ?? "";
+        sp.MaQuyTrinh = sp.MaQuyTrinh?.Trim() ?? "";
+
+        var tp = await _db.Products.AsNoTracking().Include(p => p.DanhSachDinhMuc)
+            .FirstOrDefaultAsync(p => p.MaSanPham == sp.MaThanhPham, ct);
+        if (tp is null || tp.LoaiSanPham != LoaiSanPham.ThanhPham)
+            return $"\"{sp.MaThanhPham}\" không phải thành phẩm hợp lệ.";
+        if (tp.DanhSachDinhMuc.Count == 0)
+            return $"\"{tp.TenSanPham}\" chưa có định mức. Khai định mức trước khi sản xuất.";
+        if (sp.SoLuong <= 0) return $"Số lượng của \"{tp.TenSanPham}\" phải lớn hơn 0.";
+
+        // Quy trình và khâu: đây là dữ liệu HanoiCheck cần để truy xuất nguồn gốc.
+        if (string.IsNullOrWhiteSpace(sp.MaQuyTrinh))
+            return $"Vui lòng chọn quy trình sản xuất cho \"{tp.TenSanPham}\".";
+        var quyTrinh = await _db.ProductionProcesses.AsNoTracking().Include(q => q.DanhSachKhau)
+            .FirstOrDefaultAsync(q => q.MaQuyTrinh == sp.MaQuyTrinh, ct);
+        if (quyTrinh is null) return $"Không tìm thấy quy trình \"{sp.MaQuyTrinh}\".";
+        if (quyTrinh.DanhSachKhau.Count == 0)
+            return $"Quy trình \"{quyTrinh.TenQuyTrinh}\" chưa khai khâu nào.";
+        if (sp.Khau.Count == 0)
+            return $"\"{tp.TenSanPham}\": phải khai người thực hiện cho các khâu của quy trình.";
+
+        var khauCanCo = quyTrinh.DanhSachKhau.Select(k => k.MaKhau).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var khauDaKhai = sp.Khau.Select(k => (k.MaKhau ?? "").Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var thieuKhau = khauCanCo.Except(khauDaKhai, StringComparer.OrdinalIgnoreCase).ToList();
+        if (thieuKhau.Count > 0)
+            return $"\"{tp.TenSanPham}\": còn khâu chưa khai người thực hiện ({string.Join(", ", thieuKhau)}).";
+
+        foreach (var k in sp.Khau)
+        {
+            var loi = await KiemTraKhauAsync(k, tp.TenSanPham, ct);
+            if (loi is not null) return loi;
+        }
+        return null;
+    }
+
+    private async Task<string?> KiemTraKhauAsync(LenhSanXuatKhau k, string tenThanhPham, CancellationToken ct)
+    {
+        k.MaKhau = k.MaKhau?.Trim() ?? "";
+        k.MaCoSo = k.MaCoSo?.Trim() ?? "";
+        k.NguoiThucHienCsv = string.Join(",", (k.NguoiThucHienCsv ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        k.GhiChu = string.IsNullOrWhiteSpace(k.GhiChu) ? null : k.GhiChu.Trim();
+
+        if (!await _db.ProductionSteps.AnyAsync(s => s.MaKhau == k.MaKhau, ct))
+            return $"\"{tenThanhPham}\": khâu \"{k.MaKhau}\" không có trong danh mục.";
+        if (string.IsNullOrWhiteSpace(k.MaCoSo))
+            return $"\"{tenThanhPham}\" - khâu \"{k.MaKhau}\": chưa chọn cơ sở thực hiện.";
+        if (!await _db.Facilities.AnyAsync(c => c.MaCoSo == k.MaCoSo, ct))
+            return $"\"{tenThanhPham}\" - khâu \"{k.MaKhau}\": cơ sở \"{k.MaCoSo}\" không có trong danh mục.";
+        if (k.NguoiThucHien.Count == 0)
+            return $"\"{tenThanhPham}\" - khâu \"{k.MaKhau}\": cần ít nhất 1 người thực hiện.";
+
+        var ma = k.NguoiThucHien.ToList();
+        var nhanSuCo = await _db.Staff.AsNoTracking()
+            .Where(n => ma.Contains(n.MaNhanSu)).Select(n => n.MaNhanSu).ToListAsync(ct);
+        var la = ma.Except(nhanSuCo, StringComparer.OrdinalIgnoreCase).ToList();
+        if (la.Count > 0)
+            return $"\"{tenThanhPham}\" - khâu \"{k.MaKhau}\": không có nhân sự {string.Join(", ", la)}.";
+        return null;
+    }
+
+    // ==================== Hoàn thành ====================
+
+    public async Task<KetQuaThaoTac> ThucHienAsync(
+        int id,
+        IReadOnlyList<AnhTheoSanPham> anhTheoSanPham,
+        IReadOnlyList<LenhSanXuatKhau>? khauSuaLai = null,
+        CancellationToken ct = default)
+    {
+        var lenh = await QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
         if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
         if (lenh.TrangThai == TrangThaiLenhSX.HoanThanh)
             return KetQuaThaoTac.Loi("Lệnh này đã hoàn thành rồi.");
         if (lenh.TrangThai == TrangThaiLenhSX.DaHuy)
             return KetQuaThaoTac.Loi("Lệnh này đã huỷ, không hoàn thành lại được. Hãy tạo lệnh mới.");
+        if (lenh.SanPham.Count == 0) return KetQuaThaoTac.Loi("Lệnh không có sản phẩm nào.");
 
-        var tp = await _db.Products.Include(p => p.DanhSachDinhMuc)
-            .FirstOrDefaultAsync(p => p.MaSanPham == lenh.MaThanhPham, ct);
-        if (tp is null || tp.DanhSachDinhMuc.Count == 0)
-            return KetQuaThaoTac.Loi("Thành phẩm không còn định mức, không thể thực hiện.");
+        // Ảnh: MỖI dòng sản phẩm phải có ảnh của chính lô đó. Kiểm TRƯỚC khi động vào kho.
+        var anhTheoDong = (anhTheoSanPham ?? Array.Empty<AnhTheoSanPham>())
+            .ToDictionary(a => a.SanPhamId,
+                          a => a.Anh.Where(x => !string.IsNullOrWhiteSpace(x.DuongDan)).ToList());
+        // Giới hạn album ảnh chỉ áp khi lệnh tạo Lô đồng bộ và cơ sở đang bật HanoiCheck.
+        var apHnC = lenh.TaoLoDongBo && await _outbox.DangBatAsync(ct);
+        foreach (var sp in lenh.SanPham)
+        {
+            if (!anhTheoDong.TryGetValue(sp.Id, out var anh) || anh.Count == 0)
+                return KetQuaThaoTac.Loi($"Cần ít nhất 1 ảnh lô thành phẩm cho \"{sp.MaThanhPham}\" (lô {sp.MaLoThanhPham}).");
+            // Ảnh lô là album ảnh của Lô sản xuất gửi HanoiCheck - đặc tả chỉ nhận 1-3 ảnh.
+            if (apHnC && anh.Count > LoSanXuatService.SoAnhLoToiDa)
+                return KetQuaThaoTac.Loi($"Lô {sp.MaLoThanhPham}: tối đa {LoSanXuatService.SoAnhLoToiDa} ảnh "
+                                         + $"(đang chọn {anh.Count}) - giới hạn album ảnh lô của HanoiCheck.");
+        }
 
-        // Tính nhu cầu + gom lô FEFO cho từng nguyên liệu, kiểm tra đủ TRƯỚC khi trừ.
+        // Cho phép sửa lại người thực hiện / cơ sở ngay lúc hoàn thành (ai làm thực tế có thể khác kế hoạch).
+        if (khauSuaLai is { Count: > 0 })
+        {
+            var loiKhau = await ApDungKhauSuaLaiAsync(lenh, khauSuaLai, ct);
+            if (loiKhau is not null) return KetQuaThaoTac.Loi(loiKhau);
+        }
+
+        // Nhu cầu nguyên liệu tính riêng từng dòng (để chia tiêu hao) rồi GỘP lại để so tồn.
+        var canTungDong = await NhuCauTungDongAsync(
+            lenh.SanPham.Select(s => (s.MaThanhPham, s.SoLuong)).ToList(), ct);
+        var can = new Dictionary<string, decimal>();
+        foreach (var d in canTungDong)
+            foreach (var (ma, luong) in d)
+                can[ma] = can.GetValueOrDefault(ma) + luong;
+        if (can.Count == 0) return KetQuaThaoTac.Loi("Các thành phẩm không còn định mức, không thể thực hiện.");
+
         var thieu = new List<string>();
         var keHoachTru = new List<(string MaNL, string MaLo, DateOnly? Hsd, decimal SoLuong)>();
-
-        foreach (var dm in tp.DanhSachDinhMuc)
+        foreach (var (maNl, luong) in can)
         {
-            var can = NhuCau(dm, lenh.SoLuong);
-            var lots = await LayLoFefoAsync(dm.MaNguyenLieu, lenh.MaKho, ct);
+            var lots = await LayLoFefoAsync(maNl, lenh.MaKho, ct);
             var tongTon = lots.Sum(x => x.Ton);
-            if (tongTon < can)
+            if (tongTon < luong)
             {
-                thieu.Add($"{dm.MaNguyenLieu} (cần {can:0.###}, còn {tongTon:0.###})");
+                thieu.Add($"{maNl} (cần {luong:0.###}, còn {tongTon:0.###})");
                 continue;
             }
-
-            var conCanTru = can;
+            var conCanTru = luong;
             foreach (var lot in lots)
             {
                 if (conCanTru <= 0) break;
                 var tru = Math.Min(conCanTru, lot.Ton);
-                keHoachTru.Add((dm.MaNguyenLieu, lot.MaLo, lot.Hsd, tru));
+                keHoachTru.Add((maNl, lot.MaLo, lot.Hsd, tru));
                 conCanTru -= tru;
             }
         }
-
         if (thieu.Count > 0)
             return KetQuaThaoTac.Loi("Không đủ nguyên liệu: " + string.Join("; ", thieu));
 
         var now = DateTime.UtcNow;
 
-        // Trừ nguyên liệu (âm) theo kế hoạch FEFO + ghi tiêu hao.
+        // Trừ nguyên liệu (âm) theo kế hoạch FEFO.
         foreach (var t in keHoachTru)
         {
             _db.KhoGiaoDichs.Add(new KhoGiaoDich
@@ -177,120 +338,172 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
                 SoLuong = -t.SoLuong, HanSuDung = t.Hsd,
                 Loai = LoaiGiaoDichKho.XuatSanXuat, ChungTu = lenh.MaLenh, ThoiGianUtc = now
             });
-            lenh.TieuHao.Add(new LenhSanXuatTieuHao
-            {
-                MaNguyenLieu = t.MaNL, MaLo = t.MaLo, SoLuong = t.SoLuong
-            });
         }
 
-        // Nhập thành phẩm (dương).
-        _db.KhoGiaoDichs.Add(new KhoGiaoDich
-        {
-            MaSanPham = lenh.MaThanhPham, MaKho = lenh.MaKho, MaLo = lenh.MaLoThanhPham,
-            SoLuong = lenh.SoLuong, HanSuDung = lenh.HanSuDungThanhPham,
-            Loai = LoaiGiaoDichKho.NhapThanhPham, ChungTu = lenh.MaLenh, ThoiGianUtc = now
-        });
+        // Ghi tiêu hao về từng dòng sản phẩm theo tỷ lệ nhu cầu - để truy xuất lô nguyên liệu nào
+        // đã vào lô thành phẩm nào.
+        GanTieuHaoChoTungDong(lenh, canTungDong, keHoachTru, can);
 
-        // Ảnh chứng từ của lô thành phẩm - mã file đánh theo lệnh để khớp với file gửi HanoiCheck.
-        var thuTuAnh = 1;
-        foreach (var a in anhLo)
+        foreach (var sp in lenh.SanPham)
         {
-            lenh.DanhSachAnh.Add(new LenhSanXuatAnh
+            // Nhập thành phẩm (dương).
+            _db.KhoGiaoDichs.Add(new KhoGiaoDich
             {
-                MaFile = $"{lenh.MaLenh}-A{thuTuAnh++}",
-                TenFile = a.TenFile, DuongDan = a.DuongDan, ThoiGianUtc = now
+                MaSanPham = sp.MaThanhPham, MaKho = lenh.MaKho, MaLo = sp.MaLoThanhPham,
+                SoLuong = sp.SoLuong, HanSuDung = sp.HanSuDung,
+                Loai = LoaiGiaoDichKho.NhapThanhPham, ChungTu = lenh.MaLenh, ThoiGianUtc = now
             });
+
+            // Ảnh chứng từ của lô - mã file đánh theo mã lô để khớp với file gửi HanoiCheck.
+            var thuTu = 1;
+            foreach (var a in anhTheoDong[sp.Id])
+            {
+                sp.Anh.Add(new LenhSanXuatAnh
+                {
+                    MaFile = $"{sp.MaLoThanhPham}-A{thuTu++}",
+                    TenFile = a.TenFile, DuongDan = a.DuongDan, ThoiGianUtc = now
+                });
+            }
         }
 
         lenh.TrangThai = TrangThaiLenhSX.HoanThanh;
         lenh.ThoiGianHoanThanhUtc = now;
 
-        // Tuỳ chọn: sinh Lô sản xuất (Batch) cho thành phẩm để đồng bộ HanoiCheck, kèm truy xuất
-        // lô nguyên liệu → lô thành phẩm. Batch được thêm cùng transaction; đẩy hàng đợi sau khi lưu.
-        Batch? batch = null;
+        // Tuỳ chọn: sinh Lô sản xuất (Batch) cho TỪNG dòng sản phẩm để đồng bộ HanoiCheck.
+        var batches = new List<Batch>();
         if (lenh.TaoLoDongBo)
         {
-            batch = await DungBatchTuLenhAsync(lenh, tp, keHoachTru, now, ct);
-            if (batch is not null)
+            foreach (var sp in lenh.SanPham)
             {
+                var batch = await DungBatchTuDongAsync(lenh, sp, now, ct);
+                if (batch is null) continue;
                 _db.Batches.Add(batch);
-                lenh.MaLoDaTao = batch.MaLo;
+                sp.MaLoDaTao = batch.MaLo;
+                batches.Add(batch);
             }
         }
 
         await _db.SaveChangesAsync(ct);
 
-        if (batch is not null)
-            await _outbox.ThemAsync("Batch", batch.MaLo, HnCPayloadMapper.LoSanXuat(batch), ct);
+        foreach (var b in batches)
+            await _outbox.GuiAsync(b, ct);
 
-        var thongBao = $"Đã sản xuất {lenh.SoLuong:0.###} \"{tp.TenSanPham}\" (lô {lenh.MaLoThanhPham}), trừ nguyên liệu theo định mức.";
-        if (batch is not null)
-            thongBao += $" Đã tạo lô \"{batch.MaLo}\" và đưa vào hàng đợi đồng bộ HanoiCheck.";
+        var thongBao = $"Đã sản xuất {lenh.SanPham.Count} sản phẩm "
+                       + $"({string.Join(", ", lenh.SanPham.Select(s => $"{s.MaThanhPham} {s.SoLuong:0.###}"))}), "
+                       + "trừ nguyên liệu theo định mức.";
+        if (batches.Count > 0)
+            thongBao += $" Đã tạo {batches.Count} lô và đưa vào hàng đợi đồng bộ HanoiCheck.";
         else if (lenh.TaoLoDongBo)
-            thongBao += " (Lô đồng bộ đã tồn tại nên bỏ qua tạo mới.)";
+            thongBao += " (Các lô đồng bộ đã tồn tại nên bỏ qua tạo mới.)";
         return KetQuaThaoTac.Ok(thongBao);
     }
 
-    /// <summary>
-    /// Dựng Batch từ một lệnh sản xuất đã tính kế hoạch tiêu hao: lô thành phẩm + kho + (nếu có
-    /// khâu) một bước cho mỗi lô nguyên liệu tiêu hao (ma_lo_nguyen_lieu → ma_lo_san_xuat). Trả về
-    /// null nếu mã lô này đã có Batch (tránh trùng khoá nghiệp vụ).
-    /// </summary>
-    private async Task<Batch?> DungBatchTuLenhAsync(
-        LenhSanXuat lenh, Product tp,
-        List<(string MaNL, string MaLo, DateOnly? Hsd, decimal SoLuong)> keHoachTru,
-        DateTime now, CancellationToken ct)
+    /// <summary>Cập nhật người thực hiện / cơ sở của khâu ngay trước khi chốt lệnh.</summary>
+    private async Task<string?> ApDungKhauSuaLaiAsync(
+        LenhSanXuat lenh, IReadOnlyList<LenhSanXuatKhau> suaLai, CancellationToken ct)
     {
-        if (await _db.Batches.AnyAsync(b => b.MaLo == lenh.MaLoThanhPham, ct)) return null;
-
-        // Chọn khâu để gắn bước truy xuất: ưu tiên khâu đầu của quy trình thành phẩm, sau đó là
-        // khâu bất kỳ trong danh mục. Không có khâu nào thì để danh sách bước rỗng (vẫn hợp lệ).
-        string? maKhau = null;
-        if (!string.IsNullOrWhiteSpace(tp.MaQuyTrinh))
+        foreach (var moi in suaLai)
         {
-            maKhau = await _db.ProcessStepLines
-                .Where(l => l.ProductionProcess!.MaQuyTrinh == tp.MaQuyTrinh)
-                .OrderBy(l => l.ThuTu).Select(l => l.MaKhau).FirstOrDefaultAsync(ct);
+            var sp = lenh.SanPham.FirstOrDefault(s => s.Khau.Any(k => k.Id == moi.Id));
+            var khau = sp?.Khau.FirstOrDefault(k => k.Id == moi.Id);
+            if (sp is null || khau is null) continue;   // khâu không thuộc lệnh này thì bỏ qua
+
+            var ban = new LenhSanXuatKhau
+            {
+                MaKhau = khau.MaKhau, MaCoSo = moi.MaCoSo,
+                NguoiThucHienCsv = moi.NguoiThucHienCsv, GhiChu = moi.GhiChu
+            };
+            var loi = await KiemTraKhauAsync(ban, sp.MaThanhPham, ct);
+            if (loi is not null) return loi;
+
+            khau.MaCoSo = ban.MaCoSo;
+            khau.NguoiThucHienCsv = ban.NguoiThucHienCsv;
+            khau.GhiChu = ban.GhiChu;
         }
-        maKhau ??= await _db.ProductionSteps.OrderBy(s => s.MaKhau)
-            .Select(s => s.MaKhau).FirstOrDefaultAsync(ct);
+        return null;
+    }
 
-        var moTaNL = string.Join("; ", keHoachTru.Select(t => $"{t.MaLo}×{t.SoLuong:0.###}"));
+    /// <summary>
+    /// Chia lượng nguyên liệu đã trừ về từng dòng sản phẩm theo tỷ lệ nhu cầu của dòng đó.
+    /// Cần thiết vì kho trừ gộp (FEFO trên tổng nhu cầu) nhưng truy xuất lại theo từng lô thành phẩm.
+    /// </summary>
+    private static void GanTieuHaoChoTungDong(
+        LenhSanXuat lenh,
+        List<Dictionary<string, decimal>> canTungDong,
+        List<(string MaNL, string MaLo, DateOnly? Hsd, decimal SoLuong)> keHoachTru,
+        Dictionary<string, decimal> tongCan)
+    {
+        foreach (var t in keHoachTru)
+        {
+            var tong = tongCan.GetValueOrDefault(t.MaNL);
+            if (tong <= 0) continue;
 
+            for (var i = 0; i < lenh.SanPham.Count; i++)
+            {
+                var canCuaDong = canTungDong[i].GetValueOrDefault(t.MaNL);
+                if (canCuaDong <= 0) continue;
+                var phan = Math.Round(t.SoLuong * canCuaDong / tong, 4, MidpointRounding.AwayFromZero);
+                if (phan <= 0) continue;
+                lenh.SanPham[i].TieuHao.Add(new LenhSanXuatTieuHao
+                {
+                    MaNguyenLieu = t.MaNL, MaLo = t.MaLo, SoLuong = phan
+                });
+            }
+        }
+    }
+
+    // ==================== Dựng Batch cho HanoiCheck ====================
+
+    /// <summary>
+    /// Dựng Batch từ một dòng sản phẩm: lô thành phẩm + kho + các khâu đã khai (kèm người thực hiện,
+    /// địa chỉ cơ sở) + ảnh chứng từ. Trả null nếu mã lô này đã có Batch (tránh trùng khoá nghiệp vụ).
+    /// </summary>
+    private async Task<Batch?> DungBatchTuDongAsync(
+        LenhSanXuat lenh, LenhSanXuatSanPham sp, DateTime now, CancellationToken ct)
+    {
+        if (await _db.Batches.AnyAsync(b => b.MaLo == sp.MaLoThanhPham, ct)) return null;
+
+        var coSo = await _db.Facilities.AsNoTracking().ToListAsync(ct);
+        var diaChiCoSo = coSo.GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().DiaChi);
+        var khauSapXep = sp.Khau.OrderBy(k => k.ThuTu).ToList();
+
+        var moTaNL = string.Join("; ", sp.TieuHao.Select(t => $"{t.MaLo}×{t.SoLuong:0.###}"));
         var batch = new Batch
         {
-            MaSanPham = lenh.MaThanhPham,
-            MaLo = lenh.MaLoThanhPham,
-            TenLo = $"Lô SX {lenh.MaLenh}",
+            MaSanPham = sp.MaThanhPham,
+            MaLo = sp.MaLoThanhPham,
+            TenLo = $"Lô SX {lenh.MaLenh} - {sp.MaThanhPham}",
             NgayNhap = lenh.NgaySanXuat,
             NgaySanXuat = lenh.NgaySanXuat,
-            HanSuDung = lenh.HanSuDungThanhPham,
+            HanSuDung = sp.HanSuDung,
+            // Cơ sở của lô lấy theo khâu đầu tiên - HanoiCheck chỉ nhận một mã cơ sở cho cả lô.
+            MaCoSo = khauSapXep.FirstOrDefault()?.MaCoSo,
             GhiChu = $"Tự động từ lệnh sản xuất {lenh.MaLenh}."
                      + (moTaNL.Length > 0 ? $" Nguyên liệu tiêu hao: {moTaNL}." : ""),
             DanhSachKho = new() { new BatchWarehouse { MaKho = lenh.MaKho } }
         };
 
-        if (!string.IsNullOrWhiteSpace(maKhau))
+        // Mỗi khâu của quy trình thành một bước sản xuất, mang theo người thực hiện.
+        var thuTu = 1;
+        foreach (var k in khauSapXep)
         {
-            var thuTu = 1;
-            foreach (var t in keHoachTru)
+            batch.DanhSachKhau.Add(new BatchStep
             {
-                batch.DanhSachKhau.Add(new BatchStep
-                {
-                    MaBuocSx = $"{lenh.MaLenh}-{thuTu}",
-                    MaKhau = maKhau,
-                    ThuTu = thuTu,
-                    ThoiGian = now,
-                    MaLoNguyenLieu = t.MaLo,
-                    MaLoSanXuat = lenh.MaLoThanhPham,
-                    GhiChu = $"Tiêu hao {t.MaNL} lô {t.MaLo}: {t.SoLuong:0.###}"
-                });
-                thuTu++;
-            }
+                MaBuocSx = $"{sp.MaLoThanhPham}-B{thuTu}",
+                MaKhau = k.MaKhau,
+                ThuTu = thuTu,
+                ThoiGian = now,
+                MaLoSanXuat = sp.MaLoThanhPham,
+                // Khâu đầu gắn lô nguyên liệu đã tiêu hao để truy xuất ngược về đầu vào.
+                MaLoNguyenLieu = thuTu == 1 ? string.Join(", ", sp.TieuHao.Select(t => t.MaLo).Distinct()) : null,
+                NguoiThucHienCsv = k.NguoiThucHienCsv,
+                DiaChi = diaChiCoSo.GetValueOrDefault(k.MaCoSo),
+                GhiChu = k.GhiChu
+            });
+            thuTu++;
         }
 
-        // Ảnh lô chụp lúc hoàn thành lệnh chính là danh sách file của lô gửi sang HanoiCheck.
-        foreach (var anh in lenh.DanhSachAnh)
+        foreach (var anh in sp.Anh)
         {
             batch.DanhSachFile.Add(new BatchFile
             {
@@ -298,16 +511,19 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
                 TenFile = anh.TenFile,
                 DuongDan = anh.DuongDan,
                 Loai = "HINH_ANH",
-                MaKhau = maKhau
+                MaKhau = khauSapXep.FirstOrDefault()?.MaKhau
             });
         }
 
         return batch;
     }
 
+    // ==================== Xoá / huỷ ====================
+
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)
     {
-        var lenh = await _db.LenhSanXuats.FirstOrDefaultAsync(l => l.Id == id, ct);
+        // Nạp kèm dòng sản phẩm + khâu để EF xoá lan cả khi CSDL không tự cascade.
+        var lenh = await QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
         if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
         if (lenh.TrangThai == TrangThaiLenhSX.HoanThanh)
             return KetQuaThaoTac.Loi(
@@ -328,15 +544,15 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         if (string.IsNullOrWhiteSpace(lyDo)) return KetQuaThaoTac.Loi("Vui lòng nhập lý do huỷ.");
         if (lyDo.Length > 500) lyDo = lyDo[..500];
 
-        var lenh = await _db.LenhSanXuats.Include(l => l.TieuHao).FirstOrDefaultAsync(l => l.Id == id, ct);
+        var lenh = await QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
         if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
         if (lenh.TrangThai == TrangThaiLenhSX.MoiTao)
             return KetQuaThaoTac.Loi("Lệnh chưa thực hiện thì dùng nút \"Xoá\", không cần huỷ.");
         if (lenh.TrangThai == TrangThaiLenhSX.DaHuy)
             return KetQuaThaoTac.Loi("Lệnh này đã huỷ rồi.");
 
-        // Đảo đúng các dòng sổ kho do chính lệnh này sinh ra (giữ nguyên lô + hạn dùng của lô),
-        // thay vì tính lại theo định mức - định mức có thể đã bị sửa sau khi lệnh chạy.
+        // Đảo đúng các dòng sổ kho do chính lệnh này sinh ra (giữ nguyên lô + hạn dùng, không tính
+        // lại theo định mức - định mức có thể đã bị sửa sau khi lệnh chạy).
         var dongGoc = await _db.KhoGiaoDichs
             .Where(g => g.ChungTu == lenh.MaLenh
                         && (g.Loai == LoaiGiaoDichKho.XuatSanXuat || g.Loai == LoaiGiaoDichKho.NhapThanhPham))
@@ -344,14 +560,17 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         if (dongGoc.Count == 0)
             return KetQuaThaoTac.Loi("Không tìm thấy giao dịch kho của lệnh này để đảo.");
 
-        // Thành phẩm đã nhập phải còn nguyên trong lô mới thu hồi được (chưa bán, chưa dùng tiếp).
-        var canThuHoi = dongGoc.Where(g => g.Loai == LoaiGiaoDichKho.NhapThanhPham).Sum(g => g.SoLuong);
-        if (canThuHoi > 0)
+        // Thành phẩm của MỌI lô phải còn nguyên mới thu hồi được.
+        foreach (var sp in lenh.SanPham)
         {
-            var tonLoTp = await TonLoAsync(lenh.MaThanhPham, lenh.MaKho, lenh.MaLoThanhPham, ct);
+            var canThuHoi = dongGoc
+                .Where(g => g.Loai == LoaiGiaoDichKho.NhapThanhPham && g.MaLo == sp.MaLoThanhPham)
+                .Sum(g => g.SoLuong);
+            if (canThuHoi <= 0) continue;
+            var tonLoTp = await TonLoAsync(sp.MaThanhPham, lenh.MaKho, sp.MaLoThanhPham, ct);
             if (tonLoTp < canThuHoi)
                 return KetQuaThaoTac.Loi(
-                    $"Không huỷ được: lô thành phẩm \"{lenh.MaLoThanhPham}\" chỉ còn {tonLoTp:0.###}/"
+                    $"Không huỷ được: lô thành phẩm \"{sp.MaLoThanhPham}\" chỉ còn {tonLoTp:0.###}/"
                     + $"{canThuHoi:0.###} - phần đã xuất bán hoặc dùng tiếp không thu hồi được. "
                     + "Hãy dùng Kiểm kê / Điều chỉnh tồn để xử lý.");
         }
@@ -369,19 +588,21 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             });
         }
 
-        // Lô sản xuất (Batch) sinh kèm: xoá trong app, đồng thời gỡ khỏi hàng đợi nếu chưa gửi đi.
-        var canhBaoHnC = false;
-        if (!string.IsNullOrWhiteSpace(lenh.MaLoDaTao))
+        // Lô sản xuất sinh kèm: xoá trong app, đồng thời gỡ khỏi hàng đợi nếu chưa gửi đi.
+        var canhBaoHnC = new List<string>();
+        var daXoaLo = new List<string>();
+        var tenantId = _db.TenantInfo?.Id;
+        foreach (var sp in lenh.SanPham.Where(s => !string.IsNullOrWhiteSpace(s.MaLoDaTao)))
         {
-            var batch = await _db.Batches.FirstOrDefaultAsync(b => b.MaLo == lenh.MaLoDaTao, ct);
-            if (batch is not null) _db.Batches.Remove(batch);
+            var batch = await _db.Batches.FirstOrDefaultAsync(b => b.MaLo == sp.MaLoDaTao, ct);
+            if (batch is not null) { _db.Batches.Remove(batch); daXoaLo.Add(sp.MaLoDaTao!); }
 
-            var tenantId = _db.TenantInfo?.Id;
             var hangDoi = await _db.SyncOutboxItems
-                .Where(o => o.TenantId == tenantId && o.EntityType == "Batch" && o.EntityKey == lenh.MaLoDaTao)
+                .Where(o => o.TenantId == tenantId && o.EntityType == "Batch" && o.EntityKey == sp.MaLoDaTao)
                 .ToListAsync(ct);
             // Đã gửi thành công (hoặc đang gửi) thì HanoiCheck đã có dữ liệu - không thu hồi được.
-            canhBaoHnC = hangDoi.Any(o => o.Status is SyncOutboxStatus.Success or SyncOutboxStatus.Processing);
+            if (hangDoi.Any(o => o.Status is SyncOutboxStatus.Success or SyncOutboxStatus.Processing))
+                canhBaoHnC.Add(sp.MaLoDaTao!);
             _db.SyncOutboxItems.RemoveRange(
                 hangDoi.Where(o => o.Status is not (SyncOutboxStatus.Success or SyncOutboxStatus.Processing)));
         }
@@ -391,15 +612,18 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         lenh.LyDoHuy = lyDo;
         await _db.SaveChangesAsync(ct);
 
-        var thongBao = $"Đã huỷ lệnh \"{lenh.MaLenh}\": trả lại nguyên liệu và thu hồi "
-                       + $"{canThuHoi:0.###} thành phẩm lô {lenh.MaLoThanhPham}.";
-        if (canhBaoHnC)
-            thongBao += $" CẢNH BÁO: lô \"{lenh.MaLoDaTao}\" đã gửi sang HanoiCheck, hệ thống không "
-                        + "thu hồi được - cần xử lý thủ công phía HanoiCheck.";
-        else if (!string.IsNullOrWhiteSpace(lenh.MaLoDaTao))
-            thongBao += $" Đã xoá lô \"{lenh.MaLoDaTao}\" khỏi app (chưa gửi sang HanoiCheck).";
+        var thongBao = $"Đã huỷ lệnh \"{lenh.MaLenh}\": trả lại nguyên liệu và thu hồi thành phẩm của "
+                       + $"{lenh.SanPham.Count} lô.";
+        if (canhBaoHnC.Count > 0)
+            thongBao += $" CẢNH BÁO: lô {string.Join(", ", canhBaoHnC)} đã gửi sang HanoiCheck, hệ thống "
+                        + "không thu hồi được - cần xử lý thủ công phía HanoiCheck.";
+        var xoaChuaGui = daXoaLo.Except(canhBaoHnC).ToList();
+        if (xoaChuaGui.Count > 0)
+            thongBao += $" Đã xoá lô {string.Join(", ", xoaChuaGui)} khỏi app (chưa gửi sang HanoiCheck).";
         return KetQuaThaoTac.Ok(thongBao);
     }
+
+    // ==================== Tiện ích kho ====================
 
     /// <summary>Nhu cầu nguyên liệu = định lượng × số lượng SX × (1 + hao hụt%).</summary>
     private static decimal NhuCau(DinhMucNguyenLieu dm, decimal soLuong) =>

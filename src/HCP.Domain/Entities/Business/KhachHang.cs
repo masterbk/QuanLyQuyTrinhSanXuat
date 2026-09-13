@@ -18,6 +18,9 @@ public class KhachHang : TenantEntity
 
     public LoaiKhachHang Loai { get; set; } = LoaiKhachHang.CuaHang;
 
+    /// <summary>Mã trường trên HanoiCheck (khách loại Trường học) - để nối đơn trường đặt qua HanoiCheck.</summary>
+    public string? MaTruongHnC { get; set; }
+
     public string? DienThoai { get; set; }
 
     public string? DiaChi { get; set; }

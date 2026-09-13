@@ -20,15 +20,17 @@
         <MudText Typo="Typo.h5">Quản lý thực phẩm / SKU</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
             Danh mục thực phẩm ổn định của cơ sở, khai một lần rồi dùng lại cho các lô sản xuất.
-            Đồng bộ sang HanoiCheck qua nghiệp vụ "Đồng bộ thực phẩm".
+            Thành phẩm có tick "Đồng bộ HanoiCheck" được gửi sang HanoiCheck khi cơ sở bật đồng bộ.
         </MudText>
     </div>
     <div class="d-flex flex-wrap">
+        <ChiKhiBatHnC>
         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mr-2 mb-2"
                    StartIcon="@Icons.Material.Filled.CloudSync" Disabled="_dangDongBoDanhMuc"
                    OnClick="CapNhatDanhMucChuanAsync">
             Cập nhật danh mục chuẩn
         </MudButton>
+        </ChiKhiBatHnC>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mb-2"
                    StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => MoForm(null))">
             Thêm thực phẩm
@@ -36,6 +38,7 @@
     </div>
 </div>
 
+<ChiKhiBatHnC>
 @if (_danhMucChuan.Count == 0 && !_dangTai)
 {
     <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
@@ -44,6 +47,7 @@
         chọn loại từ danh sách.
     </MudAlert>
 }
+</ChiKhiBatHnC>
 
 @if (_dangTai)
 {
@@ -132,13 +136,14 @@ else
 
                 @* Mã loại (danh mục chuẩn HnC) chỉ áp dụng cho THÀNH PHẨM. Không render với nguyên
                    liệu để khỏi vướng validation Required. *@
+                <ChiKhiBatHnC>
                 @if (_input.LoaiSanPham == LoaiSanPham.ThanhPham)
                 {
                     <MudItem xs="12" sm="6">
                         @if (_danhMucChuan.Count > 0)
                         {
                             <MudAutocomplete T="string" @bind-Value="_input.MaLoaiSp" Label="Loại thực phẩm"
-                                             Variant="Variant.Outlined" Required="true"
+                                             Variant="Variant.Outlined" Required="@_input.DongBoHnC"
                                              RequiredError="Vui lòng chọn loại thực phẩm"
                                              SearchFunc="TimLoaiThucPham" ToStringFunc="TenLoai"
                                              MaxItems="100" Clearable="true" ResetValueOnEmptyText="false"
@@ -149,14 +154,16 @@ else
                             <MudTextField @bind-Value="_input.MaLoaiSp" Label="Mã loại thực phẩm"
                                           Variant="Variant.Outlined" MaxLength="100"
                                           HelperText="Danh mục chuẩn chưa đồng bộ - nhập mã tay, vd THIT."
-                                          Required="true" RequiredError="Vui lòng nhập mã loại" />
+                                          Required="@_input.DongBoHnC" RequiredError="Vui lòng nhập mã loại" />
                         }
                     </MudItem>
                 }
+                </ChiKhiBatHnC>
                 <MudItem xs="12" sm="6">
                     <MudSelect T="string" @bind-Value="_input.MaQuyTrinh" Label="Quy trình sản xuất"
                                Variant="Variant.Outlined" Clearable="true"
-                               HelperText="Không bắt buộc.">
+                               HelperText="Bắt buộc với thành phẩm đồng bộ HanoiCheck.">
+
                         @foreach (var qt in _quyTrinh)
                         {
                             <MudSelectItem T="string" Value="@qt.MaQuyTrinh">
@@ -184,6 +191,7 @@ else
                                   Variant="Variant.Outlined" MaxLength="2000" Lines="2" />
                 </MudItem>
             </MudGrid>
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -276,7 +284,7 @@ else
             ? new Product()
             : new Product
             {
-                Id = sp.Id,
+                Id = sp.Id, DongBoHnC = sp.DongBoHnC,
                 MaSanPham = sp.MaSanPham,
                 TenSanPham = sp.TenSanPham,
                 MaLoaiSp = sp.MaLoaiSp,

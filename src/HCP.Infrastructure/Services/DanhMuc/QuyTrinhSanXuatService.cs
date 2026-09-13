@@ -51,9 +51,9 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
         _db.ProductionProcesses.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("ProductionProcess", entity.MaQuyTrinh, HnCPayloadMapper.QuyTrinh(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm quy trình \"{entity.TenQuyTrinh}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm quy trình \"{entity.TenQuyTrinh}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(ProductionProcess entity, CancellationToken ct = default)
@@ -74,6 +74,7 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
         hienTai.MaQuyTrinh = maMoi;
         hienTai.TenQuyTrinh = entity.TenQuyTrinh.Trim();
         hienTai.MaDanhMucThucPham = entity.MaDanhMucThucPham;
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         // Thay toàn bộ danh sách khâu: đơn giản và tránh sai lệch thứ tự khi
@@ -89,9 +90,9 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("ProductionProcess", hienTai.MaQuyTrinh, HnCPayloadMapper.QuyTrinh(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật quy trình \"{hienTai.TenQuyTrinh}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật quy trình \"{hienTai.TenQuyTrinh}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)

@@ -11,8 +11,11 @@ class NguoiDung {
   final String? maCoSo;
   final List<String> vaiTro;
 
+  /// Cơ sở có bật đồng bộ HanoiCheck không. Tắt thì app ẩn phần HanoiCheck (tạo lô đồng bộ, giới hạn ảnh...).
+  final bool hanoiCheckBat;
+
   NguoiDung({required this.id, required this.email, this.hoTen, this.maCoSo,
-             this.vaiTro = const []});
+             this.vaiTro = const [], this.hanoiCheckBat = true});
 
   factory NguoiDung.tuJson(Map<String, dynamic> j) => NguoiDung(
         id: j['id'] as String? ?? '',
@@ -20,6 +23,8 @@ class NguoiDung {
         hoTen: j['hoTen'] as String?,
         maCoSo: j['maCoSo'] as String?,
         vaiTro: (j['vaiTro'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+        // Máy chủ bản cũ chưa trả trường này: coi như bật để app giữ nguyên cách làm trước đây.
+        hanoiCheckBat: j['hanoiCheckBat'] as bool? ?? true,
       );
 
   String get tenHienThi => (hoTen != null && hoTen!.isNotEmpty) ? hoTen! : email;
@@ -49,6 +54,17 @@ final apiProvider = Provider<ApiClient>((ref) {
   final api = ApiClient(ref.watch(luuTruProvider));
   api.khiHetPhien = () => ref.read(xacThucProvider.notifier).datLaiPhien();
   return api;
+});
+
+/// Công tắc HanoiCheck MỚI NHẤT của cơ sở: đọc lại /auth/toi mỗi lần mở màn cần dùng, vì quản trị có thể vừa đổi
+/// trên web. Không gọi được (mất sóng...) thì dùng giá trị lúc đăng nhập.
+final hanoiCheckBatProvider = FutureProvider.autoDispose<bool>((ref) async {
+  try {
+    final j = await ref.read(apiProvider).get('/api/v1/auth/toi') as Map<String, dynamic>;
+    return NguoiDung.tuJson(j).hanoiCheckBat;
+  } catch (_) {
+    return ref.read(xacThucProvider).nguoiDung?.hanoiCheckBat ?? true;
+  }
 });
 
 final xacThucProvider =

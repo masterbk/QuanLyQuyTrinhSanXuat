@@ -1,0 +1,536 @@
+@page "/app/don-hang-ban"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services
+@using HCP.Infrastructure.Services.BanHang
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Services.Kho
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDonHangBanService DonHangService
+@inject IKhachHangService KhachHangService
+@inject IDanhMucService<Product> ThucPhamService
+@inject IDanhMucService<Warehouse> KhoDanhMucService
+@inject IDanhMucService<Staff> NhanSuService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Đơn hàng bán</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Đơn hàng bán</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Đơn bán thành phẩm cho mọi khách hàng. Xác nhận → Xuất kho (trừ tồn theo lô, gợi ý lô hết hạn trước) →
+            Đã giao. Huỷ khi đang giao sẽ trả hàng về đúng lô.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="MoTao" Disabled="@(_khachHang.Count == 0 || _thanhPham.Count == 0 || _kho.Count == 0)">
+        Tạo đơn
+    </MudButton>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    @if (_khachHang.Count == 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">
+            Chưa có khách hàng. Thêm ở <MudLink Href="/app/khach-hang">Khách hàng</MudLink> trước.
+        </MudAlert>
+    }
+
+    <div class="d-flex gap-2 align-center mb-3" style="max-width:320px">
+        <MudSelect T="TrangThaiDonHangBan?" Value="_loc" ValueChanged="@(v => _loc = v)" Label="Lọc trạng thái"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+            @foreach (var t in Enum.GetValues<TrangThaiDonHangBan>())
+            {
+                <MudSelectItem T="TrangThaiDonHangBan?" Value="@t">@TenTrangThai(t)</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+
+    @if (DanhSachLoc.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">Chưa có đơn hàng nào.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="DanhSachLoc" Hover="true" Dense="true" Elevation="1">
+            <HeaderContent>
+                <MudTh>Mã đơn</MudTh>
+                <MudTh>Khách hàng</MudTh>
+                <MudTh>Ngày đặt / giao</MudTh>
+                <MudTh Style="text-align:right">Tổng tiền</MudTh>
+                <MudTh>Trạng thái</MudTh>
+                <MudTh Style="width:230px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Mã đơn">
+                    <b>@context.MaDonHang</b>
+                    @if (context.Nguon == NguonDonHang.HanoiCheck)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary">HanoiCheck</MudChip>
+                        @if (context.HnCCoThayDoi)
+                        {
+                            <MudTooltip Text="HanoiCheck đã đổi hoặc huỷ đơn sau khi xác nhận - xem Đơn hàng từ trường, sửa đơn nếu cần (lưu lại để tắt cảnh báo).">
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" />
+                            </MudTooltip>
+                        }
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                            @context.MaDonHnC · HnC: @TenTrangThaiHnC(context.TrangThaiHnC)
+                        </MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Khách hàng">@TenKhach(context.MaKhachHang)</MudTd>
+                <MudTd DataLabel="Ngày">
+                    @context.NgayDat.ToString("dd/MM/yyyy")
+                    @if (context.NgayGiao is { } ng)
+                    {
+                        <span class="mud-text-secondary"> → @ng.ToString("dd/MM/yyyy")</span>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Tổng tiền" Style="text-align:right">@context.TongTien.ToString("#,0") đ</MudTd>
+                <MudTd DataLabel="Trạng thái">
+                    <MudChip T="string" Size="Size.Small" Color="@MauTrangThai(context.TrangThai)">@TenTrangThai(context.TrangThai)</MudChip>
+                </MudTd>
+                <MudTd>
+                    <NutQrTraCuu Loai="LoaiTraCuu.DonHang" Id="@context.Id" Ma="@context.MaDonHang" />
+                    @switch (context.TrangThai)
+                    {
+                        case TrangThaiDonHangBan.ChoXacNhan:
+                        case TrangThaiDonHangBan.DaXacNhan:
+                            @if (context.TrangThai == TrangThaiDonHangBan.ChoXacNhan)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_dangXuLy"
+                                           OnClick="@(() => ChayAsync(() => DonHangService.XacNhanAsync(context.Id)))">Xác nhận</MudButton>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangXuLy"
+                                       StartIcon="@Icons.Material.Filled.LocalShipping"
+                                       OnClick="@(() => MoXuatKhoAsync(context))">Xuất kho</MudButton>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
+                                           OnClick="@(() => MoSua(context))" />
+                            @if (context.Nguon == NguonDonHang.NoiBo)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => XoaAsync(context))" />
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => MoHuy(context))" />
+                            break;
+                        case TrangThaiDonHangBan.DangGiao:
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_dangXuLy"
+                                       OnClick="@(() => ChayAsync(() => DonHangService.HoanTatGiaoAsync(context.Id)))">Đã giao</MudButton>
+                            <MudTooltip Text="Huỷ đơn: trả hàng về kho">
+                                <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => MoHuy(context))" />
+                            </MudTooltip>
+                            break;
+                        case TrangThaiDonHangBan.DaHuy:
+                            <MudTooltip Text="@($"Lý do: {context.LyDoHuy}")">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Huỷ @context.ThoiGianHuyUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                                </MudText>
+                            </MudTooltip>
+                            break;
+                        default:
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Giao @context.ThoiGianGiaoUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                            </MudText>
+                            break;
+                    }
+                </MudTd>
+            </RowTemplate>
+            <ChildRowContent>
+                @if (context.Dong.Any(l => l.XuatLo.Count > 0))
+                {
+                    <MudTr>
+                        <td colspan="6" class="px-4 pb-2">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Lô đã xuất:
+                                @string.Join("; ", context.Dong.SelectMany(l => l.XuatLo.Select(x => $"{TenThanhPham(l.MaThanhPham)} lô {x.MaLo} × {x.SoLuong:0.###}")))
+                            </MudText>
+                        </td>
+                    </MudTr>
+                }
+            </ChildRowContent>
+        </MudTable>
+    }
+}
+
+@* ==================== Tạo / sửa ==================== *@
+<MudDialog @bind-Visible="_hienForm" Options="_dialogLon">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_input.Id == 0 ? "Tạo đơn hàng bán" : $"Sửa đơn {_input.MaDonHang}")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" Value="_input.MaKhachHang" ValueChanged="DoiKhachHang" Label="Khách hàng *"
+                           Variant="Variant.Outlined">
+                    @foreach (var kh in _khachHang)
+                    {
+                        <MudSelectItem T="string" Value="@kh.MaKhachHang">@kh.TenKhachHang (@kh.MaKhachHang)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_input.MaKho" Label="Kho xuất *" Variant="Variant.Outlined">
+                    @foreach (var k in _kho)
+                    {
+                        <MudSelectItem T="string" Value="@k.MaKho">@k.TenKho (@k.MaKho)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudDatePicker @bind-Date="_ngayDat" Label="Ngày đặt" Variant="Variant.Outlined"
+                               DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudDatePicker @bind-Date="_ngayGiao" Label="Ngày giao" Variant="Variant.Outlined"
+                               DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_input.MaNguoiGiao" Label="Người giao" Variant="Variant.Outlined" Clearable="true">
+                    @foreach (var ns in _nguoiGiao)
+                    {
+                        <MudSelectItem T="string" Value="@ns.MaNhanSu">@ns.HoTen (@ns.MaNhanSu)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_input.DiaChiGiao" Label="Địa chỉ giao" Variant="Variant.Outlined" MaxLength="500"
+                              HelperText="Trống thì lấy địa chỉ của khách hàng." />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Variant="Variant.Outlined" MaxLength="1000" />
+            </MudItem>
+        </MudGrid>
+
+        <div class="d-flex justify-space-between align-center mt-4 mb-1">
+            <MudText Typo="Typo.subtitle1">Dòng hàng</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => _input.Dong.Add(new DonHangBanDong { SoLuong = 1 }))">Thêm dòng</MudButton>
+        </div>
+        <MudTable Items="_input.Dong" Dense="true" Elevation="0">
+            <HeaderContent>
+                <MudTh>Thành phẩm</MudTh>
+                <MudTh Style="width:120px">Số lượng</MudTh>
+                <MudTh Style="width:150px">Đơn giá (đ)</MudTh>
+                <MudTh Style="width:130px;text-align:right">Thành tiền</MudTh>
+                <MudTh Style="width:40px"></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudSelect T="string" @bind-Value="context.MaThanhPham" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var tp in _thanhPham)
+                        {
+                            <MudSelectItem T="string" Value="@tp.MaSanPham">@tp.TenSanPham (@tp.MaSanPham)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudTd>
+                <MudTd><MudNumericField @bind-Value="context.SoLuong" Variant="Variant.Outlined" Min="0m" Margin="Margin.Dense" /></MudTd>
+                <MudTd><MudNumericField @bind-Value="context.DonGia" Variant="Variant.Outlined" Min="0m" Margin="Margin.Dense" /></MudTd>
+                <MudTd Style="text-align:right">@context.ThanhTien.ToString("#,0")</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => _input.Dong.Remove(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+        <MudText Typo="Typo.subtitle1" Align="Align.Right" Class="mt-2">Tổng: <b>@_input.TongTien.ToString("#,0") đ</b></MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Đóng</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangXuLy" OnClick="LuuAsync">
+            @(_input.Id == 0 ? "Tạo đơn" : "Lưu thay đổi")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ==================== Xuất kho ==================== *@
+<MudDialog @bind-Visible="_hienXuat" Options="_dialogLon">
+    <TitleContent><MudText Typo="Typo.h6">Xuất kho đơn @_donXuat?.MaDonHang</MudText></TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Hệ thống đã gợi ý lô hết hạn trước. Sửa số lượng lấy từ từng lô nếu cần - mỗi dòng phải xuất đúng số lượng đặt.
+            Xác nhận sẽ trừ tồn kho và chuyển đơn sang "Đang giao".
+        </MudText>
+        <MudSelect T="string" @bind-Value="_nguoiGiaoXuat" Label="Người giao" Variant="Variant.Outlined"
+                   Clearable="true" Class="mb-3" Style="max-width:360px">
+            @foreach (var ns in _nguoiGiao)
+            {
+                <MudSelectItem T="string" Value="@ns.MaNhanSu">@ns.HoTen (@ns.MaNhanSu)</MudSelectItem>
+            }
+        </MudSelect>
+
+        @foreach (var dong in _xuatKho)
+        {
+            var daChon = dong.Lo.Sum(x => x.SoLuong);
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <div class="d-flex justify-space-between">
+                    <MudText Typo="Typo.subtitle2">@dong.TenThanhPham × @dong.SoLuong.ToString("0.###") @dong.DonViTinh</MudText>
+                    <MudText Typo="Typo.subtitle2" Color="@(daChon == dong.SoLuong ? Color.Success : Color.Error)">
+                        Đã chọn @daChon.ToString("0.###") / @dong.SoLuong.ToString("0.###")
+                    </MudText>
+                </div>
+                @if (dong.Lo.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Kho không còn lô nào của thành phẩm này.</MudAlert>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0" Class="mt-1">
+                        <thead><tr><th>Lô</th><th>Hạn dùng</th><th style="text-align:right">Tồn</th><th style="width:140px">Xuất</th></tr></thead>
+                        <tbody>
+                            @foreach (var lo in dong.Lo)
+                            {
+                                <tr>
+                                    <td>@lo.MaLo</td>
+                                    <td>@(lo.HanSuDung?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                    <td style="text-align:right">@lo.Ton.ToString("0.###")</td>
+                                    <td><MudNumericField @bind-Value="lo.SoLuong" Min="0m" Max="lo.Ton" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienXuat = false)">Đóng</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangXuLy" OnClick="XuatKhoAsync">Xác nhận xuất kho</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ==================== Huỷ ==================== *@
+<MudDialog @bind-Visible="_hienHuy" Options="_dialogNho">
+    <TitleContent><MudText Typo="Typo.h6">Huỷ đơn @_donHuy?.MaDonHang</MudText></TitleContent>
+    <DialogContent>
+        @if (_donHuy?.TrangThai == TrangThaiDonHangBan.DangGiao)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                Đơn đã xuất kho: huỷ sẽ ghi bút toán đảo, trả hàng về đúng các lô đã xuất.
+            </MudAlert>
+        }
+        <MudTextField @bind-Value="_lyDoHuy" Label="Lý do huỷ *" Variant="Variant.Outlined" Lines="2" MaxLength="500" Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienHuy = false)">Đóng</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="_dangXuLy" OnClick="HuyAsync">Huỷ đơn</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>Một lô trong bảng xuất kho: số lượng người dùng chốt, khởi tạo bằng gợi ý FEFO.</summary>
+    private sealed class OLo
+    {
+        public string MaLo { get; init; } = "";
+        public DateOnly? HanSuDung { get; init; }
+        public decimal Ton { get; init; }
+        public decimal SoLuong { get; set; }
+    }
+
+    private sealed class ODongXuat
+    {
+        public int DongId { get; init; }
+        public string TenThanhPham { get; init; } = "";
+        public string? DonViTinh { get; init; }
+        public decimal SoLuong { get; init; }
+        public List<OLo> Lo { get; init; } = new();
+    }
+
+    private List<DonHangBan> _danhSach = new();
+    private List<KhachHang> _khachHang = new();
+    private List<Product> _thanhPham = new();
+    private List<Warehouse> _kho = new();
+    private List<Staff> _nguoiGiao = new();
+    private Dictionary<string, string> _tenKhach = new();
+    private Dictionary<string, string> _tenThanhPham = new();
+
+    private TrangThaiDonHangBan? _loc;
+    private bool _dangTai = true;
+    private bool _dangXuLy;
+
+    private bool _hienForm;
+    private DonHangBan _input = new();
+    private DateTime? _ngayDat;
+    private DateTime? _ngayGiao;
+
+    private bool _hienXuat;
+    private DonHangBan? _donXuat;
+    private List<ODongXuat> _xuatKho = new();
+    private string? _nguoiGiaoXuat;
+
+    private bool _hienHuy;
+    private DonHangBan? _donHuy;
+    private string? _lyDoHuy;
+
+    private readonly DialogOptions _dialogLon = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
+    private readonly DialogOptions _dialogNho = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    private List<DonHangBan> DanhSachLoc => _loc is null ? _danhSach : _danhSach.Where(d => d.TrangThai == _loc).ToList();
+
+    protected override async Task OnInitializedAsync() => await TaiAsync();
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await DonHangService.LayTatCaAsync()).ToList();
+        _khachHang = (await KhachHangService.LayTatCaAsync()).ToList();
+        _kho = (await KhoDanhMucService.LayTatCaAsync()).ToList();
+        var sp = await ThucPhamService.LayTatCaAsync();
+        _thanhPham = sp.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham).ToList();
+        var nhanSu = (await NhanSuService.LayTatCaAsync()).Where(n => n.TrangThai).ToList();
+        // Ưu tiên nhân sự đánh dấu "người giao hàng"; chưa ai được đánh dấu thì cho chọn mọi nhân sự.
+        _nguoiGiao = nhanSu.Any(n => n.LaNguoiGiaoHang) ? nhanSu.Where(n => n.LaNguoiGiaoHang).ToList() : nhanSu;
+        _tenKhach = _khachHang.GroupBy(k => k.MaKhachHang).ToDictionary(g => g.Key, g => g.First().TenKhachHang);
+        _tenThanhPham = sp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
+        _dangTai = false;
+    }
+
+    private string TenKhach(string ma) => _tenKhach.GetValueOrDefault(ma) ?? ma;
+    private string TenThanhPham(string ma) => _tenThanhPham.GetValueOrDefault(ma) ?? ma;
+
+    private static string TenTrangThai(TrangThaiDonHangBan t) => t switch
+    {
+        TrangThaiDonHangBan.ChoXacNhan => "Chờ xác nhận",
+        TrangThaiDonHangBan.DaXacNhan => "Đã xác nhận",
+        TrangThaiDonHangBan.DangGiao => "Đang giao",
+        TrangThaiDonHangBan.DaGiao => "Đã giao",
+        TrangThaiDonHangBan.DaHuy => "Đã huỷ",
+        _ => t.ToString()
+    };
+
+    private static string TenTrangThaiHnC(string? s) => s switch
+    {
+        "CHO_XAC_NHAN" => "Chờ xác nhận",
+        "TU_CHOI" => "Từ chối",
+        "DANG_CHUAN_BI" => "Đang chuẩn bị",
+        "DANG_GIAO" => "Đang giao",
+        "DA_GIAO" => "Đã giao",
+        "GIAO_HANG_THANH_CONG" => "Giao thành công",
+        "TRA_HANG" => "Trả hàng",
+        "HUY" => "Huỷ",
+        _ => s ?? "-"
+    };
+
+    private static Color MauTrangThai(TrangThaiDonHangBan t) => t switch
+    {
+        TrangThaiDonHangBan.ChoXacNhan => Color.Info,
+        TrangThaiDonHangBan.DaXacNhan => Color.Primary,
+        TrangThaiDonHangBan.DangGiao => Color.Warning,
+        TrangThaiDonHangBan.DaGiao => Color.Success,
+        _ => Color.Default
+    };
+
+    // ---------- Tạo / sửa ----------
+
+    private void MoTao()
+    {
+        _input = new DonHangBan
+        {
+            MaKho = _kho.Count == 1 ? _kho[0].MaKho : "",
+            Dong = new() { new DonHangBanDong { SoLuong = 1 } }
+        };
+        _ngayDat = DateTime.Today;
+        _ngayGiao = null;
+        _hienForm = true;
+    }
+
+    /// <summary>Sửa trên BẢN SAO để bấm Đóng không làm đổi dòng trong bảng.</summary>
+    private void MoSua(DonHangBan d)
+    {
+        _input = new DonHangBan
+        {
+            Id = d.Id, MaDonHang = d.MaDonHang, MaKhachHang = d.MaKhachHang, MaKho = d.MaKho,
+            DiaChiGiao = d.DiaChiGiao, MaNguoiGiao = d.MaNguoiGiao, GhiChu = d.GhiChu,
+            Dong = d.Dong.OrderBy(l => l.Id).Select(l => new DonHangBanDong
+            {
+                MaThanhPham = l.MaThanhPham, SoLuong = l.SoLuong, DonGia = l.DonGia, GhiChu = l.GhiChu
+            }).ToList()
+        };
+        _ngayDat = d.NgayDat.ToDateTime(TimeOnly.MinValue);
+        _ngayGiao = d.NgayGiao?.ToDateTime(TimeOnly.MinValue);
+        _hienForm = true;
+    }
+
+    private void DoiKhachHang(string ma)
+    {
+        _input.MaKhachHang = ma;
+        var kh = _khachHang.FirstOrDefault(k => k.MaKhachHang == ma);
+        if (kh is not null && string.IsNullOrWhiteSpace(_input.DiaChiGiao)) _input.DiaChiGiao = kh.DiaChi;
+    }
+
+    private async Task LuuAsync()
+    {
+        _input.NgayDat = _ngayDat is { } a ? DateOnly.FromDateTime(a) : default;
+        _input.NgayGiao = _ngayGiao is { } b ? DateOnly.FromDateTime(b) : null;
+        var laMoi = _input.Id == 0;
+        await ChayAsync(() => laMoi ? DonHangService.TaoAsync(_input) : DonHangService.CapNhatAsync(_input),
+                        () => _hienForm = false);
+    }
+
+    // ---------- Xuất kho ----------
+
+    private async Task MoXuatKhoAsync(DonHangBan d)
+    {
+        _donXuat = d;
+        _nguoiGiaoXuat = d.MaNguoiGiao;
+        var goiY = await DonHangService.GoiYXuatKhoAsync(d.Id);
+        _xuatKho = goiY.Select(g => new ODongXuat
+        {
+            DongId = g.DongId, TenThanhPham = g.TenThanhPham, DonViTinh = g.DonViTinh, SoLuong = g.SoLuong,
+            Lo = g.Lo.Select(x => new OLo { MaLo = x.MaLo, HanSuDung = x.HanSuDung, Ton = x.Ton, SoLuong = x.GoiY }).ToList()
+        }).ToList();
+        _hienXuat = true;
+    }
+
+    private async Task XuatKhoAsync()
+    {
+        if (_donXuat is null) return;
+        var phanBo = _xuatKho.SelectMany(d => d.Lo.Where(x => x.SoLuong > 0)
+            .Select(x => new PhanBoLoRequest(d.DongId, x.MaLo, x.SoLuong))).ToList();
+        await ChayAsync(() => DonHangService.XuatKhoAsync(_donXuat.Id, phanBo, _nguoiGiaoXuat), () => _hienXuat = false);
+    }
+
+    // ---------- Huỷ / xoá ----------
+
+    private void MoHuy(DonHangBan d)
+    {
+        _donHuy = d;
+        _lyDoHuy = null;
+        _hienHuy = true;
+    }
+
+    private async Task HuyAsync()
+    {
+        if (_donHuy is null) return;
+        await ChayAsync(() => DonHangService.HuyAsync(_donHuy.Id, _lyDoHuy), () => _hienHuy = false);
+    }
+
+    private async Task XoaAsync(DonHangBan d)
+    {
+        var dongY = await DialogService.ShowMessageBox("Xác nhận xoá", $"Xoá đơn \"{d.MaDonHang}\"?",
+                                                       yesText: "Xoá", cancelText: "Huỷ");
+        if (dongY == true) await ChayAsync(() => DonHangService.XoaAsync(d.Id));
+    }
+
+    /// <summary>Chạy một thao tác, báo kết quả, tải lại danh sách khi thành công.</summary>
+    private async Task ChayAsync(Func<Task<KetQuaThaoTac>> thaoTac, Action? khiThanhCong = null)
+    {
+        _dangXuLy = true;
+        var kq = await thaoTac();
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (!kq.ThanhCong) return;
+        khiThanhCong?.Invoke();
+        await TaiAsync();
+    }
+}

@@ -45,9 +45,9 @@ public class KhoService : IDanhMucService<Warehouse>
         await _db.SaveChangesAsync(ct);
 
         // Lưu xong thì đưa vào hàng đợi để job nền tự đồng bộ sang HanoiCheck.
-        await _outbox.ThemAsync("Warehouse", entity.MaKho, HnCPayloadMapper.Kho(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm kho \"{entity.TenKho}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm kho \"{entity.TenKho}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(Warehouse entity, CancellationToken ct = default)
@@ -66,14 +66,15 @@ public class KhoService : IDanhMucService<Warehouse>
         hienTai.TenKho = entity.TenKho.Trim();
         hienTai.DiaChi = entity.DiaChi.Trim();
         hienTai.DienTich = entity.DienTich;
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
 
         // merge của HnC là upsert theo ma_kho, nên sửa cũng gửi lại cả bản ghi.
-        await _outbox.ThemAsync("Warehouse", hienTai.MaKho, HnCPayloadMapper.Kho(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật kho \"{hienTai.TenKho}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật kho \"{hienTai.TenKho}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)

@@ -10,9 +10,12 @@ namespace HCP.Domain.Entities.Business;
 /// bản đã mã hoá, còn <see cref="Cccd"/> là plaintext [không map DB] chỉ tồn tại trong bộ nhớ
 /// để nhập/hiển thị và dựng payload gửi HnC. Tầng service chịu trách nhiệm mã hoá/giải mã.
 /// </summary>
-public class Staff : TenantEntity
+public class Staff : TenantEntity, ICoDongBoHnC
 {
     public int Id { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_nhan_su - khoá nghiệp vụ.</summary>
     public string MaNhanSu { get; set; } = string.Empty;

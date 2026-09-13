@@ -97,10 +97,9 @@ else
         <MudForm @ref="_form" Model="_input">
             <MudGrid>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="_input.MaNccDauVao" Label="Mã nhà cung ứng"
-                                  Variant="Variant.Outlined" MaxLength="255"
-                                  HelperText="vd NCC001."
-                                  Required="true" RequiredError="Vui lòng nhập mã" />
+                    <MudTextField T="string" Value="@(_dangSua ? _input.MaNccDauVao : "(tự sinh khi lưu)")"
+                                  Label="Mã nhà cung ứng" Variant="Variant.Outlined" ReadOnly="true"
+                                  HelperText="Hệ thống tự sinh dạng NCC-0001, không sửa được." />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="_input.MaSoThue" Label="Mã số thuế"
@@ -120,6 +119,7 @@ else
                                   Variant="Variant.Outlined" MaxLength="20" />
                 </MudItem>
             </MudGrid>
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
         </MudForm>
 
         <MudDivider Class="my-4" />
@@ -321,7 +321,7 @@ else
         {
             _input = new SubSupplier
             {
-                Id = ncc.Id,
+                Id = ncc.Id, DongBoHnC = ncc.DongBoHnC,
                 MaNccDauVao = ncc.MaNccDauVao,
                 Ten = ncc.Ten,
                 MaSoThue = ncc.MaSoThue,

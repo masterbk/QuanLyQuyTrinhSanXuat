@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,11 +15,13 @@ public class CoSoSanXuatService : IDanhMucService<Facility>
 {
     private readonly AppDbContext _db;
     private readonly ISyncOutboxWriter _outbox;
+    private readonly IMaTuSinhService _maTuSinh;
 
-    public CoSoSanXuatService(AppDbContext db, ISyncOutboxWriter outbox)
+    public CoSoSanXuatService(AppDbContext db, ISyncOutboxWriter outbox, IMaTuSinhService maTuSinh)
     {
         _db = db;
         _outbox = outbox;
+        _maTuSinh = maTuSinh;
     }
 
     public async Task<IReadOnlyList<Facility>> LayTatCaAsync(CancellationToken ct = default) =>
@@ -29,22 +32,18 @@ public class CoSoSanXuatService : IDanhMucService<Facility>
 
     public async Task<KetQuaThaoTac> ThemAsync(Facility entity, CancellationToken ct = default)
     {
-        entity.MaCoSo = entity.MaCoSo.Trim();
-
-        if (await _db.Facilities.AnyAsync(f => f.MaCoSo == entity.MaCoSo, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã cơ sở \"{entity.MaCoSo}\" đã tồn tại.");
-        }
-
         entity.TenCoSo = entity.TenCoSo.Trim();
         entity.DiaChi = entity.DiaChi?.Trim();
+
+        // Mã do hệ thống cấp (CS-0001...), bỏ qua mọi mã gửi lên.
+        entity.MaCoSo = await _maTuSinh.SinhAsync(LoaiMaTuSinh.CoSo, ct: ct);
 
         _db.Facilities.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Facility", entity.MaCoSo, HnCPayloadMapper.CoSo(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm cơ sở \"{entity.TenCoSo}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm cơ sở \"{entity.TenCoSo}\" (mã {entity.MaCoSo}).").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(Facility entity, CancellationToken ct = default)
@@ -52,23 +51,17 @@ public class CoSoSanXuatService : IDanhMucService<Facility>
         var hienTai = await LayTheoIdAsync(entity.Id, ct);
         if (hienTai is null) return KetQuaThaoTac.Loi("Không tìm thấy cơ sở cần sửa.");
 
-        var maMoi = entity.MaCoSo.Trim();
-
-        if (await _db.Facilities.AnyAsync(f => f.MaCoSo == maMoi && f.Id != entity.Id, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã cơ sở \"{maMoi}\" đã được dùng cho cơ sở khác.");
-        }
-
-        hienTai.MaCoSo = maMoi;
+        // Mã cơ sở KHÔNG sửa được: là khoá đối chiếu với HanoiCheck và được lô/khâu tham chiếu.
         hienTai.TenCoSo = entity.TenCoSo.Trim();
         hienTai.DiaChi = entity.DiaChi?.Trim();
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Facility", hienTai.MaCoSo, HnCPayloadMapper.CoSo(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật cơ sở \"{hienTai.TenCoSo}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật cơ sở \"{hienTai.TenCoSo}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)

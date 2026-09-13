@@ -8,8 +8,9 @@ public sealed record LamMoiRequest(string RefreshToken, string? ThietBi);
 
 public sealed record DangXuatRequest(string RefreshToken);
 
+/// <param name="HanoiCheckBat">Công tắc đồng bộ HanoiCheck của cơ sở: tắt thì app ẩn phần HanoiCheck.</param>
 public sealed record NguoiDungDto(string Id, string Email, string? HoTen, string? MaCoSo,
-                                  IReadOnlyList<string> VaiTro);
+                                  IReadOnlyList<string> VaiTro, bool HanoiCheckBat);
 
 public sealed record PhienDto(string AccessToken, DateTime AccessTokenHetHanUtc,
                               string RefreshToken, DateTime RefreshTokenHetHanUtc,
@@ -30,25 +31,66 @@ public sealed record KetQuaDto(bool ThanhCong, string ThongBao);
 
 // ================== Lệnh sản xuất ==================
 
+/// <summary>
+/// Lệnh sản xuất: phần đầu dùng chung + danh sách sản phẩm, mỗi sản phẩm là một lô riêng.
+/// </summary>
 public sealed record LenhSanXuatDto(
-    int Id, string MaLenh, string MaThanhPham, string? TenThanhPham, decimal SoLuong,
-    string MaKho, string MaLoThanhPham, DateOnly? HanSuDungThanhPham, DateOnly NgaySanXuat,
-    string TrangThai, string TrangThaiHienThi, bool TaoLoDongBo, string? MaLoDaTao,
+    int Id, string MaLenh, string MaKho, DateOnly NgaySanXuat,
+    string TrangThai, string TrangThaiHienThi, bool TaoLoDongBo,
     DateTime? ThoiGianHoanThanhUtc, DateTime? ThoiGianHuyUtc, string? LyDoHuy, string? GhiChu,
+    IReadOnlyList<LenhSanXuatSanPhamDto> SanPham);
+
+public sealed record LenhSanXuatSanPhamDto(
+    int Id, string MaThanhPham, string? TenThanhPham, decimal SoLuong,
+    string MaLoThanhPham, DateOnly? HanSuDung, string MaQuyTrinh, string? TenQuyTrinh,
+    string? MaLoDaTao,
+    IReadOnlyList<LenhSanXuatKhauDto> Khau,
     IReadOnlyList<AnhLenhDto> Anh);
+
+public sealed record LenhSanXuatKhauDto(
+    int Id, string MaKhau, string? TenKhau, int ThuTu,
+    string MaCoSo, string? TenCoSo, IReadOnlyList<string> NguoiThucHien, string? GhiChu);
 
 public sealed record AnhLenhDto(string MaFile, string TenFile, string DuongDan);
 
+/// <summary>MaLenh bị bỏ qua: mã lệnh do hệ thống sinh.</summary>
 public sealed record LenhSanXuatLuuRequest(
-    string MaLenh, string MaThanhPham, decimal SoLuong, string MaKho, string MaLoThanhPham,
-    DateOnly? HanSuDungThanhPham, DateOnly? NgaySanXuat, bool TaoLoDongBo, string? GhiChu);
+    string? MaLenh, string MaKho, DateOnly? NgaySanXuat, bool TaoLoDongBo, string? GhiChu,
+    IReadOnlyList<LenhSanXuatSanPhamRequest>? SanPham);
+
+/// <summary>MaLoThanhPham: để trống với dòng mới (hệ thống cấp mã); dòng cũ gửi lại đúng mã đã cấp.</summary>
+public sealed record LenhSanXuatSanPhamRequest(
+    string MaThanhPham, decimal SoLuong, string? MaLoThanhPham, DateOnly? HanSuDung,
+    string MaQuyTrinh, IReadOnlyList<LenhSanXuatKhauRequest>? Khau);
+
+public sealed record LenhSanXuatKhauRequest(
+    string MaKhau, int ThuTu, string MaCoSo, IReadOnlyList<string>? NguoiThucHien, string? GhiChu);
+
+/// <summary>Sửa lại người thực hiện / cơ sở của một khâu ngay lúc bấm Hoàn thành.</summary>
+public sealed record KhauSuaLaiRequest(
+    int Id, string MaCoSo, IReadOnlyList<string>? NguoiThucHien, string? GhiChu);
 
 public sealed record HuyLenhRequest(string LyDo);
+
+/// <summary>Xem trước nguyên liệu cho NHIỀU dòng sản phẩm cùng lúc (nhu cầu được cộng dồn).</summary>
+public sealed record NguyenLieuCanRequest(string MaKho, IReadOnlyList<DongSanPhamRequest>? Dong);
+
+public sealed record DongSanPhamRequest(string MaThanhPham, decimal SoLuong);
 
 public sealed record NguyenLieuCanDtoApi(string MaNguyenLieu, string TenNguyenLieu, string? DonViTinh,
                                          decimal Can, decimal Ton, bool Du);
 
-public sealed record ThanhPhamDto(string MaSanPham, string TenSanPham, string? DonViTinh);
+public sealed record ThanhPhamDto(string MaSanPham, string TenSanPham, string? DonViTinh,
+                                  string? MaQuyTrinh);
+
+public sealed record QuyTrinhDto(string MaQuyTrinh, string TenQuyTrinh,
+                                 IReadOnlyList<KhauDto> Khau);
+
+public sealed record KhauDto(string MaKhau, string? TenKhau, int ThuTu);
+
+public sealed record CoSoDto(string MaCoSo, string TenCoSo, string? DiaChi);
+
+public sealed record NhanSuDto(string MaNhanSu, string HoTen, string? ViTri);
 
 public sealed record KhoDto(string MaKho, string TenKho);
 
@@ -71,9 +113,13 @@ public sealed record PhanBoDto(string? MaPhieuXuat, string? MaThucPhamNcc, strin
 
 // ================== Đơn hàng cơ sở tự tạo (đẩy lên HanoiCheck) ==================
 
-public sealed record DonHangDto(
-    int Id, string MaDonHang, string LoaiDonHang, string MaTruong, DateOnly? NgayDonHang,
-    string? DiemGiao, string? DiaChiNhan, string? MaNguoiGiao, string TrangThai,
-    string TrangThaiHienThi, string? GhiChu, IReadOnlyList<DonHangDongDto> Dong);
+public sealed record DonHangBanDto(
+    int Id, string MaDonHang, string MaKhachHang, string? TenKhachHang, string MaKho, DateOnly NgayDat,
+    DateOnly? NgayGiao, string? DiaChiGiao, string? MaNguoiGiao, string TrangThai, string TrangThaiHienThi,
+    string Nguon, string? MaDonHnC, string? GhiChu, string? LyDoHuy, decimal TongTien,
+    DateTime? ThoiGianXuatKhoUtc, DateTime? ThoiGianGiaoUtc, IReadOnlyList<DonHangBanDongDto> Dong);
 
-public sealed record DonHangDongDto(string? MaSanPham, string? MaLoaiSp, string? MaMonAn, decimal SoLuong);
+public sealed record DonHangBanDongDto(int Id, string MaThanhPham, string? TenThanhPham, decimal SoLuong,
+                                       decimal DonGia, decimal ThanhTien, IReadOnlyList<XuatLoDto> XuatLo);
+
+public sealed record XuatLoDto(string MaLo, DateOnly? HanSuDung, decimal SoLuong);

@@ -51,9 +51,9 @@ public class MonAnService : IDanhMucService<Dish>
         _db.Dishes.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Dish", entity.MaMonAn, HnCPayloadMapper.MonAn(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm món ăn \"{entity.TenMonAn}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm món ăn \"{entity.TenMonAn}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(Dish entity, CancellationToken ct = default)
@@ -79,6 +79,7 @@ public class MonAnService : IDanhMucService<Dish>
         hienTai.MoTa = entity.MoTa;
         hienTai.MaCoSo = entity.MaCoSo;
         hienTai.MaQuyTrinh = entity.MaQuyTrinh;
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         _db.DishIngredients.RemoveRange(hienTai.DanhSachNguyenLieu);
@@ -91,9 +92,9 @@ public class MonAnService : IDanhMucService<Dish>
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Dish", hienTai.MaMonAn, HnCPayloadMapper.MonAn(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật món ăn \"{hienTai.TenMonAn}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật món ăn \"{hienTai.TenMonAn}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)

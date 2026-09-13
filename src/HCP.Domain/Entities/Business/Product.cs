@@ -7,9 +7,12 @@ namespace HCP.Domain.Entities.Business;
 /// Thực phẩm / SKU của cơ sở - danh mục ổn định, khai một lần rồi dùng lại cho nhiều lô nhập.
 /// Đồng bộ qua POST /supplier/foods/merge (bất đồng bộ, trả 202).
 /// </summary>
-public class Product : TenantEntity
+public class Product : TenantEntity, ICoDongBoHnC
 {
     public int Id { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_san_pham - mã SKU, khoá nghiệp vụ.</summary>
     public string MaSanPham { get; set; } = string.Empty;

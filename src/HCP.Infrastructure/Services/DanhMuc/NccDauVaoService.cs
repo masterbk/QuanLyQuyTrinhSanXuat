@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,11 +15,13 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
 {
     private readonly AppDbContext _db;
     private readonly ISyncOutboxWriter _outbox;
+    private readonly IMaTuSinhService _maTuSinh;
 
-    public NccDauVaoService(AppDbContext db, ISyncOutboxWriter outbox)
+    public NccDauVaoService(AppDbContext db, ISyncOutboxWriter outbox, IMaTuSinhService maTuSinh)
     {
         _db = db;
         _outbox = outbox;
+        _maTuSinh = maTuSinh;
     }
 
     public async Task<IReadOnlyList<SubSupplier>> LayTatCaAsync(CancellationToken ct = default) =>
@@ -35,24 +38,20 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
 
     public async Task<KetQuaThaoTac> ThemAsync(SubSupplier entity, CancellationToken ct = default)
     {
-        entity.MaNccDauVao = entity.MaNccDauVao.Trim();
-
-        if (await _db.SubSuppliers.AnyAsync(s => s.MaNccDauVao == entity.MaNccDauVao, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã nhà cung ứng \"{entity.MaNccDauVao}\" đã tồn tại.");
-        }
-
         var loi = KiemTraDuLieu(entity);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
         ChuanHoa(entity);
 
+        // Mã do hệ thống cấp (NCC-0001...), bỏ qua mọi mã gửi lên. Sinh SAU kiểm tra để không phí số.
+        entity.MaNccDauVao = await _maTuSinh.SinhAsync(LoaiMaTuSinh.NccDauVao, ct: ct);
+
         _db.SubSuppliers.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("SubSupplier", entity.MaNccDauVao, HnCPayloadMapper.NccDauVao(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm nhà cung ứng \"{entity.Ten}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm nhà cung ứng \"{entity.Ten}\" (mã {entity.MaNccDauVao}).").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(SubSupplier entity, CancellationToken ct = default)
@@ -60,19 +59,12 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
         var hienTai = await LayTheoIdAsync(entity.Id, ct);
         if (hienTai is null) return KetQuaThaoTac.Loi("Không tìm thấy nhà cung ứng cần sửa.");
 
-        var maMoi = entity.MaNccDauVao.Trim();
-
-        if (await _db.SubSuppliers.AnyAsync(s => s.MaNccDauVao == maMoi && s.Id != entity.Id, ct))
-        {
-            return KetQuaThaoTac.Loi($"Mã nhà cung ứng \"{maMoi}\" đã được dùng cho đơn vị khác.");
-        }
-
+        // Mã nhà cung ứng KHÔNG sửa được: là khoá đối chiếu với HanoiCheck.
         var loi = KiemTraDuLieu(entity);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
         ChuanHoa(entity);
 
-        hienTai.MaNccDauVao = maMoi;
         hienTai.Ten = entity.Ten;
         hienTai.MaSoThue = entity.MaSoThue;
         hienTai.DiaChi = entity.DiaChi;
@@ -87,6 +79,7 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
         hienTai.HopDongNgayKy = entity.HopDongNgayKy;
         hienTai.HopDongNgayHetHan = entity.HopDongNgayHetHan;
 
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         _db.SubSupplierFoodGroups.RemoveRange(hienTai.NhomThucPham);
@@ -96,9 +89,9 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("SubSupplier", hienTai.MaNccDauVao, HnCPayloadMapper.NccDauVao(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật nhà cung ứng \"{hienTai.Ten}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật nhà cung ứng \"{hienTai.Ten}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)

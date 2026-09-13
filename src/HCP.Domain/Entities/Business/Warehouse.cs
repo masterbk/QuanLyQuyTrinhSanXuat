@@ -9,9 +9,12 @@ namespace HCP.Domain.Entities.Business;
 /// Đây là entity nghiệp vụ mẫu - mọi entity nghiệp vụ khác theo đúng khuôn này:
 /// kế thừa TenantEntity + đăng ký .IsMultiTenant() trong AppDbContext.
 /// </summary>
-public class Warehouse : TenantEntity
+public class Warehouse : TenantEntity, ICoDongBoHnC
 {
     public int Id { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_kho - khoá nghiệp vụ dùng để upsert phía HnC. Tối đa 255 ký tự.</summary>
     public string MaKho { get; set; } = string.Empty;

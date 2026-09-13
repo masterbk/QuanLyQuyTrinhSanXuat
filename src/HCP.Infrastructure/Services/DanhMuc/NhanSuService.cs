@@ -59,9 +59,9 @@ public class NhanSuService : IDanhMucService<Staff>
         _db.Staff.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Staff", entity.MaNhanSu, HnCPayloadMapper.NhanSu(entity), ct);
+        var dongBo = await _outbox.GuiAsync(entity, ct);
 
-        return KetQuaThaoTac.Ok($"Đã thêm nhân sự \"{entity.HoTen}\".");
+        return KetQuaThaoTac.Ok($"Đã thêm nhân sự \"{entity.HoTen}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> CapNhatAsync(Staff entity, CancellationToken ct = default)
@@ -105,13 +105,14 @@ public class NhanSuService : IDanhMucService<Staff>
 
         hienTai.Cccd = entity.Cccd;      // giữ plaintext cho payload
         MaHoaCccd(hienTai);              // đồng thời cập nhật bản mã hoá lưu DB
+        hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
 
-        await _outbox.ThemAsync("Staff", hienTai.MaNhanSu, HnCPayloadMapper.NhanSu(hienTai), ct);
+        var dongBo = await _outbox.GuiAsync(hienTai, ct);
 
-        return KetQuaThaoTac.Ok($"Đã cập nhật nhân sự \"{hienTai.HoTen}\".");
+        return KetQuaThaoTac.Ok($"Đã cập nhật nhân sự \"{hienTai.HoTen}\".").KemGhiChu(dongBo);
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)

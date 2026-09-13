@@ -6,9 +6,12 @@ namespace HCP.Domain.Entities.Business;
 /// Nhà cung ứng đầu vào (nguồn nguyên liệu của cơ sở).
 /// Đồng bộ qua POST /supplier/sub-suppliers/merge (đồng bộ, trả 200).
 /// </summary>
-public class SubSupplier : TenantEntity
+public class SubSupplier : TenantEntity, ICoDongBoHnC
 {
     public int Id { get; set; }
+
+    /// <summary>Có gửi bản ghi này sang HanoiCheck không (khi cơ sở bật đồng bộ). Mặc định có.</summary>
+    public bool DongBoHnC { get; set; } = true;
 
     /// <summary>ma_ncc_dau_vao - khoá nghiệp vụ.</summary>
     public string MaNccDauVao { get; set; } = string.Empty;

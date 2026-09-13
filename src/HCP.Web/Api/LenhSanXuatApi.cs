@@ -1,9 +1,9 @@
+using System.Text.Json;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Services.DanhMuc;
 using HCP.Infrastructure.Services.Kho;
 using HCP.Web.Services;
-using Microsoft.AspNetCore.Mvc;
 
 namespace HCP.Web.Api;
 
@@ -11,7 +11,12 @@ namespace HCP.Web.Api;
 public static class LenhSanXuatApi
 {
     /// <summary>Ảnh chụp từ điện thoại: chặn ở mức này để một lần gửi không quá nặng.</summary>
-    private const int SoAnhToiDa = 10;
+    private const int SoAnhToiDa = 30;
+
+    /// <summary>Tiền tố tên trường file trong multipart để biết ảnh thuộc dòng sản phẩm nào: anh_{id}.</summary>
+    private const string TienToTruongAnh = "anh_";
+
+    private static readonly JsonSerializerOptions JsonForm = new() { PropertyNameCaseInsensitive = true };
 
     public static void MapLenhSanXuatApi(this IEndpointRouteBuilder app)
     {
@@ -20,24 +25,29 @@ public static class LenhSanXuatApi
             .WithTags("Lệnh sản xuất");
 
         nhom.MapGet("", async (ILenhSanXuatService svc, IDanhMucService<Product> sp,
+                               IDanhMucService<ProductionProcess> qt, IDanhMucService<ProductionStep> khau,
+                               IDanhMucService<Facility> coSo,
                                string? trangThai, int trang = 1, int soDong = 20) =>
         {
             var tatCa = await svc.LayTatCaAsync();
             if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiLenhSX>(trangThai, true, out var tt))
                 tatCa = tatCa.Where(l => l.TrangThai == tt).ToList();
 
-            var ten = await TenThanhPhamAsync(sp);
+            var ten = await LayTenAsync(sp, qt, khau, coSo);
             var (t, n) = ChuanHoaTrang(trang, soDong);
             var trangDl = tatCa.Skip((t - 1) * n).Take(n).Select(l => Map(l, ten)).ToList();
             return Results.Ok(new TrangDuLieu<LenhSanXuatDto>(trangDl, t, n, tatCa.Count));
         });
 
-        nhom.MapGet("/{id:int}", async (int id, ILenhSanXuatService svc, IDanhMucService<Product> sp) =>
+        nhom.MapGet("/{id:int}", async (int id, ILenhSanXuatService svc, IDanhMucService<Product> sp,
+                                        IDanhMucService<ProductionProcess> qt,
+                                        IDanhMucService<ProductionStep> khau,
+                                        IDanhMucService<Facility> coSo) =>
         {
             var lenh = await svc.LayTheoIdAsync(id);
             return lenh is null
                 ? Results.NotFound(new LoiDto("Không tìm thấy lệnh sản xuất."))
-                : Results.Ok(Map(lenh, await TenThanhPhamAsync(sp)));
+                : Results.Ok(Map(lenh, await LayTenAsync(sp, qt, khau, coSo)));
         });
 
         nhom.MapPost("", async (LenhSanXuatLuuRequest req, ILenhSanXuatService svc) =>
@@ -64,7 +74,10 @@ public static class LenhSanXuatApi
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         });
 
-        // Hoàn thành: multipart/form-data, trường "anh" chứa 1..n ảnh chụp lô thành phẩm.
+        // Hoàn thành: multipart/form-data.
+        //   - ảnh: mỗi trường tên "anh_{idSanPham}" chứa 1..n ảnh của ĐÚNG lô đó (lệnh 1 sản phẩm
+        //     thì chấp nhận tên trường "anh" cho gọn);
+        //   - trường "khau" (tuỳ chọn): JSON mảng KhauSuaLaiRequest nếu người làm thực tế khác kế hoạch.
         nhom.MapPost("/{id:int}/hoan-thanh", async (int id, HttpRequest http,
                                                     ILenhSanXuatService svc, ILuuTruAnhService luuAnh,
                                                     CancellationToken ct) =>
@@ -84,17 +97,28 @@ public static class LenhSanXuatApi
                 return Results.BadRequest(new LoiDto("Dữ liệu ảnh gửi lên không đọc được. Vui lòng thử lại."));
             }
 
+            var lenh = await svc.LayTheoIdAsync(id, ct);
+            if (lenh is null) return Results.NotFound(new LoiDto("Không tìm thấy lệnh sản xuất."));
+
             var files = form.Files.Where(f => f.Length > 0).Take(SoAnhToiDa).ToList();
             if (files.Count == 0)
                 return Results.BadRequest(new LoiDto("Cần tải lên ít nhất 1 ảnh lô thành phẩm."));
 
-            var anh = new List<AnhLoSanXuat>();
+            var idHopLe = lenh.SanPham.Select(s => s.Id).ToHashSet();
+            var theoDong = new Dictionary<int, List<AnhLoSanXuat>>();
             foreach (var f in files)
             {
+                if (!ThuocDongNao(f.Name, lenh, idHopLe, out var sanPhamId))
+                    return Results.BadRequest(new LoiDto(
+                        $"Trường \"{f.Name}\" không gắn được với sản phẩm nào trong lệnh. "
+                        + "Hãy đặt tên trường là anh_{id sản phẩm}."));
+
                 try
                 {
                     await using var luong = f.OpenReadStream();
-                    anh.Add(await luuAnh.LuuAsync(luong, f.FileName, f.ContentType, f.Length, ct));
+                    var anh = await luuAnh.LuuAsync(luong, f.FileName, f.ContentType, f.Length, ct);
+                    if (!theoDong.TryGetValue(sanPhamId, out var ds)) theoDong[sanPhamId] = ds = new();
+                    ds.Add(anh);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -102,7 +126,27 @@ public static class LenhSanXuatApi
                 }
             }
 
-            var kq = await svc.ThucHienAsync(id, anh, ct);
+            IReadOnlyList<LenhSanXuatKhau>? khauSuaLai = null;
+            var khauJson = form["khau"].ToString();
+            if (!string.IsNullOrWhiteSpace(khauJson))
+            {
+                try
+                {
+                    khauSuaLai = (JsonSerializer.Deserialize<List<KhauSuaLaiRequest>>(khauJson, JsonForm) ?? new())
+                        .Select(k => new LenhSanXuatKhau
+                        {
+                            Id = k.Id, MaCoSo = k.MaCoSo, GhiChu = k.GhiChu,
+                            NguoiThucHienCsv = string.Join(",", k.NguoiThucHien ?? Array.Empty<string>())
+                        }).ToList();
+                }
+                catch (JsonException)
+                {
+                    return Results.BadRequest(new LoiDto("Trường \"khau\" không phải JSON hợp lệ."));
+                }
+            }
+
+            var anhTheoSanPham = theoDong.Select(x => new AnhTheoSanPham(x.Key, x.Value)).ToList();
+            var kq = await svc.ThucHienAsync(id, anhTheoSanPham, khauSuaLai, ct);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         }).DisableAntiforgery();
@@ -114,61 +158,137 @@ public static class LenhSanXuatApi
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         });
 
-        nhom.MapGet("/nguyen-lieu-can", async (string maThanhPham, decimal soLuong, string maKho,
-                                               ILenhSanXuatService svc) =>
+        // POST (không phải GET) vì nhu cầu tính trên NHIỀU dòng sản phẩm một lúc.
+        nhom.MapPost("/nguyen-lieu-can", async (NguyenLieuCanRequest req, ILenhSanXuatService svc) =>
         {
-            var ds = await svc.TinhNguyenLieuCanAsync(maThanhPham, soLuong, maKho);
+            var dong = (req.Dong ?? Array.Empty<DongSanPhamRequest>())
+                .Select(d => (d.MaThanhPham, d.SoLuong)).ToList();
+            var ds = await svc.TinhNguyenLieuCanAsync(dong, req.MaKho);
             return Results.Ok(ds.Select(x => new NguyenLieuCanDtoApi(
                 x.MaNguyenLieu, x.TenNguyenLieu, x.DonViTinh, x.Can, x.Ton, x.Du)).ToList());
         });
 
-        // Danh mục để app đổ vào ô chọn: chỉ thành phẩm ĐÃ có định mức mới sản xuất được.
+        MapDanhMuc(app);
+    }
+
+    /// <summary>Danh mục để app đổ vào các ô chọn khi lập lệnh.</summary>
+    private static void MapDanhMuc(IEndpointRouteBuilder app)
+    {
         var dm = app.MapGroup("/api/v1/danh-muc")
             .RequireAuthorization(ApiAuth.ChinhSach)
             .WithTags("Danh mục");
 
+        // Chỉ thành phẩm ĐÃ có định mức mới sản xuất được.
         dm.MapGet("/thanh-pham", async (IDanhMucService<Product> sp, IDinhMucService dinhMuc) =>
         {
             var ds = new List<ThanhPhamDto>();
             foreach (var p in (await sp.LayTatCaAsync()).Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham))
             {
                 if ((await dinhMuc.LayTheoThanhPhamAsync(p.Id)).Count > 0)
-                    ds.Add(new ThanhPhamDto(p.MaSanPham, p.TenSanPham, p.DonViTinh));
+                    ds.Add(new ThanhPhamDto(p.MaSanPham, p.TenSanPham, p.DonViTinh, p.MaQuyTrinh));
             }
             return Results.Ok(ds);
         });
 
         dm.MapGet("/kho", async (IDanhMucService<Warehouse> kho) =>
             Results.Ok((await kho.LayTatCaAsync()).Select(k => new KhoDto(k.MaKho, k.TenKho)).ToList()));
+
+        dm.MapGet("/quy-trinh", async (IDanhMucService<ProductionProcess> qt,
+                                       IDanhMucService<ProductionStep> khau) =>
+        {
+            var tenKhau = (await khau.LayTatCaAsync()).GroupBy(k => k.MaKhau)
+                .ToDictionary(g => g.Key, g => g.First().TenKhau);
+            return Results.Ok((await qt.LayTatCaAsync()).Select(q => new QuyTrinhDto(
+                q.MaQuyTrinh, q.TenQuyTrinh,
+                q.DanhSachKhau.OrderBy(k => k.ThuTu)
+                    .Select(k => new KhauDto(k.MaKhau, tenKhau.GetValueOrDefault(k.MaKhau), k.ThuTu))
+                    .ToList())).ToList());
+        });
+
+        dm.MapGet("/co-so", async (IDanhMucService<Facility> coSo) =>
+            Results.Ok((await coSo.LayTatCaAsync())
+                .Select(c => new CoSoDto(c.MaCoSo, c.TenCoSo, c.DiaChi)).ToList()));
+
+        dm.MapGet("/nhan-su", async (IDanhMucService<Staff> ns) =>
+            Results.Ok((await ns.LayTatCaAsync()).Where(n => n.TrangThai)
+                .Select(n => new NhanSuDto(n.MaNhanSu, n.HoTen, n.ViTri)).ToList()));
     }
 
     internal static (int Trang, int SoDong) ChuanHoaTrang(int trang, int soDong) =>
         (Math.Max(1, trang), Math.Clamp(soDong, 1, 100));
 
-    private static async Task<Dictionary<string, string>> TenThanhPhamAsync(IDanhMucService<Product> sp) =>
-        (await sp.LayTatCaAsync()).GroupBy(p => p.MaSanPham)
-            .ToDictionary(g => g.Key, g => g.First().TenSanPham);
+    /// <summary>
+    /// Xác định ảnh thuộc dòng sản phẩm nào qua tên trường "anh_{id}". Lệnh chỉ có một sản phẩm thì
+    /// chấp nhận tên trường bất kỳ (app cũ gửi "anh") để không phải ép client đổi ngay.
+    /// </summary>
+    private static bool ThuocDongNao(string tenTruong, LenhSanXuat lenh, HashSet<int> idHopLe, out int sanPhamId)
+    {
+        if (tenTruong.StartsWith(TienToTruongAnh, StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(tenTruong[TienToTruongAnh.Length..], out sanPhamId)
+            && idHopLe.Contains(sanPhamId))
+            return true;
+
+        if (lenh.SanPham.Count == 1)
+        {
+            sanPhamId = lenh.SanPham[0].Id;
+            return true;
+        }
+
+        sanPhamId = 0;
+        return false;
+    }
+
+    private sealed record BangTen(
+        IReadOnlyDictionary<string, string> ThanhPham,
+        IReadOnlyDictionary<string, string> QuyTrinh,
+        IReadOnlyDictionary<string, string> Khau,
+        IReadOnlyDictionary<string, string> CoSo);
+
+    private static async Task<BangTen> LayTenAsync(
+        IDanhMucService<Product> sp, IDanhMucService<ProductionProcess> qt,
+        IDanhMucService<ProductionStep> khau, IDanhMucService<Facility> coSo) => new(
+        (await sp.LayTatCaAsync()).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham),
+        (await qt.LayTatCaAsync()).GroupBy(p => p.MaQuyTrinh).ToDictionary(g => g.Key, g => g.First().TenQuyTrinh),
+        (await khau.LayTatCaAsync()).GroupBy(p => p.MaKhau).ToDictionary(g => g.Key, g => g.First().TenKhau),
+        (await coSo.LayTatCaAsync()).GroupBy(p => p.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo));
 
     private static LenhSanXuat TuRequest(LenhSanXuat lenh, LenhSanXuatLuuRequest r)
     {
-        lenh.MaLenh = r.MaLenh;
-        lenh.MaThanhPham = r.MaThanhPham;
-        lenh.SoLuong = r.SoLuong;
+        lenh.MaLenh = r.MaLenh ?? "";
         lenh.MaKho = r.MaKho;
-        lenh.MaLoThanhPham = r.MaLoThanhPham;
-        lenh.HanSuDungThanhPham = r.HanSuDungThanhPham;
         lenh.NgaySanXuat = r.NgaySanXuat ?? DateOnly.FromDateTime(DateTime.Today);
         lenh.TaoLoDongBo = r.TaoLoDongBo;
         lenh.GhiChu = r.GhiChu;
+        lenh.SanPham = (r.SanPham ?? Array.Empty<LenhSanXuatSanPhamRequest>()).Select(s => new LenhSanXuatSanPham
+        {
+            MaThanhPham = s.MaThanhPham,
+            SoLuong = s.SoLuong,
+            MaLoThanhPham = s.MaLoThanhPham ?? "",
+            HanSuDung = s.HanSuDung,
+            MaQuyTrinh = s.MaQuyTrinh,
+            Khau = (s.Khau ?? Array.Empty<LenhSanXuatKhauRequest>()).Select(k => new LenhSanXuatKhau
+            {
+                MaKhau = k.MaKhau,
+                ThuTu = k.ThuTu,
+                MaCoSo = k.MaCoSo,
+                NguoiThucHienCsv = string.Join(",", k.NguoiThucHien ?? Array.Empty<string>()),
+                GhiChu = k.GhiChu
+            }).ToList()
+        }).ToList();
         return lenh;
     }
 
-    private static LenhSanXuatDto Map(LenhSanXuat l, IReadOnlyDictionary<string, string> ten) => new(
-        l.Id, l.MaLenh, l.MaThanhPham, ten.GetValueOrDefault(l.MaThanhPham), l.SoLuong, l.MaKho,
-        l.MaLoThanhPham, l.HanSuDungThanhPham, l.NgaySanXuat, l.TrangThai.ToString(),
-        TenTrangThai(l.TrangThai), l.TaoLoDongBo, l.MaLoDaTao, l.ThoiGianHoanThanhUtc,
-        l.ThoiGianHuyUtc, l.LyDoHuy, l.GhiChu,
-        l.DanhSachAnh.Select(a => new AnhLenhDto(a.MaFile, a.TenFile, a.DuongDan)).ToList());
+    private static LenhSanXuatDto Map(LenhSanXuat l, BangTen ten) => new(
+        l.Id, l.MaLenh, l.MaKho, l.NgaySanXuat, l.TrangThai.ToString(), TenTrangThai(l.TrangThai),
+        l.TaoLoDongBo, l.ThoiGianHoanThanhUtc, l.ThoiGianHuyUtc, l.LyDoHuy, l.GhiChu,
+        l.SanPham.Select(s => new LenhSanXuatSanPhamDto(
+            s.Id, s.MaThanhPham, ten.ThanhPham.GetValueOrDefault(s.MaThanhPham), s.SoLuong,
+            s.MaLoThanhPham, s.HanSuDung, s.MaQuyTrinh, ten.QuyTrinh.GetValueOrDefault(s.MaQuyTrinh),
+            s.MaLoDaTao,
+            s.Khau.OrderBy(k => k.ThuTu).Select(k => new LenhSanXuatKhauDto(
+                k.Id, k.MaKhau, ten.Khau.GetValueOrDefault(k.MaKhau), k.ThuTu,
+                k.MaCoSo, ten.CoSo.GetValueOrDefault(k.MaCoSo), k.NguoiThucHien, k.GhiChu)).ToList(),
+            s.Anh.Select(a => new AnhLenhDto(a.MaFile, a.TenFile, a.DuongDan)).ToList())).ToList());
 
     private static string TenTrangThai(TrangThaiLenhSX t) => t switch
     {

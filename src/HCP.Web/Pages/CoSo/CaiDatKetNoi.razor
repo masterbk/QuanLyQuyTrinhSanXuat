@@ -2,10 +2,13 @@
 @using HCP.Domain.Constants
 @using HCP.Domain.Entities.Infrastructure
 @using HCP.Infrastructure.Services
+@using HCP.Infrastructure.Sync
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin)]
 @inject IKetNoiHnCService KetNoiService
 @inject ISnackbar Snackbar
+@inject IDongBoHnCTongService DongBoTong
+@inject NavigationManager Nav
 
 <PageTitle>Cài đặt kết nối HanoiCheck</PageTitle>
 
@@ -118,6 +121,23 @@ else
                     }
                 }
             </MudPaper>
+
+            <MudPaper Class="pa-5 mt-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Đồng bộ HanoiCheck</MudText>
+                <MudSwitch T="bool" Value="BatDongBo" ValueChanged="DoiBatDongBoAsync" Color="Color.Success"
+                           Disabled="@(_dangXuLy || !_daCoCauHinh)"
+                           Label="@(BatDongBo ? "Đang bật" : "Đang tắt")" />
+                <MudText Typo="Typo.body2" Class="mt-2 mud-text-secondary">
+                    <b>Tắt</b>: phần mềm chạy như hệ thống quản lý nội bộ - không gửi dữ liệu, không kéo đơn, ẩn các màn
+                    HanoiCheck, gỡ các bản ghi chưa gửi khỏi hàng đợi.<br />
+                    <b>Bật</b>: chỉ gửi những gì thêm/sửa từ lúc bật; từng bản ghi có ô "Đồng bộ HanoiCheck" để chọn gửi hay không.
+                </MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-3"
+                           StartIcon="@Icons.Material.Filled.CloudUpload"
+                           Disabled="@(_dangXuLy || !BatDongBo)" OnClick="DayToanBoAsync">
+                    Đẩy toàn bộ danh mục
+                </MudButton>
+            </MudPaper>
         </MudItem>
     </MudGrid>
 }
@@ -221,5 +241,25 @@ else
 
         Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
         await TaiCauHinhAsync();
+    }
+
+    private bool BatDongBo => _cauHinh?.BatDongBo == true;
+
+    private async Task DoiBatDongBoAsync(bool bat)
+    {
+        _dangXuLy = true;
+        var kq = await DongBoTong.BatTatAsync(bat);
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        // Tải lại trang để menu và các màn ẩn/hiện đúng theo công tắc.
+        if (kq.ThanhCong) Nav.NavigateTo(Nav.Uri, forceLoad: true);
+    }
+
+    private async Task DayToanBoAsync()
+    {
+        _dangXuLy = true;
+        var kq = await DongBoTong.DayToanBoAsync();
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
     }
 }

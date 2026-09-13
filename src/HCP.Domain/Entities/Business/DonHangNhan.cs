@@ -6,7 +6,7 @@ namespace HCP.Domain.Entities.Business;
 /// Đơn hàng NHẬN VỀ từ HanoiCheck (do trường học tạo, nhà cung cấp kéo về qua
 /// GET /api/supplier/orders). Đây là dữ liệu chỉ đọc phía cơ sở, cập nhật bằng job đồng bộ.
 ///
-/// KHÁC với <see cref="Order"/> (chiều ĐẨY lên HnC): entity này là chiều KÉO xuống.
+/// Bản sao đơn từ HanoiCheck; đơn bán nội bộ của nhà cung cấp là <see cref="DonHangBan"/>.
 /// Vì job nền ghi dữ liệu KHÔNG có tenant context, bảng này KHÔNG dùng global filter
 /// multi-tenant; TenantId được gán tường minh khi ghi và lọc tường minh khi đọc
 /// (giống SyncOutbox / SystemLog).

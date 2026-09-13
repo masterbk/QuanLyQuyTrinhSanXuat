@@ -1,0 +1,27 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @* Trang tra cứu mở qua mã QR: không cho công cụ tìm kiếm lập chỉ mục. *@
+    <meta name="robots" content="noindex, nofollow" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/css/bootstrap/bootstrap.min.css" />
+    <style>
+        body { background: #f4f6f8; }
+        .tra-cuu { max-width: 720px; }
+        .nhan { color: #6c757d; font-size: .85rem; }
+        .anh-lo { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: .5rem; }
+        .buoc { border-left: 3px solid #0d6efd; padding-left: .75rem; }
+    </style>
+</head>
+<body>
+    <div class="container tra-cuu py-3">
+        @RenderBody()
+        <p class="text-center nhan mt-4 mb-0">Thông tin tra cứu do cơ sở sản xuất cung cấp.</p>
+    </div>
+</body>
+</html>

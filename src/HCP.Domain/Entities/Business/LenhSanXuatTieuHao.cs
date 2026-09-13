@@ -7,8 +7,8 @@ public class LenhSanXuatTieuHao : TenantEntity
 {
     public int Id { get; set; }
 
-    public int LenhSanXuatId { get; set; }
-    public LenhSanXuat? LenhSanXuat { get; set; }
+    public int LenhSanXuatSanPhamId { get; set; }
+    public LenhSanXuatSanPham? LenhSanXuatSanPham { get; set; }
 
     public string MaNguyenLieu { get; set; } = string.Empty;
     public string MaLo { get; set; } = string.Empty;

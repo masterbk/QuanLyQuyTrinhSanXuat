@@ -1,7 +1,10 @@
+using Finbuckle.MultiTenant.Abstractions;
 using HCP.Domain.Constants;
+using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace HCP.Web.Api;
@@ -13,20 +16,21 @@ public static class AuthApi
     {
         var nhom = app.MapGroup("/api/v1/auth").WithTags("Xác thực");
 
-        nhom.MapPost("/dang-nhap", async (DangNhapRequest req, IMobileTokenService tokens,
+        nhom.MapPost("/dang-nhap", async (DangNhapRequest req, IMobileTokenService tokens, AppDbContext db,
                                           CancellationToken ct) =>
         {
             var kq = await tokens.DangNhapAsync(req.Email, req.MatKhau, req.ThietBi, ct);
             return kq.ThanhCong
-                ? Results.Ok(Map(kq.Phien!))
+                ? Results.Ok(await MapAsync(kq.Phien!, db, ct))
                 : Results.Json(new LoiDto(kq.ThongBao!), statusCode: StatusCodes.Status401Unauthorized);
         });
 
-        nhom.MapPost("/lam-moi", async (LamMoiRequest req, IMobileTokenService tokens, CancellationToken ct) =>
+        nhom.MapPost("/lam-moi", async (LamMoiRequest req, IMobileTokenService tokens, AppDbContext db,
+                                        CancellationToken ct) =>
         {
             var kq = await tokens.LamMoiAsync(req.RefreshToken, req.ThietBi, ct);
             return kq.ThanhCong
-                ? Results.Ok(Map(kq.Phien!))
+                ? Results.Ok(await MapAsync(kq.Phien!, db, ct))
                 : Results.Json(new LoiDto(kq.ThongBao!), statusCode: StatusCodes.Status401Unauthorized);
         });
 
@@ -36,20 +40,32 @@ public static class AuthApi
             return Results.Ok(new KetQuaDto(true, "Đã đăng xuất."));
         });
 
-        // Kiểm tra token còn sống + lấy thông tin người dùng hiện tại.
-        nhom.MapGet("/toi", (ClaimsPrincipal user) => Results.Ok(new NguoiDungDto(
+        // Kiểm tra token còn sống + lấy thông tin người dùng hiện tại. App gọi lại mỗi khi mở màn lệnh để biết
+        // công tắc HanoiCheck mới nhất (đổi trên web thì app thấy ngay, không cần đăng nhập lại).
+        nhom.MapGet("/toi", async (ClaimsPrincipal user, IMultiTenantContextAccessor tenant, AppDbContext db,
+                                   CancellationToken ct) => Results.Ok(new NguoiDungDto(
                 user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
                 user.FindFirstValue(ClaimTypes.Email) ?? user.Identity?.Name ?? "",
                 user.FindFirstValue("hoTen"),
                 user.FindFirstValue(AppClaimTypes.TenantIdentifier),
-                user.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList())))
+                user.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList(),
+                await HanoiCheckBatAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id, ct))))
             .RequireAuthorization(ApiAuth.ChinhSach);
     }
 
-    private static PhienDto Map(PhienDangNhap p) => new(
+    private static async Task<PhienDto> MapAsync(PhienDangNhap p, AppDbContext db, CancellationToken ct) => new(
         p.AccessToken, p.AccessTokenHetHanUtc, p.RefreshToken, p.RefreshTokenHetHanUtc,
         new NguoiDungDto(p.NguoiDung.Id, p.NguoiDung.Email ?? "", p.NguoiDung.HoTen,
-                         p.NguoiDung.TenantId, p.VaiTro));
+                         p.NguoiDung.TenantId, p.VaiTro, await HanoiCheckBatAsync(db, p.NguoiDung.TenantId, ct)));
+
+    /// <summary>
+    /// Công tắc tổng HanoiCheck (chưa có cấu hình kết nối = tắt). Đọc thẳng theo TenantId vì lúc đăng nhập request
+    /// chưa có ngữ cảnh cơ sở.
+    /// </summary>
+    private static Task<bool> HanoiCheckBatAsync(AppDbContext db, string? tenantId, CancellationToken ct) =>
+        string.IsNullOrWhiteSpace(tenantId)
+            ? Task.FromResult(false)
+            : db.TenantHnCCredentials.AsNoTracking().AnyAsync(c => c.TenantId == tenantId && c.BatDongBo, ct);
 }
 
 /// <summary>Tên chính sách uỷ quyền dùng chung cho mọi API của ứng dụng di động.</summary>

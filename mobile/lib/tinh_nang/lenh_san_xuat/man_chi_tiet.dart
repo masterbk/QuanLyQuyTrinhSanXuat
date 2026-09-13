@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../loi/api.dart';
+import '../xac_thuc/xac_thuc.dart';
 import 'hoan_thanh.dart';
 import 'kho_du_lieu.dart';
 import 'man_sua.dart';
@@ -27,11 +28,7 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
   bool _coThayDoi = false;
 
   Future<void> _hoanThanh(LenhSanXuat l) async {
-    final tb = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => HopThoaiHoanThanh(lenh: l),
-    );
+    final tb = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => ManHoanThanh(lenh: l)));
     if (tb != null && mounted) {
       _coThayDoi = true;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
@@ -40,7 +37,12 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
   }
 
   Future<void> _huy(LenhSanXuat l) async {
+    // Chỉ cảnh báo HanoiCheck khi cơ sở đang bật đồng bộ (tắt thì lô không được gửi đi).
+    final hanoiCheckBat = await ref.read(hanoiCheckBatProvider.future);
+    if (!mounted) return;
     final lyDo = TextEditingController();
+    final loDongBo =
+        hanoiCheckBat ? l.sanPham.map((s) => s.maLoDaTao).whereType<String>().toList() : const <String>[];
     final dongY = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -49,8 +51,14 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Hệ thống ghi bút toán đảo: trả lại nguyên liệu và thu hồi '
-                '${soGon(l.soLuong)} thành phẩm ở lô ${l.maLoThanhPham}.'),
+            Text('Hệ thống ghi bút toán đảo: trả lại nguyên liệu và thu hồi thành phẩm ở các lô '
+                '${l.sanPham.map((s) => s.maLoThanhPham).join(', ')}.'),
+            if (loDongBo.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Lô ${loDongBo.join(', ')} đã tạo để đồng bộ HanoiCheck: nếu đã gửi đi thì phải xử lý '
+                  'thủ công bên HanoiCheck.',
+                  style: TextStyle(color: Theme.of(c).colorScheme.error)),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: lyDo,
@@ -125,7 +133,9 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(hanoiCheckBatProvider); // tải sẵn công tắc HanoiCheck cho hộp thoại huỷ
     final chiTiet = ref.watch(_chiTietProvider(widget.id));
+    final tenNguoi = {for (final n in ref.watch(nhanSuProvider).value ?? const <NhanSu>[]) n.maNhanSu: n.hoTen};
 
     return PopScope(
       canPop: false,
@@ -173,48 +183,27 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
             children: [
               _TheTrangThai(lenh: l),
               const SizedBox(height: 16),
-              _Muc('Thành phẩm', l.tenHienThi),
-              _Muc('Số lượng', soGon(l.soLuong)),
               _Muc('Kho', l.maKho),
-              _Muc('Lô thành phẩm', l.maLoThanhPham),
               _Muc('Ngày sản xuất', _ngayVn.format(l.ngaySanXuat)),
-              if (l.hanSuDungThanhPham != null)
-                _Muc('Hạn dùng', _ngayVn.format(l.hanSuDungThanhPham!)),
               if (l.ghiChu != null && l.ghiChu!.isNotEmpty) _Muc('Ghi chú', l.ghiChu!),
-              if (l.maLoDaTao != null) _Muc('Lô đồng bộ HanoiCheck', l.maLoDaTao!),
               if (l.thoiGianHoanThanhUtc != null)
                 _Muc('Hoàn thành lúc', _gioVn.format(l.thoiGianHoanThanhUtc!.toLocal())),
               if (l.thoiGianHuyUtc != null) ...[
                 _Muc('Huỷ lúc', _gioVn.format(l.thoiGianHuyUtc!.toLocal())),
                 if (l.lyDoHuy != null) _Muc('Lý do huỷ', l.lyDoHuy!),
               ],
-              if (l.anh.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text('Ảnh lô sản phẩm', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 110,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: l.anh.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (c, i) => ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        l.anh[i].duongDan,
-                        width: 110, height: 110, fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => Container(
-                          width: 110, height: 110,
-                          color: Theme.of(c).colorScheme.surfaceContainerHighest,
-                          child: const Icon(Icons.broken_image_outlined),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              Text('Sản phẩm (${l.sanPham.length})', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              for (final s in l.sanPham) _TheSanPham(sanPham: s, tenNguoi: tenNguoi),
+              const SizedBox(height: 16),
               if (l.moiTao) ...[
+                if (l.sanPham.any((s) => s.khau.isEmpty))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text('Có sản phẩm chưa khai khâu/người thực hiện - bấm Sửa để khai trước khi hoàn thành.',
+                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
                 FilledButton.icon(
                   onPressed: () => _hoanThanh(l),
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
@@ -238,6 +227,76 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TheSanPham extends StatelessWidget {
+  final SanPhamLenh sanPham;
+  final Map<String, String> tenNguoi;
+
+  const _TheSanPham({required this.sanPham, required this.tenNguoi});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = sanPham;
+    final khau = [...s.khau]..sort((a, b) => a.thuTu.compareTo(b.thuTu));
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${s.tenHienThi} ×${soGon(s.soLuong)}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 4),
+            _Muc('Lô thành phẩm', s.maLoThanhPham),
+            if (s.hanSuDung != null) _Muc('Hạn dùng', _ngayVn.format(s.hanSuDung!)),
+            _Muc('Quy trình', s.tenQuyTrinh ?? (s.maQuyTrinh.isEmpty ? '—' : s.maQuyTrinh)),
+            if (s.maLoDaTao != null) _Muc('Lô đồng bộ HnC', s.maLoDaTao!),
+            if (khau.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text('Khâu', style: Theme.of(context).textTheme.titleSmall),
+              for (final k in khau)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text.rich(TextSpan(children: [
+                    TextSpan(text: '${k.thuTu}. ${k.tenHienThi}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    TextSpan(
+                      text: ' — ${k.tenCoSo ?? k.maCoSo}\n'
+                          '${k.nguoiThucHien.map((m) => tenNguoi[m] ?? m).join(', ')}',
+                      style: TextStyle(color: Theme.of(context).hintColor),
+                    ),
+                  ])),
+                ),
+            ],
+            if (s.anh.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 96,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: s.anh.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (c, i) => ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      s.anh[i].duongDan,
+                      width: 96, height: 96, fit: BoxFit.cover,
+                      errorBuilder: (c, e, st) => Container(
+                        width: 96, height: 96,
+                        color: Theme.of(c).colorScheme.surfaceContainerHighest,
+                        child: const Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -282,12 +341,12 @@ class _Muc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
+        padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 140,
+              width: 130,
               child: Text(nhan, style: TextStyle(color: Theme.of(context).hintColor)),
             ),
             Expanded(child: Text(giaTri, style: const TextStyle(fontWeight: FontWeight.w500))),
