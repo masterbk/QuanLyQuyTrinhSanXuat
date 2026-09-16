@@ -169,6 +169,7 @@ builder.Services.AddScoped<TrangThaiHnC>();
 builder.Services.AddScoped<HCP.Infrastructure.Services.TraCuu.ITraCuuCongKhaiService, HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService>();
 builder.Services.AddScoped<IStandardFoodsSyncJob, StandardFoodsSyncJob>();
 builder.Services.AddScoped<IHanoiCheckOrderQueryClient, HanoiCheckOrderQueryClient>();
+builder.Services.AddScoped<IHanoiCheckOrderCommandClient, HanoiCheckOrderCommandClient>();
 builder.Services.AddScoped<IDongBoDonHangJob, DongBoDonHangJob>();
 builder.Services.AddScoped<IDonHangNhanService, DonHangNhanService>();
 

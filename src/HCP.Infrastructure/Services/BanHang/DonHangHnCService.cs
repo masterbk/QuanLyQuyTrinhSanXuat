@@ -75,10 +75,12 @@ public sealed class DonHangHnCService : IDonHangHnCService
         var soDon = 0;
         foreach (var n in donNhan.OrderBy(d => d.NgayTaoTrenHnC ?? DateTime.MaxValue).ThenBy(d => d.Id))
         {
+            // KHÔNG gộp theo mã sản phẩm: mỗi dòng HnC (kèm trace_code riêng) phải giữ nguyên 1-1
+            // để sau này đẩy ngược xử lý đơn (chi_tiet[].trace_code) gọi đúng dòng - một sản phẩm có
+            // thể xuất hiện nhiều lần trong cùng đơn với trace_code khác nhau.
             var dong = n.Dong.Where(l => l.SoLuong is > 0 && thanhPham.Contains(l.MaSanPham))
-                .GroupBy(l => l.MaSanPham)
-                .Select(g => (Ma: g.Key, SoLuong: g.Sum(x => x.SoLuong!.Value)))
-                .OrderBy(x => x.Ma, StringComparer.Ordinal)
+                .Select(l => (Ma: l.MaSanPham, SoLuong: l.SoLuong!.Value, TraceCode: l.MaTruyVet))
+                .OrderBy(x => x.Ma, StringComparer.Ordinal).ThenBy(x => x.TraceCode, StringComparer.Ordinal)
                 .ToList();
             var biHuyTrenHnC = n.TrangThai is not null && TrangThaiHuyHnC.Contains(n.TrangThai);
 
@@ -99,7 +101,7 @@ public sealed class DonHangHnCService : IDonHangHnCService
         return soDon;
     }
 
-    private async Task<DonHangBan> TaoDonAsync(DonHangNhanEntity n, List<(string Ma, decimal SoLuong)> dong,
+    private async Task<DonHangBan> TaoDonAsync(DonHangNhanEntity n, List<(string Ma, decimal SoLuong, string? TraceCode)> dong,
                                                 List<string> kho, HashSet<string> nhanSu, CancellationToken ct)
     {
         var khach = await TimHoacTaoKhachTruongAsync(n.TenTruong, ct);
@@ -134,7 +136,10 @@ public sealed class DonHangHnCService : IDonHangHnCService
             MaDonHnC = n.MaDonHang,
             TrangThaiHnC = n.TrangThai,
             GhiChu = string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu[..Math.Min(ghiChu.Length, 1000)],
-            Dong = dong.Select(x => new DonHangBanDong { MaThanhPham = x.Ma, SoLuong = x.SoLuong, DonGia = 0 }).ToList()
+            Dong = dong.Select(x => new DonHangBanDong
+            {
+                MaThanhPham = x.Ma, SoLuong = x.SoLuong, DonGia = 0, MaTruyVetHnC = x.TraceCode
+            }).ToList()
         };
 
         // Hàm sinh mã tự SaveChanges bộ đếm -> gọi TRƯỚC khi Add.
@@ -145,8 +150,8 @@ public sealed class DonHangHnCService : IDonHangHnCService
     }
 
     /// <summary>Áp thay đổi từ HanoiCheck vào đơn đã có. Trả true nếu có thay đổi.</summary>
-    private bool CapNhatDon(DonHangBan don, DonHangNhanEntity n, List<(string Ma, decimal SoLuong)> dong, bool biHuyTrenHnC,
-                            HashSet<string> nhanSu, DateTime now)
+    private bool CapNhatDon(DonHangBan don, DonHangNhanEntity n, List<(string Ma, decimal SoLuong, string? TraceCode)> dong,
+                            bool biHuyTrenHnC, HashSet<string> nhanSu, DateTime now)
     {
         var coDoi = false;
         if (don.TrangThaiHnC != n.TrangThai)
@@ -181,11 +186,18 @@ public sealed class DonHangHnCService : IDonHangHnCService
         {
             if (don.TrangThai == TrangThaiDonHangBan.ChoXacNhan && dong.Count > 0)
             {
-                var giaCu = don.Dong.GroupBy(l => l.MaThanhPham).ToDictionary(g => g.Key, g => g.First().DonGia);
+                // Giữ đơn giá NCC đã nhập: khớp theo (mã, trace_code) trước, mã đơn thuần là dự phòng
+                // (đơn cũ trước khi có trace_code, hoặc trace_code đổi nhẹ giữa hai lần đồng bộ).
+                var giaCuTheoTrace = don.Dong.Where(l => l.MaTruyVetHnC is not null)
+                    .GroupBy(l => (l.MaThanhPham, l.MaTruyVetHnC))
+                    .ToDictionary(g => g.Key, g => g.First().DonGia);
+                var giaCuTheoMa = don.Dong.GroupBy(l => l.MaThanhPham).ToDictionary(g => g.Key, g => g.First().DonGia);
                 _db.DonHangBanDongs.RemoveRange(don.Dong);
                 don.Dong = dong.Select(x => new DonHangBanDong
                 {
-                    MaThanhPham = x.Ma, SoLuong = x.SoLuong, DonGia = giaCu.GetValueOrDefault(x.Ma)
+                    MaThanhPham = x.Ma, SoLuong = x.SoLuong, MaTruyVetHnC = x.TraceCode,
+                    DonGia = x.TraceCode is not null && giaCuTheoTrace.TryGetValue((x.Ma, x.TraceCode), out var giaTrace)
+                        ? giaTrace : giaCuTheoMa.GetValueOrDefault(x.Ma)
                 }).ToList();
                 don.NgayGiao = n.NgayGiao;
                 if (don.NgayGiao is { } g && don.NgayDat > g) don.NgayDat = g;
@@ -210,13 +222,14 @@ public sealed class DonHangHnCService : IDonHangHnCService
         return coDoi;
     }
 
-    private static bool NoiDungKhac(DonHangBan don, List<(string Ma, decimal SoLuong)> dong, DateOnly? ngayGiao)
+    private static bool NoiDungKhac(DonHangBan don, List<(string Ma, decimal SoLuong, string? TraceCode)> dong, DateOnly? ngayGiao)
     {
         if (don.NgayGiao != ngayGiao) return true;
-        var hienTai = don.Dong.GroupBy(l => l.MaThanhPham)
-            .Select(g => (Ma: g.Key, SoLuong: g.Sum(x => x.SoLuong)))
-            .OrderBy(x => x.Ma, StringComparer.Ordinal).ToList();
-        return !hienTai.SequenceEqual(dong);
+        var hienTai = don.Dong
+            .Select(l => (Ma: l.MaThanhPham, SoLuong: l.SoLuong, TraceCode: l.MaTruyVetHnC))
+            .OrderBy(x => x.Ma, StringComparer.Ordinal).ThenBy(x => x.TraceCode, StringComparer.Ordinal).ToList();
+        var moi = dong.OrderBy(x => x.Ma, StringComparer.Ordinal).ThenBy(x => x.TraceCode, StringComparer.Ordinal).ToList();
+        return !hienTai.SequenceEqual(moi);
     }
 
     private async Task<KhachHang> TimHoacTaoKhachTruongAsync(string? tenTruong, CancellationToken ct)

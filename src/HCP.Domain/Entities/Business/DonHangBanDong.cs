@@ -12,6 +12,11 @@ public class DonHangBanDong : TenantEntity
 
     public string MaThanhPham { get; set; } = string.Empty;
 
+    /// <summary>trace_code của dòng hàng gốc trên HanoiCheck (đơn nguồn HanoiCheck) - cần để gọi
+    /// đúng dòng khi đẩy ngược xử lý đơn (chi_tiet[].trace_code của POST orders/{code}/process).
+    /// Null với đơn nội bộ hoặc dòng chưa có dữ liệu này (đơn HnC cũ trước khi có cột này).</summary>
+    public string? MaTruyVetHnC { get; set; }
+
     public decimal SoLuong { get; set; }
 
     /// <summary>Đơn giá bán (đồng/đơn vị tính của thành phẩm).</summary>

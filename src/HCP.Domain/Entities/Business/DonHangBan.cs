@@ -65,5 +65,8 @@ public class DonHangBan : TenantEntity, ICoMaTraCuu
 
     public List<DonHangBanDong> Dong { get; set; } = new();
 
+    /// <summary>Ảnh tổng quan chụp lúc xuất kho - gửi kèm sang HanoiCheck với đơn nguồn HanoiCheck.</summary>
+    public List<DonHangBanAnh> AnhTongQuan { get; set; } = new();
+
     public decimal TongTien => Dong.Sum(d => d.ThanhTien);
 }

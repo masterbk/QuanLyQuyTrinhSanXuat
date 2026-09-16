@@ -26,7 +26,8 @@ public class DonHangHnCServiceTests
     }
 
     private static DonHangHnCService Svc(AppDbContext db) => new(db, new MaTuSinhService(db));
-    private static DonHangBanService SvcBan(AppDbContext db) => new(db, new MaTuSinhService(db));
+    private static DonHangBanService SvcBan(AppDbContext db) =>
+        new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient());
 
     /// <summary>BANH_MI tồn LO_A 10 (HSD 20/09, hết hạn trước) và LO_B 10 (HSD 30/09); 2 kho; người giao VC-03.</summary>
     private void Seed()
@@ -236,5 +237,32 @@ public class DonHangHnCServiceTests
         var xoa = await SvcBan(db).XoaAsync(id);
         Assert.False(xoa.ThanhCong);
         Assert.Contains("HanoiCheck", xoa.ThongBao);
+    }
+
+    [Fact]
+    public async Task Cung_Ma_San_Pham_Hai_Lan_Trong_Don_Giu_Rieng_Tung_Dong_Kem_Trace_Code()
+    {
+        Seed();
+        using (var db = MoDb())
+        {
+            db.DonHangNhans.Add(new DonHangNhan
+            {
+                TenantId = CoSo, MaDonHang = "HNC-1", TenTruong = "MN Hoa Sen", TrangThai = "CHO_XAC_NHAN",
+                NgayGiao = new DateOnly(2026, 9, 20), NgayTaoTrenHnC = new DateTime(2026, 9, 13, 10, 0, 0),
+                DaLayChiTiet = true, LanDongBoUtc = DateTime.UtcNow,
+                Dong = new List<DonHangNhanDong>
+                {
+                    new() { TenantId = CoSo, MaSanPham = "BANH_MI", TenSanPham = "BANH_MI", SoLuong = 8, MaTruyVet = "TX-01" },
+                    new() { TenantId = CoSo, MaSanPham = "BANH_MI", TenSanPham = "BANH_MI", SoLuong = 5, MaTruyVet = "TX-02" }
+                }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, await DongBoAsync());
+        var don = LayDon("HNC-1");
+        Assert.Equal(2, don.Dong.Count);        // KHÔNG gộp - giữ đúng 2 dòng gốc của HnC
+        Assert.Equal(new (string, decimal, string?)[] { ("BANH_MI", 8m, "TX-01"), ("BANH_MI", 5m, "TX-02") },
+            don.Dong.OrderBy(d => d.MaTruyVetHnC).Select(d => (d.MaThanhPham, d.SoLuong, d.MaTruyVetHnC)));
     }
 }

@@ -1,5 +1,6 @@
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
+using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.BanHang;
@@ -7,6 +8,22 @@ using HCP.Infrastructure.Services.MaTuSinh;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
+
+/// <summary>Fake không gọi mạng - các test ở đây chỉ dùng đơn nguồn nội bộ nên không bao giờ được gọi thật;
+/// đơn nguồn HanoiCheck có test riêng ở <see cref="DonHangBanServiceHnCTests"/>.</summary>
+public sealed class FakeHanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
+{
+    public Func<string, ProcessOrderRequest, OrderCommandResult>? XuLyDon;
+    public Func<string, string, OrderCommandResult>? DoiTrangThai;
+
+    public Task<OrderCommandResult> XuLyDonAsync(string tenantId, string maDon, ProcessOrderRequest noiDung,
+                                                 CancellationToken ct = default) =>
+        Task.FromResult(XuLyDon?.Invoke(maDon, noiDung) ?? OrderCommandResult.ChuaCauHinhKq("stub"));
+
+    public Task<OrderCommandResult> DoiTrangThaiAsync(string tenantId, string maDon, string trangThai, string? ghiChu,
+                                                      CancellationToken ct = default) =>
+        Task.FromResult(DoiTrangThai?.Invoke(maDon, trangThai) ?? OrderCommandResult.ChuaCauHinhKq("stub"));
+}
 
 /// <summary>
 /// Kiểm chứng đơn hàng bán: lập đơn (mã tự sinh, tổng tiền), vòng đời trạng thái, xuất kho trừ tồn theo lô
@@ -25,7 +42,7 @@ public class DonHangBanServiceTests
         return new AppDbContext(accessor, options);
     }
 
-    private static DonHangBanService Svc(AppDbContext db) => new(db, new MaTuSinhService(db));
+    private static DonHangBanService Svc(AppDbContext db) => new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient());
 
     /// <summary>BANH_MI tồn 2 lô: LOTP_A 5 (HSD 20/09, hết hạn trước), LOTP_B 10 (HSD 30/09).</summary>
     private void Seed()

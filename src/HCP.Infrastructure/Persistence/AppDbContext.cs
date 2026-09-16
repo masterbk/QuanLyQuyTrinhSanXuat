@@ -91,6 +91,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<DonHangBan> DonHangBans => Set<DonHangBan>();
     public DbSet<DonHangBanDong> DonHangBanDongs => Set<DonHangBanDong>();
     public DbSet<DonHangBanXuatLo> DonHangBanXuatLos => Set<DonHangBanXuatLo>();
+    public DbSet<DonHangBanAnh> DonHangBanAnhs => Set<DonHangBanAnh>();
     public DbSet<Batch> Batches => Set<Batch>();
     public DbSet<BatchWarehouse> BatchWarehouses => Set<BatchWarehouse>();
     public DbSet<BatchStep> BatchSteps => Set<BatchStep>();
@@ -385,6 +386,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         donBan.Ignore(d => d.TongTien);
         donBan.HasMany(d => d.Dong).WithOne(l => l.DonHangBan!)
               .HasForeignKey(l => l.DonHangBanId).OnDelete(DeleteBehavior.Cascade);
+        donBan.HasMany(d => d.AnhTongQuan).WithOne(a => a.DonHangBan!)
+              .HasForeignKey(a => a.DonHangBanId).OnDelete(DeleteBehavior.Cascade);
         donBan.HasIndex(d => d.MaDonHang).IsUnique();
         donBan.HasIndex(d => d.MaKhachHang);
         donBan.HasIndex(d => d.MaDonHnC);
@@ -393,6 +396,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         var donBanDong = builder.Entity<DonHangBanDong>();
         donBanDong.ToTable("DonHangBanDong");
         donBanDong.Property(l => l.MaThanhPham).HasMaxLength(255).IsRequired();
+        donBanDong.Property(l => l.MaTruyVetHnC).HasMaxLength(255);
         donBanDong.Property(l => l.SoLuong).HasPrecision(18, 3);
         donBanDong.Property(l => l.DonGia).HasPrecision(18, 2);
         donBanDong.Property(l => l.GhiChu).HasMaxLength(500);
@@ -408,6 +412,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         donBanLo.Property(x => x.SoLuong).HasPrecision(18, 3);
         donBanLo.HasIndex(x => x.DonHangBanDongId);
         donBanLo.IsMultiTenant();
+
+        var donBanAnh = builder.Entity<DonHangBanAnh>();
+        donBanAnh.ToTable("DonHangBanAnh");
+        donBanAnh.Property(a => a.TenAnh).HasMaxLength(255).IsRequired();
+        donBanAnh.Property(a => a.DuongDan).HasMaxLength(1000).IsRequired();
+        donBanAnh.HasIndex(a => a.DonHangBanId);
+        donBanAnh.IsMultiTenant();
 
         // --- Sổ kho nội bộ ---
         var khoGd = builder.Entity<KhoGiaoDich>();

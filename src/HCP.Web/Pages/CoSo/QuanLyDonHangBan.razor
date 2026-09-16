@@ -6,6 +6,7 @@
 @using HCP.Infrastructure.Services.BanHang
 @using HCP.Infrastructure.Services.DanhMuc
 @using HCP.Infrastructure.Services.Kho
+@using HCP.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
 @inject IDonHangBanService DonHangService
@@ -13,6 +14,7 @@
 @inject IDanhMucService<Product> ThucPhamService
 @inject IDanhMucService<Warehouse> KhoDanhMucService
 @inject IDanhMucService<Staff> NhanSuService
+@inject ILuuTruAnhService LuuTruAnh
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -68,7 +70,7 @@ else
                 <MudTh>Ngày đặt / giao</MudTh>
                 <MudTh Style="text-align:right">Tổng tiền</MudTh>
                 <MudTh>Trạng thái</MudTh>
-                <MudTh Style="width:230px"></MudTh>
+                <MudTh Style="width:1%"></MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Mã đơn">
@@ -100,50 +102,77 @@ else
                     <MudChip T="string" Size="Size.Small" Color="@MauTrangThai(context.TrangThai)">@TenTrangThai(context.TrangThai)</MudChip>
                 </MudTd>
                 <MudTd>
-                    <NutQrTraCuu Loai="LoaiTraCuu.DonHang" Id="@context.Id" Ma="@context.MaDonHang" />
-                    @switch (context.TrangThai)
-                    {
-                        case TrangThaiDonHangBan.ChoXacNhan:
-                        case TrangThaiDonHangBan.DaXacNhan:
-                            @if (context.TrangThai == TrangThaiDonHangBan.ChoXacNhan)
+                    @* Một hàng cố định: [nút bước tiếp theo] [QR] [⋮ thao tác phụ] - mọi dòng thẳng cột. *@
+                    <div class="d-flex align-center justify-end gap-1" style="white-space:nowrap">
+                        <div style="width:124px" class="d-flex justify-end">
+                            @switch (context.TrangThai)
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_dangXuLy"
-                                           OnClick="@(() => ChayAsync(() => DonHangService.XacNhanAsync(context.Id)))">Xác nhận</MudButton>
+                                case TrangThaiDonHangBan.ChoXacNhan:
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangXuLy" FullWidth="true"
+                                               StartIcon="@Icons.Material.Filled.Check"
+                                               OnClick="@(() => ChayAsync(() => DonHangService.XacNhanAsync(context.Id)))">Xác nhận</MudButton>
+                                    break;
+                                case TrangThaiDonHangBan.DaXacNhan:
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangXuLy" FullWidth="true"
+                                               StartIcon="@Icons.Material.Filled.LocalShipping"
+                                               OnClick="@(() => MoXuatKhoAsync(context))">Xuất kho</MudButton>
+                                    break;
+                                case TrangThaiDonHangBan.DangGiao:
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_dangXuLy" FullWidth="true"
+                                               StartIcon="@Icons.Material.Filled.DoneAll"
+                                               OnClick="@(() => ChayAsync(() => DonHangService.HoanTatGiaoAsync(context.Id)))">Đã giao</MudButton>
+                                    break;
+                                case TrangThaiDonHangBan.DaHuy:
+                                    <MudTooltip Text="@($"Lý do: {context.LyDoHuy}")">
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            Huỷ @context.ThoiGianHuyUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                                        </MudText>
+                                    </MudTooltip>
+                                    break;
+                                default:
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        Giao @context.ThoiGianGiaoUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                                    </MudText>
+                                    break;
                             }
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangXuLy"
-                                       StartIcon="@Icons.Material.Filled.LocalShipping"
-                                       OnClick="@(() => MoXuatKhoAsync(context))">Xuất kho</MudButton>
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
-                                           OnClick="@(() => MoSua(context))" />
-                            @if (context.Nguon == NguonDonHang.NoiBo)
-                            {
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                                               OnClick="@(() => XoaAsync(context))" />
-                            }
-                            <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small" Color="Color.Error"
-                                           OnClick="@(() => MoHuy(context))" />
-                            break;
-                        case TrangThaiDonHangBan.DangGiao:
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_dangXuLy"
-                                       OnClick="@(() => ChayAsync(() => DonHangService.HoanTatGiaoAsync(context.Id)))">Đã giao</MudButton>
-                            <MudTooltip Text="Huỷ đơn: trả hàng về kho">
-                                <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Error"
-                                               OnClick="@(() => MoHuy(context))" />
-                            </MudTooltip>
-                            break;
-                        case TrangThaiDonHangBan.DaHuy:
-                            <MudTooltip Text="@($"Lý do: {context.LyDoHuy}")">
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                    Huỷ @context.ThoiGianHuyUtc?.ToLocalTime().ToString("dd/MM HH:mm")
-                                </MudText>
-                            </MudTooltip>
-                            break;
-                        default:
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                Giao @context.ThoiGianGiaoUtc?.ToLocalTime().ToString("dd/MM HH:mm")
-                            </MudText>
-                            break;
-                    }
+                        </div>
+
+                        <NutQrTraCuu Loai="LoaiTraCuu.DonHang" Id="@context.Id" Ma="@context.MaDonHang" />
+
+                        @if (context.TrangThai is TrangThaiDonHangBan.ChoXacNhan or TrangThaiDonHangBan.DaXacNhan or TrangThaiDonHangBan.DangGiao)
+                        {
+                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Disabled="_dangXuLy"
+                                     AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                @if (context.TrangThai == TrangThaiDonHangBan.DangGiao)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Undo" IconColor="Color.Error"
+                                                 OnClick="@(() => MoHuy(context))">Huỷ đơn (trả hàng về kho)</MudMenuItem>
+                                }
+                                else
+                                {
+                                    @if (context.TrangThai == TrangThaiDonHangBan.ChoXacNhan)
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.LocalShipping"
+                                                     OnClick="@(() => MoXuatKhoAsync(context))">Xuất kho luôn</MudMenuItem>
+                                    }
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => MoSua(context))">Sửa đơn</MudMenuItem>
+                                    <MudDivider />
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Block" IconColor="Color.Error"
+                                                 OnClick="@(() => MoHuy(context))">Huỷ đơn</MudMenuItem>
+                                    @if (context.Nguon == NguonDonHang.NoiBo)
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error"
+                                                     OnClick="@(() => XoaAsync(context))">Xoá đơn</MudMenuItem>
+                                    }
+                                }
+                            </MudMenu>
+                        }
+                        else
+                        {
+                            @* Giữ chỗ bằng kích thước nút ⋮ để icon QR vẫn thẳng cột với các dòng khác. *@
+                            <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Disabled="true" Style="visibility:hidden" />
+                        }
+                    </div>
                 </MudTd>
             </RowTemplate>
             <ChildRowContent>
@@ -269,6 +298,29 @@ else
             }
         </MudSelect>
 
+        @if (_donXuat?.Nguon == NguonDonHang.HanoiCheck)
+        {
+            <MudTextField @bind-Value="_ghiChuXuat" Label="Ghi chú" Variant="Variant.Outlined" Lines="2"
+                          MaxLength="1000" Immediate="true" Class="mb-3" />
+
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Ảnh tổng quan (tối đa 3 ảnh) - gửi kèm sang HanoiCheck</MudText>
+            <div class="d-flex flex-wrap gap-2 align-center mb-3">
+                <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="ChonAnhTongQuanAsync"
+                               Accept="image/*" MaximumFileCount="3">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                   Disabled="_dangTaiAnh" StartIcon="@Icons.Material.Filled.PhotoCamera">
+                            Chọn ảnh
+                        </MudButton>
+                    </ActivatorContent>
+                </MudFileUpload>
+                @foreach (var anh in _anhXuat)
+                {
+                    <MudChip T="string" Size="Size.Small" OnClose="@(() => _anhXuat.Remove(anh))">@anh.TenFile</MudChip>
+                }
+            </div>
+        }
+
         @foreach (var dong in _xuatKho)
         {
             var daChon = dong.Lo.Sum(x => x.SoLuong);
@@ -367,6 +419,9 @@ else
     private DonHangBan? _donXuat;
     private List<ODongXuat> _xuatKho = new();
     private string? _nguoiGiaoXuat;
+    private string? _ghiChuXuat;
+    private List<AnhLoSanXuat> _anhXuat = new();
+    private bool _dangTaiAnh;
 
     private bool _hienHuy;
     private DonHangBan? _donHuy;
@@ -483,6 +538,8 @@ else
     {
         _donXuat = d;
         _nguoiGiaoXuat = d.MaNguoiGiao;
+        _ghiChuXuat = d.GhiChu;
+        _anhXuat = new();
         var goiY = await DonHangService.GoiYXuatKhoAsync(d.Id);
         _xuatKho = goiY.Select(g => new ODongXuat
         {
@@ -492,12 +549,26 @@ else
         _hienXuat = true;
     }
 
+    /// <summary>Tải ảnh lên đĩa ngay khi chọn (giống màn Lệnh sản xuất) - lưu vào đơn lúc bấm Xác nhận xuất kho.</summary>
+    private async Task ChonAnhTongQuanAsync(IReadOnlyList<IBrowserFile> files)
+    {
+        _dangTaiAnh = true;
+        foreach (var f in files.Take(3 - _anhXuat.Count))
+        {
+            try { _anhXuat.Add(await LuuTruAnh.LuuAsync(f)); }
+            catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        }
+        _dangTaiAnh = false;
+    }
+
     private async Task XuatKhoAsync()
     {
         if (_donXuat is null) return;
         var phanBo = _xuatKho.SelectMany(d => d.Lo.Where(x => x.SoLuong > 0)
             .Select(x => new PhanBoLoRequest(d.DongId, x.MaLo, x.SoLuong))).ToList();
-        await ChayAsync(() => DonHangService.XuatKhoAsync(_donXuat.Id, phanBo, _nguoiGiaoXuat), () => _hienXuat = false);
+        var anh = _anhXuat.Count == 0 ? null : (IReadOnlyList<AnhDauVao>)_anhXuat.Select(a => new AnhDauVao(a.TenFile, a.DuongDan)).ToList();
+        await ChayAsync(() => DonHangService.XuatKhoAsync(_donXuat.Id, phanBo, _nguoiGiaoXuat, _ghiChuXuat, anh),
+                        () => _hienXuat = false);
     }
 
     // ---------- Huỷ / xoá ----------

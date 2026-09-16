@@ -1,5 +1,6 @@
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
+using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.MaTuSinh;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,9 @@ public sealed record DongXuatKhoDto(int DongId, string MaThanhPham, string TenTh
 
 /// <summary>Người dùng chốt: lấy bao nhiêu từ lô nào cho dòng nào.</summary>
 public sealed record PhanBoLoRequest(int DongId, string MaLo, decimal SoLuong);
+
+/// <summary>Một ảnh tổng quan đã tải lên (tên gốc + đường dẫn công khai) gắn cho đơn lúc xuất kho.</summary>
+public sealed record AnhDauVao(string TenAnh, string DuongDan);
 
 /// <summary>
 /// Đơn hàng bán: lập đơn → xác nhận → xuất kho (trừ tồn theo lô, gợi ý FEFO, cho sửa) → đã giao; huỷ khi
@@ -37,8 +41,11 @@ public interface IDonHangBanService
 
     /// <summary>
     /// Xuất kho: trừ tồn theo phân bổ lô rồi chuyển "Đang giao". <paramref name="phanBo"/> rỗng = dùng gợi ý FEFO.
+    /// Với đơn nguồn HanoiCheck: trước khi trừ tồn, gọi đẩy ngược "process" (người giao/ghi chú/ảnh/nguồn hàng)
+    /// rồi "status" (Đang giao) sang HnC - lỗi thật thì KHÔNG trừ tồn/đổi trạng thái nội bộ để 2 bên luôn khớp.
     /// </summary>
     Task<KetQuaThaoTac> XuatKhoAsync(int id, IReadOnlyList<PhanBoLoRequest>? phanBo, string? maNguoiGiao,
+                                     string? ghiChu = null, IReadOnlyList<AnhDauVao>? anhTongQuan = null,
                                      CancellationToken ct = default);
 
     Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, CancellationToken ct = default);
@@ -54,15 +61,17 @@ public sealed class DonHangBanService : IDonHangBanService
 {
     private readonly AppDbContext _db;
     private readonly IMaTuSinhService _maTuSinh;
+    private readonly IHanoiCheckOrderCommandClient _orderCommandClient;
 
-    public DonHangBanService(AppDbContext db, IMaTuSinhService maTuSinh)
+    public DonHangBanService(AppDbContext db, IMaTuSinhService maTuSinh, IHanoiCheckOrderCommandClient orderCommandClient)
     {
         _db = db;
         _maTuSinh = maTuSinh;
+        _orderCommandClient = orderCommandClient;
     }
 
     private IQueryable<DonHangBan> QueryDayDu() =>
-        _db.DonHangBans.Include(d => d.Dong).ThenInclude(l => l.XuatLo);
+        _db.DonHangBans.Include(d => d.Dong).ThenInclude(l => l.XuatLo).Include(d => d.AnhTongQuan);
 
     public async Task<IReadOnlyList<DonHangBan>> LayTatCaAsync(CancellationToken ct = default) =>
         await QueryDayDu().AsNoTracking()
@@ -166,6 +175,15 @@ public sealed class DonHangBanService : IDonHangBanService
         if (don.TrangThai != TrangThaiDonHangBan.ChoXacNhan)
             return KetQuaThaoTac.Loi("Chỉ xác nhận được đơn đang chờ xác nhận.");
 
+        // Đơn nguồn HanoiCheck: đẩy ngược "Đang chuẩn bị" TRƯỚC khi lưu nội bộ, để 2 bên luôn khớp -
+        // công tắc HnC tắt/chưa cấu hình thì bỏ qua (ChuaCauHinh), lỗi thật thì chặn xác nhận.
+        if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
+        {
+            var ket = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_CHUAN_BI", null, ct);
+            if (!ket.ThanhCong && !ket.ChuaCauHinh)
+                return KetQuaThaoTac.Loi($"Không đẩy được trạng thái sang HanoiCheck: {ket.ThongBao}");
+        }
+
         don.TrangThai = TrangThaiDonHangBan.DaXacNhan;
         await _db.SaveChangesAsync(ct);
         return KetQuaThaoTac.Ok($"Đã xác nhận đơn \"{don.MaDonHang}\".");
@@ -232,6 +250,7 @@ public sealed class DonHangBanService : IDonHangBanService
     }
 
     public async Task<KetQuaThaoTac> XuatKhoAsync(int id, IReadOnlyList<PhanBoLoRequest>? phanBo, string? maNguoiGiao,
+                                                  string? ghiChu = null, IReadOnlyList<AnhDauVao>? anhTongQuan = null,
                                                   CancellationToken ct = default)
     {
         var don = await QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
@@ -277,6 +296,37 @@ public sealed class DonHangBanService : IDonHangBanService
                                          + $"không xuất được {can:0.###}.");
         }
 
+        // Đơn nguồn HanoiCheck: đẩy ngược process (người giao/ghi chú/ảnh/nguồn hàng) rồi status (Đang giao)
+        // TRƯỚC khi chạm vào kho nội bộ - lỗi thật ở 1 trong 2 bước thì dừng hẳn, giữ nguyên "Đã xác nhận"
+        // để NCC bấm lại (process ghi đè toàn bộ mỗi lần gọi nên gọi lại an toàn).
+        if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
+        {
+            var chiTiet = chot.Where(p => dongTheoId[p.DongId].MaTruyVetHnC is not null)
+                .GroupBy(p => dongTheoId[p.DongId].MaTruyVetHnC!)
+                .Select(g => new ProcessOrderLine
+                {
+                    TraceCode = g.Key,
+                    PhanBo = g.Select(p => new ProcessOrderAllocation(p.MaLo, don.MaKho, p.SoLuong)).ToList()
+                }).ToList();
+
+            var ketXuLy = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
+            {
+                MaNguoiGiao = maNguoiGiao,
+                GhiChu = ghiChu,
+                DanhSachAnh = anhTongQuan?.Select(a => a.DuongDan).ToList(),
+                ChiTiet = chiTiet
+            }, ct);
+            if (!ketXuLy.ThanhCong && !ketXuLy.ChuaCauHinh)
+                return KetQuaThaoTac.Loi($"Không đẩy được xử lý đơn sang HanoiCheck: {ketXuLy.ThongBao}");
+
+            if (ketXuLy.ThanhCong)
+            {
+                var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_GIAO", null, ct);
+                if (!ketTrangThai.ThanhCong)
+                    return KetQuaThaoTac.Loi($"Không đẩy được trạng thái \"Đang giao\" sang HanoiCheck: {ketTrangThai.ThongBao}");
+            }
+        }
+
         var now = DateTime.UtcNow;
         foreach (var p in chot)
         {
@@ -291,6 +341,12 @@ public sealed class DonHangBanService : IDonHangBanService
         }
 
         don.MaNguoiGiao = maNguoiGiao;
+        don.GhiChu = string.IsNullOrWhiteSpace(ghiChu) ? don.GhiChu : ghiChu.Trim();
+        if (anhTongQuan is not null)
+        {
+            _db.DonHangBanAnhs.RemoveRange(don.AnhTongQuan);
+            don.AnhTongQuan = anhTongQuan.Select(a => new DonHangBanAnh { TenAnh = a.TenAnh, DuongDan = a.DuongDan }).ToList();
+        }
         don.TrangThai = TrangThaiDonHangBan.DangGiao;
         don.ThoiGianXuatKhoUtc = now;
         await _db.SaveChangesAsync(ct);
