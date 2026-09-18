@@ -63,6 +63,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<SyncOutboxItem> SyncOutboxItems => Set<SyncOutboxItem>();
     public DbSet<SystemLogEntry> SystemLogs => Set<SystemLogEntry>();
     public DbSet<MobileRefreshToken> MobileRefreshTokens => Set<MobileRefreshToken>();
+    public DbSet<PushDeviceToken> PushDeviceTokens => Set<PushDeviceToken>();
 
     // Đơn hàng NHẬN VỀ từ HnC (chiều kéo). Job nền ghi -> KHÔNG lọc theo tenant tự động,
     // TenantId gán/lọc tường minh (giống SyncOutbox/SystemLog).
@@ -560,6 +561,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         refreshToken.Property(t => t.ThietBi).HasMaxLength(255);
         refreshToken.HasIndex(t => t.TokenHash).IsUnique();
         refreshToken.HasIndex(t => t.UserId);
+
+        // --- Token thiết bị (FCM) cho thông báo đẩy - bảng hạ tầng, không lọc theo tenant ---
+        var pushToken = builder.Entity<PushDeviceToken>();
+        pushToken.ToTable("PushDeviceTokens");
+        pushToken.Property(t => t.UserId).HasMaxLength(450).IsRequired();
+        pushToken.Property(t => t.Token).HasMaxLength(500).IsRequired();
+        pushToken.Property(t => t.ThietBi).HasMaxLength(255);
+        pushToken.HasIndex(t => t.Token).IsUnique();
+        pushToken.HasIndex(t => t.UserId);
 
         // --- Đơn hàng nhận về (chiều kéo từ HnC) ---
         // KHÔNG gọi IsMultiTenant(): job nền ghi không có tenant context nên TenantId

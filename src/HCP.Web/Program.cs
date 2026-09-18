@@ -17,6 +17,7 @@ using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Services.Kho;
 using HCP.Infrastructure.Services.NhatKyDongBo;
+using HCP.Infrastructure.Services.ThongBao;
 using HCP.Infrastructure.Sync;
 using HCP.Web.Api;
 using Microsoft.AspNetCore.Authentication;
@@ -149,6 +150,7 @@ builder.Services.AddScoped<IKiemTraApiHnCService, KiemTraApiHnCService>();
 builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IDonHangBanService, DonHangBanService>();
 builder.Services.AddScoped<IDonHangHnCService, DonHangHnCService>();
+builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<IDonHangHnCTheoCoSo, DonHangHnCTheoCoSo>();
 builder.Services.AddScoped<IDashboardCoSoService, DashboardCoSoService>();
 builder.Services.AddScoped<IDashboardNenTangService, DashboardNenTangService>();
@@ -192,6 +194,20 @@ builder.Services.AddHangfire(cfg => cfg
     .UseRecommendedSerializerSettings()
     .UseSqlServerStorage(connectionString));
 builder.Services.AddHangfireServer();
+
+// --- Thông báo đẩy (FCM) cho app mobile: đơn hàng mới/đổi trạng thái ---
+// File JSON service account KHÔNG commit (giống appsettings.Development.json). Chưa cấu hình thì
+// FirebaseApp.DefaultInstance vẫn null -> PushNotificationService tự bỏ qua gửi, không lỗi.
+var firebaseCredPath = builder.Configuration["Firebase:CredentialsPath"];
+if (!string.IsNullOrWhiteSpace(firebaseCredPath) && File.Exists(firebaseCredPath))
+{
+    // GoogleCredential.FromFile bị đánh Obsolete (khuyến nghị CredentialFactory) nhưng vẫn hoạt động
+    // đúng - giữ cách gọi đơn giản, quen thuộc này cho tới khi có lý do thật để đổi.
+#pragma warning disable CS0618
+    var credential = Google.Apis.Auth.OAuth2.GoogleCredential.FromFile(firebaseCredPath);
+#pragma warning restore CS0618
+    FirebaseAdmin.FirebaseApp.Create(new FirebaseAdmin.AppOptions { Credential = credential });
+}
 
 // --- Xác thực cho ứng dụng di động (chạy SONG SONG với cookie của web, không thay đổi web) ---
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "";

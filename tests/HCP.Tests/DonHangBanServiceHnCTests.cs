@@ -4,6 +4,7 @@ using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
@@ -56,7 +57,7 @@ public class DonHangBanServiceHnCTests
     }
 
     private static DonHangBanService Svc(AppDbContext db, FakeHanoiCheckOrderCommandClient fake) =>
-        new(db, new MaTuSinhService(db), fake);
+        new(db, new MaTuSinhService(db), fake, new FakePushNotificationService());
 
     [Fact]
     public async Task Xac_Nhan_Day_Dang_Chuan_Bi_Sang_HanoiCheck()

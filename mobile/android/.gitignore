@@ -12,3 +12,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Cấu hình Firebase riêng của project - không commit, mỗi máy dev/CI tự đặt file thật
+# (xem mobile/lib/loi/thong_bao_day.dart và CI secrets).
+app/google-services.json

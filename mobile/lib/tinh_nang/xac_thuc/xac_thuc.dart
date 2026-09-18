@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../loi/api.dart';
 import '../../loi/luu_tru.dart';
+import '../../loi/thong_bao_day.dart';
 
 /// Người dùng đang đăng nhập.
 class NguoiDung {
@@ -97,6 +100,7 @@ class XacThucNotifier extends Notifier<TrangThaiXacThuc> {
       }
       final j = await _api.get('/api/v1/auth/toi') as Map<String, dynamic>;
       state = TrangThaiXacThuc(nguoiDung: NguoiDung.tuJson(j));
+      unawaited(ThongBaoDay.dangKyThietBiAsync(_dangKyThietBi));
     } on LoiApi catch (e) {
       // CHỈ xoá phiên khi máy chủ thực sự từ chối token. Mất sóng lúc mở app mà xoá
       // phiên thì người dùng phải đăng nhập lại oan, dù token vẫn còn hạn.
@@ -128,6 +132,7 @@ class XacThucNotifier extends Notifier<TrangThaiXacThuc> {
         email: email.trim(),
       );
       state = TrangThaiXacThuc(nguoiDung: NguoiDung.tuJson(j['nguoiDung'] as Map<String, dynamic>));
+      unawaited(ThongBaoDay.dangKyThietBiAsync(_dangKyThietBi));
       return true;
     } on LoiApi catch (e) {
       state = TrangThaiXacThuc(loi: e.thongBao);
@@ -139,6 +144,13 @@ class XacThucNotifier extends Notifier<TrangThaiXacThuc> {
   }
 
   Future<void> dangXuat() async {
+    // Bỏ đăng ký thiết bị TRƯỚC khi mất access token (API cần đăng nhập) - máy khác đăng nhập
+    // tiếp không bị nhận nhầm thông báo của người vừa đăng xuất.
+    try {
+      final token = await ThongBaoDay.layTokenHienTaiAsync();
+      if (token != null) await _api.delete('/api/v1/auth/thiet-bi?token=${Uri.encodeQueryComponent(token)}');
+    } catch (_) {}
+
     final refresh = await _luuTru.refreshToken();
     if (refresh != null) {
       // Báo máy chủ thu hồi token; mạng hỏng cũng vẫn đăng xuất tại máy.
@@ -154,5 +166,13 @@ class XacThucNotifier extends Notifier<TrangThaiXacThuc> {
   Future<void> datLaiPhien() async {
     await _luuTru.xoaPhien();
     state = const TrangThaiXacThuc(loi: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+  }
+
+  /// Gửi token thiết bị (FCM) lên máy chủ - lỗi không chặn đăng nhập, chỉ đơn giản là chưa nhận
+  /// được thông báo đẩy.
+  Future<void> _dangKyThietBi(String token) async {
+    try {
+      await _api.post('/api/v1/auth/thiet-bi', than: {'token': token});
+    } catch (_) {}
   }
 }

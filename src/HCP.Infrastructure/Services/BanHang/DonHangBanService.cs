@@ -1,8 +1,10 @@
+using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.BanHang;
@@ -72,13 +74,20 @@ public sealed class DonHangBanService : IDonHangBanService
     private readonly AppDbContext _db;
     private readonly IMaTuSinhService _maTuSinh;
     private readonly IHanoiCheckOrderCommandClient _orderCommandClient;
+    private readonly IPushNotificationService _push;
 
-    public DonHangBanService(AppDbContext db, IMaTuSinhService maTuSinh, IHanoiCheckOrderCommandClient orderCommandClient)
+    public DonHangBanService(AppDbContext db, IMaTuSinhService maTuSinh, IHanoiCheckOrderCommandClient orderCommandClient,
+                             IPushNotificationService push)
     {
         _db = db;
         _maTuSinh = maTuSinh;
         _orderCommandClient = orderCommandClient;
+        _push = push;
     }
+
+    /// <summary>Dữ liệu kèm mọi thông báo đẩy của đơn hàng - app dùng để mở đúng màn chi tiết khi bấm vào.</summary>
+    private static Dictionary<string, string> DuLieuThongBao(int donId) =>
+        new() { ["loaiThongBao"] = "don_hang", ["donHangId"] = donId.ToString() };
 
     private IQueryable<DonHangBan> QueryDayDu() =>
         _db.DonHangBans.Include(d => d.Dong).ThenInclude(l => l.XuatLo).Include(d => d.AnhTongQuan);
@@ -107,6 +116,11 @@ public sealed class DonHangBanService : IDonHangBanService
 
         _db.DonHangBans.Add(don);
         await _db.SaveChangesAsync(ct);
+
+        if (_db.TenantInfo?.Id is { } tenantId)
+            await _push.GuiTheoQuyenAsync(tenantId, AppRoles.QuyenNhapLieu.Split(','),
+                "Đơn hàng mới", $"Đơn mới: {don.MaDonHang}", DuLieuThongBao(don.Id), ct);
+
         return KetQuaThaoTac.Ok($"Đã tạo đơn hàng \"{don.MaDonHang}\" - tổng {don.TongTien:#,0} đ.");
     }
 
@@ -226,6 +240,11 @@ public sealed class DonHangBanService : IDonHangBanService
 
         don.TrangThai = TrangThaiDonHangBan.DaXacNhan;
         await _db.SaveChangesAsync(ct);
+
+        if (_db.TenantInfo?.Id is { } coSoId)
+            await _push.GuiTheoQuyenAsync(coSoId, AppRoles.QuyenNhapLieu.Split(','), "Đơn đã xác nhận",
+                $"Đơn {don.MaDonHang} đã xác nhận, có thể xuất kho.", DuLieuThongBao(don.Id), ct);
+
         return KetQuaThaoTac.Ok($"Đã xác nhận đơn \"{don.MaDonHang}\".");
     }
 
@@ -402,6 +421,11 @@ public sealed class DonHangBanService : IDonHangBanService
         don.TrangThai = TrangThaiDonHangBan.DangGiao;
         don.ThoiGianXuatKhoUtc = now;
         await _db.SaveChangesAsync(ct);
+
+        if (_db.TenantInfo?.Id is { } coSoId)
+            await _push.GuiTheoQuyenAsync(coSoId, AppRoles.QuyenGiaoHang.Split(','), "Đơn sẵn sàng giao",
+                $"Đơn {don.MaDonHang} sẵn sàng giao.", DuLieuThongBao(don.Id), ct);
+
         return KetQuaThaoTac.Ok($"Đã xuất kho đơn \"{don.MaDonHang}\" ({chot.Select(p => p.MaLo).Distinct().Count()} lô), "
                                 + "chuyển sang Đang giao.");
     }

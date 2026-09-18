@@ -5,6 +5,7 @@ using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
@@ -27,7 +28,7 @@ public class DonHangGiaoHangTests
         return new AppDbContext(accessor, options);
     }
 
-    private DonHangBanService Svc(AppDbContext db) => new(db, new MaTuSinhService(db), _hnc);
+    private DonHangBanService Svc(AppDbContext db) => new(db, new MaTuSinhService(db), _hnc, new FakePushNotificationService());
 
     private static readonly IReadOnlyList<AnhDauVao> AnhGiao = new[]
     {

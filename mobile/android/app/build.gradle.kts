@@ -7,6 +7,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Thông báo đẩy (FCM): plugin google-services CHỈ áp dụng khi có file cấu hình thật (không commit,
+// xem android/.gitignore) - để build vẫn chạy được ở máy/CI chưa thiết lập Firebase.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Khoá ký bản phát hành đọc từ android/key.properties (máy dev tự tạo; CI tạo từ GitHub Secrets - xem
 // .github/workflows/mobile-android.yml). File này và file .jks bị .gitignore, KHÔNG commit.
 // Không có thì ký bằng khoá debug: chỉ để thử, không phát cho người dùng vì mỗi máy build một khoá khác nhau.

@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- App gọi API máy chủ nên bản phát hành cũng cần quyền truy cập mạng. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ (API 33) bắt buộc quyền này mới hiện được thông báo đẩy. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="Quản lý sản xuất"

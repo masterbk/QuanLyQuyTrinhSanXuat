@@ -1,10 +1,12 @@
 using Finbuckle.MultiTenant;
 using Finbuckle.MultiTenant.Abstractions;
+using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Entities.Infrastructure;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using DonHangNhanEntity = HCP.Domain.Entities.Business.DonHangNhan;
@@ -42,11 +44,13 @@ public sealed class DonHangHnCService : IDonHangHnCService
 
     private readonly AppDbContext _db;
     private readonly IMaTuSinhService _maTuSinh;
+    private readonly IPushNotificationService _push;
 
-    public DonHangHnCService(AppDbContext db, IMaTuSinhService maTuSinh)
+    public DonHangHnCService(AppDbContext db, IMaTuSinhService maTuSinh, IPushNotificationService push)
     {
         _db = db;
         _maTuSinh = maTuSinh;
+        _push = push;
     }
 
     public async Task<int> DongBoVaoDonHangBanAsync(CancellationToken ct = default)
@@ -147,6 +151,12 @@ public sealed class DonHangHnCService : IDonHangHnCService
         don.MaDonHang = await _maTuSinh.SinhAsync(LoaiMaTuSinh.DonHangBan, ngayDat, ct);
         _db.DonHangBans.Add(don);
         await _db.SaveChangesAsync(ct);
+
+        if (_db.TenantInfo?.Id is { } tenantId)
+            await _push.GuiTheoQuyenAsync(tenantId, AppRoles.QuyenNhapLieu.Split(','), "Đơn hàng mới",
+                $"Đơn mới từ {khach.TenKhachHang}: {don.MaDonHang}",
+                new Dictionary<string, string> { ["loaiThongBao"] = "don_hang", ["donHangId"] = don.Id.ToString() }, ct);
+
         return don;
     }
 

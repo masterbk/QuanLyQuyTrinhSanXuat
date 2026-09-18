@@ -1,5 +1,6 @@
 using Finbuckle.MultiTenant.Abstractions;
 using HCP.Domain.Constants;
+using HCP.Domain.Entities.Infrastructure;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -53,6 +54,36 @@ public static class AuthApi
                 await MaNhanSuAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id,
                                     user.FindFirstValue(ClaimTypes.NameIdentifier), ct))))
             .RequireAuthorization(ApiAuth.ChinhSach);
+
+        // Đăng ký/bỏ đăng ký token thiết bị (FCM) để nhận thông báo đẩy - gọi lúc đăng nhập/đăng xuất.
+        nhom.MapPost("/thiet-bi", async (DangKyThietBiRequest req, ClaimsPrincipal user, AppDbContext db,
+                                         CancellationToken ct) =>
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+            var token = req.Token.Trim();
+            if (token.Length == 0) return Results.BadRequest(new LoiDto("Thiếu token thiết bị."));
+
+            var hienCo = await db.PushDeviceTokens.FirstOrDefaultAsync(t => t.Token == token, ct);
+            if (hienCo is null)
+            {
+                db.PushDeviceTokens.Add(new PushDeviceToken { UserId = userId, Token = token, ThietBi = req.ThietBi });
+            }
+            else
+            {
+                hienCo.UserId = userId;
+                hienCo.ThietBi = req.ThietBi;
+                hienCo.UpdatedAtUtc = DateTime.UtcNow;
+            }
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new KetQuaDto(true, "Đã đăng ký nhận thông báo."));
+        }).RequireAuthorization(ApiAuth.ChinhSach);
+
+        nhom.MapDelete("/thiet-bi", async (string token, ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+            await db.PushDeviceTokens.Where(t => t.Token == token.Trim() && t.UserId == userId).ExecuteDeleteAsync(ct);
+            return Results.Ok(new KetQuaDto(true, "Đã bỏ đăng ký nhận thông báo."));
+        }).RequireAuthorization(ApiAuth.ChinhSach);
     }
 
     private static async Task<PhienDto> MapAsync(PhienDangNhap p, AppDbContext db, CancellationToken ct) => new(

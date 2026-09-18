@@ -1,8 +1,10 @@
+using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
@@ -25,9 +27,10 @@ public class DonHangHnCServiceTests
         return new AppDbContext(accessor, options);
     }
 
-    private static DonHangHnCService Svc(AppDbContext db) => new(db, new MaTuSinhService(db));
+    private static DonHangHnCService Svc(AppDbContext db) =>
+        new(db, new MaTuSinhService(db), new FakePushNotificationService());
     private static DonHangBanService SvcBan(AppDbContext db) =>
-        new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient());
+        new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient(), new FakePushNotificationService());
 
     /// <summary>BANH_MI tồn LO_A 10 (HSD 20/09, hết hạn trước) và LO_B 10 (HSD 30/09); 2 kho; người giao VC-03.</summary>
     private void Seed()
@@ -107,6 +110,23 @@ public class DonHangHnCServiceTests
         var khach = await db.KhachHangs.SingleAsync();
         Assert.Equal(("KH-0001", "MN Hoa Sen", LoaiKhachHang.TruongHoc), (khach.MaKhachHang, khach.TenKhachHang, khach.Loai));
         Assert.Equal(khach.MaKhachHang, don.MaKhachHang);
+    }
+
+    [Fact]
+    public async Task Don_Moi_Tu_HnC_Gui_Thong_Bao_Cho_Quan_Ly_Nhap_Lieu()
+    {
+        Seed();
+        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 20), ("BANH_MI", 8, null, null));
+
+        var push = new FakePushNotificationService();
+        using (var db = MoDb())
+            Assert.Equal(1, await new DonHangHnCService(db, new MaTuSinhService(db), push).DongBoVaoDonHangBanAsync());
+
+        var gui = Assert.Single(push.DaGui);
+        Assert.Equal(CoSo, gui.TenantId);
+        Assert.Equal(AppRoles.QuyenNhapLieu.Split(','), gui.VaiTro);
+        Assert.Contains("MN Hoa Sen", gui.NoiDung);
+        Assert.Equal(LayDon("HNC-1").Id.ToString(), gui.DuLieu?["donHangId"]);
     }
 
     [Fact]

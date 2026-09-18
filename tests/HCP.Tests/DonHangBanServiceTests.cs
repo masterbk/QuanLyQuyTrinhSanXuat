@@ -1,3 +1,4 @@
+using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck;
@@ -5,6 +6,7 @@ using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Tests;
@@ -25,6 +27,22 @@ public sealed class FakeHanoiCheckOrderCommandClient : IHanoiCheckOrderCommandCl
         Task.FromResult(DoiTrangThai?.Invoke(maDon, trangThai) ?? OrderCommandResult.ChuaCauHinhKq("stub"));
 }
 
+/// <summary>Fake không gọi Firebase - chỉ ghi lại lệnh gọi để test kiểm nội dung nếu cần.</summary>
+public sealed class FakePushNotificationService : IPushNotificationService
+{
+    public sealed record LanGui(string TenantId, IReadOnlyList<string> VaiTro, string TieuDe, string NoiDung,
+                                IReadOnlyDictionary<string, string>? DuLieu);
+
+    public readonly List<LanGui> DaGui = new();
+
+    public Task GuiTheoQuyenAsync(string tenantId, IReadOnlyList<string> vaiTro, string tieuDe, string noiDung,
+                                  IReadOnlyDictionary<string, string>? duLieu = null, CancellationToken ct = default)
+    {
+        DaGui.Add(new LanGui(tenantId, vaiTro, tieuDe, noiDung, duLieu));
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>
 /// Kiểm chứng đơn hàng bán: lập đơn (mã tự sinh, tổng tiền), vòng đời trạng thái, xuất kho trừ tồn theo lô
 /// (gợi ý FEFO cộng dồn các dòng, cho người dùng đổi lô), chặn phân bổ sai, huỷ khi đang giao trả hàng về lô.
@@ -42,7 +60,8 @@ public class DonHangBanServiceTests
         return new AppDbContext(accessor, options);
     }
 
-    private static DonHangBanService Svc(AppDbContext db) => new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient());
+    private static DonHangBanService Svc(AppDbContext db) =>
+        new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient(), new FakePushNotificationService());
 
     /// <summary>Xác nhận đã giao bắt buộc có ảnh chứng minh.</summary>
     internal static readonly IReadOnlyList<AnhDauVao> AnhGiaoMau =
@@ -268,6 +287,33 @@ public class DonHangBanServiceTests
         var don = await db.DonHangBans.SingleAsync();
         Assert.Equal(TrangThaiDonHangBan.DaGiao, don.TrangThai);
         Assert.NotNull(don.ThoiGianGiaoUtc);
+    }
+
+    [Fact]
+    public async Task Gui_Thong_Bao_Day_Dung_Buoc_Va_Dung_Quyen()
+    {
+        Seed();
+        var push = new FakePushNotificationService();
+        DonHangBanService SvcPush(AppDbContext db) =>
+            new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient(), push);
+
+        var don = Don((2, 5000));
+        using (var db = MoDb())
+        {
+            var kq = await SvcPush(db).TaoAsync(don);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        var id = don.Id;
+
+        using (var db = MoDb()) Assert.True((await SvcPush(db).XacNhanAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await SvcPush(db).XuatKhoAsync(id, null, null)).ThanhCong);
+
+        Assert.Equal(3, push.DaGui.Count);
+        // Tạo mới + xác nhận -> báo quản lý/nhập liệu; xuất kho -> báo nhân viên giao hàng.
+        Assert.All(push.DaGui.Take(2), g => Assert.Equal(AppRoles.QuyenNhapLieu.Split(','), g.VaiTro));
+        Assert.Equal(AppRoles.QuyenGiaoHang.Split(','), push.DaGui[2].VaiTro);
+        Assert.All(push.DaGui, g => Assert.Equal(CoSo, g.TenantId));
+        Assert.All(push.DaGui, g => Assert.Equal(id.ToString(), g.DuLieu?["donHangId"]));
     }
 
     [Fact]

@@ -29,6 +29,9 @@ public sealed record LoiDto(string ThongBao);
 
 public sealed record KetQuaDto(bool ThanhCong, string ThongBao);
 
+/// <summary>Đăng ký token thiết bị (FCM) để nhận thông báo đẩy.</summary>
+public sealed record DangKyThietBiRequest(string Token, string? ThietBi);
+
 // ================== Lệnh sản xuất ==================
 
 /// <summary>
