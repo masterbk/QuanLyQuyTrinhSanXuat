@@ -10,6 +10,10 @@
 #   ANDROID_KEY_PASSWORD      mật khẩu khoá
 # Thiếu secret thì APK ký bằng khoá debug của máy build - chỉ để thử, KHÔNG phát cho nhân viên (mỗi lần build một
 # khoá khác nhau nên điện thoại không cài đè được bản mới).
+#
+# Thông báo đẩy (FCM): khai thêm secret GOOGLE_SERVICES_JSON_BASE64 (nội dung file
+# mobile/android/app/google-services.json mã hoá base64, tải từ Firebase Console). Thiếu secret
+# thì build vẫn qua bình thường, chỉ là APK đó không gửi/nhận được thông báo đẩy.
 
 name: App Android
 
@@ -42,6 +46,7 @@ jobs:
         working-directory: mobile
     env:
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
 
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +89,14 @@ jobs:
       - name: Cảnh báo chưa có khoá ký
         if: env.KEYSTORE_BASE64 == ''
         run: echo "::warning::Chưa khai secret ANDROID_KEYSTORE_BASE64 - APK ký bằng khoá debug, chỉ dùng để thử."
+
+      - name: Tạo google-services.json từ GitHub Secrets (thông báo đẩy)
+        if: env.GOOGLE_SERVICES_JSON_BASE64 != ''
+        run: echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+
+      - name: Cảnh báo chưa có cấu hình Firebase
+        if: env.GOOGLE_SERVICES_JSON_BASE64 == ''
+        run: echo "::warning::Chưa khai secret GOOGLE_SERVICES_JSON_BASE64 - APK build lần này sẽ KHÔNG gửi/nhận được thông báo đẩy."
 
       - name: Build APK
         id: build
