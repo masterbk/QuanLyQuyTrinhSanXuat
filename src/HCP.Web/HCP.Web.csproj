@@ -16,10 +16,13 @@
     </PackageReference>
     <PackageReference Include="MudBlazor" Version="7.15.0" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- -windows: cần cho System.Drawing.Common (chữ dưới ảnh QR) - project này vốn chỉ chạy trên IIS
+         Windows nên không mất gì, chỉ tắt cảnh báo CA1416 "chỉ hỗ trợ Windows" một cách chính xác. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

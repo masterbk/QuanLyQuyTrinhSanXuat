@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../loi/api.dart';
 import '../../loi/gio_viet_nam.dart';
 import '../lenh_san_xuat/mo_hinh.dart' show soGon;
+import '../qr/man_qr.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'man_danh_sach.dart';
@@ -33,6 +34,21 @@ class ManChiTietDon extends ConsumerWidget {
       appBar: AppBar(
         title: Text(chiTiet.value?.maDonHang ?? 'Chi tiết đơn'),
         actions: [
+          if (chiTiet.value != null)
+            IconButton(
+              tooltip: 'Mã QR',
+              icon: const Icon(Icons.qr_code_2),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ManXemQr(
+                    tieuDe: 'Mã QR đơn hàng ${chiTiet.value!.maDonHang}',
+                    tenFile: 'QR-${chiTiet.value!.maDonHang}.png',
+                    taiAnh: () => ref.read(khoDonProvider).qrPng(id),
+                  ),
+                ),
+              ),
+            ),
           if (coQuyenNhapLieu && chiTiet.value != null)
             _MenuHanhDong(don: chiTiet.value!, id: id),
         ],

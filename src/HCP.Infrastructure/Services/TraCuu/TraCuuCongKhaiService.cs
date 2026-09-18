@@ -80,8 +80,13 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             .FirstOrDefaultAsync(d => d.Id == id, ct);
         if (don is null) return null;
 
+        // Đơn từ trường thì hiển thị/QR theo mã trên HanoiCheck (trường chỉ biết mã đó), đơn nội bộ thì
+        // theo mã nội bộ.
+        var laHanoiCheck = don.Nguon == NguonDonHang.HanoiCheck && !string.IsNullOrWhiteSpace(don.MaDonHnC);
+        var maHienThi = laHanoiCheck ? don.MaDonHnC! : don.MaDonHang;
+
         // Đơn từ HanoiCheck: QR là trang truy xuất (traceability_url) HanoiCheck cấp cho đơn.
-        if (don.Nguon == NguonDonHang.HanoiCheck && !string.IsNullOrWhiteSpace(don.MaDonHnC))
+        if (laHanoiCheck)
         {
             var tenantId = don.TenantId;
             var maDonHnC = don.MaDonHnC;
@@ -89,7 +94,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
                 .Where(n => n.TenantId == tenantId && n.MaDonHang == maDonHnC)
                 .Select(n => n.LinkTruyXuat).FirstOrDefaultAsync(ct);
             if (LaLinkWeb(link))
-                return new QrTraCuu(don.MaDonHang, link!.Trim(), null, "Trang truy xuất của đơn trên HanoiCheck.");
+                return new QrTraCuu(maHienThi, link!.Trim(), null, "Trang truy xuất của đơn trên HanoiCheck.");
         }
 
         // Đơn nội bộ (hoặc đơn HanoiCheck chưa có link): trang tra cứu của hệ thống. Sinh luôn mã tra cứu cho các lô đã
@@ -103,7 +108,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
         }
         await _db.SaveChangesAsync(ct);
 
-        return new QrTraCuu(don.MaDonHang, null, don.MaTraCuu,
+        return new QrTraCuu(maHienThi, null, don.MaTraCuu,
             don.Nguon == NguonDonHang.HanoiCheck
                 ? "Đơn HanoiCheck chưa có link truy xuất - dùng trang tra cứu của hệ thống."
                 : "Trang tra cứu đơn hàng trên hệ thống.");

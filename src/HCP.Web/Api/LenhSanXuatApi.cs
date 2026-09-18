@@ -8,6 +8,7 @@ using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Services.DanhMuc;
 using HCP.Infrastructure.Services.Kho;
+using HCP.Infrastructure.Services.TraCuu;
 using HCP.Web.Services;
 
 namespace HCP.Web.Api;
@@ -63,6 +64,20 @@ public static class LenhSanXuatApi
             return lenh is null
                 ? Results.NotFound(new LoiDto("Không tìm thấy lệnh sản xuất."))
                 : Results.Ok(Map(lenh, await LayTenAsync(sp, qt, khau, coSo)));
+        });
+
+        // Ảnh QR (PNG, kèm dòng chữ mã lệnh dưới mã QR) để xem/tải trên app - cùng nội dung QR với web
+        // (nội dung "LSX:<mã lệnh>" cho nhân viên sản xuất quét tham gia khâu, xem mục /theo-ma dưới đây).
+        nhom.MapGet("/{id:int}/qr", async (int id, ITraCuuCongKhaiService traCuu, IConfiguration cauHinh,
+                                          HttpRequest req, CancellationToken ct) =>
+        {
+            var qr = await traCuu.LayQrLenhSanXuatAsync(id, ct);
+            if (qr is null) return Results.NotFound(new LoiDto("Không tìm thấy lệnh sản xuất."));
+
+            var goc = DuongDanTraCuu.Goc(cauHinh, $"{req.Scheme}://{req.Host}{req.PathBase}");
+            var noiDung = DuongDanTraCuu.NoiDungQr(qr, LoaiTraCuu.LenhSanXuat, goc);
+            var png = QrApi.TaoPng(noiDung, QrApi.ChuThich(qr, LoaiTraCuu.LenhSanXuat));
+            return Results.Bytes(png, "image/png");
         });
 
         // App quét mã QR lệnh (nội dung "LSX:<mã lệnh>") rồi tra lệnh theo mã.

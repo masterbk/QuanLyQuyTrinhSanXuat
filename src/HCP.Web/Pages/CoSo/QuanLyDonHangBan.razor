@@ -146,7 +146,8 @@ else
                             }
                         </div>
 
-                        <NutQrTraCuu Loai="LoaiTraCuu.DonHang" Id="@context.Id" Ma="@context.MaDonHang" />
+                        <NutQrTraCuu Loai="LoaiTraCuu.DonHang" Id="@context.Id"
+                                     Ma="@(context.Nguon == NguonDonHang.HanoiCheck && context.MaDonHnC is not null ? context.MaDonHnC : context.MaDonHang)" />
 
                         <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="quyen">
                         <Authorized>

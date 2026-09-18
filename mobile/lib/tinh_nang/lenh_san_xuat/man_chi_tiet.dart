@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../loi/api.dart';
 import '../../loi/gio_viet_nam.dart';
+import '../qr/man_qr.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'hoan_thanh.dart';
 import 'kho_du_lieu.dart';
@@ -148,6 +149,21 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
         appBar: AppBar(
           title: Text(chiTiet.value?.maLenh ?? 'Chi tiết lệnh'),
           actions: [
+            if (chiTiet.value != null)
+              IconButton(
+                tooltip: 'Mã QR',
+                icon: const Icon(Icons.qr_code_2),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ManXemQr(
+                      tieuDe: 'Mã QR lệnh sản xuất ${chiTiet.value!.maLenh}',
+                      tenFile: 'QR-${chiTiet.value!.maLenh}.png',
+                      taiAnh: () => ref.read(khoLenhProvider).qrPng(widget.id),
+                    ),
+                  ),
+                ),
+              ),
             if (chiTiet.value?.moiTao == true)
               IconButton(
                 tooltip: 'Sửa',

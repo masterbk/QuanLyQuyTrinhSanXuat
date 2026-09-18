@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import 'luu_tru.dart';
@@ -69,6 +72,36 @@ class ApiClient {
   Future<dynamic> postFile(String duongDan, FormData form) =>
       _goi(() => _dio.post(duongDan, data: form,
           options: Options(sendTimeout: const Duration(minutes: 3))));
+
+  /// Tải dữ liệu nhị phân (ảnh QR...) - KHÔNG qua _goi vì đó ép đọc JSON, làm hỏng byte ảnh.
+  Future<Uint8List> getBytes(String duongDan) => _goiBytes(
+      () => _dio.get<List<int>>(duongDan, options: Options(responseType: ResponseType.bytes)));
+
+  Future<Uint8List> _goiBytes(Future<Response<List<int>>> Function() ham) async {
+    try {
+      var r = await ham();
+      if (r.statusCode == 401) {
+        if (!await _lamMoiToken()) {
+          khiHetPhien?.call();
+          throw LoiApi('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 401);
+        }
+        r = await ham();   // thử lại đúng một lần với token mới
+      }
+      final ma = r.statusCode ?? 0;
+      if (ma >= 200 && ma < 300) return Uint8List.fromList(r.data ?? const []);
+
+      var tb = 'Máy chủ trả lỗi $ma.';
+      try {
+        final j = jsonDecode(utf8.decode(r.data ?? const []));
+        if (j is Map && j['thongBao'] is String) tb = j['thongBao'] as String;
+      } catch (_) {
+        // Lỗi không phải JSON (hiếm) - giữ thông báo chung ở trên.
+      }
+      throw LoiApi(tb, ma);
+    } on DioException catch (e) {
+      throw _tuDio(e);
+    }
+  }
 
   /// Gọi KHÔNG kèm token và KHÔNG tự làm mới - dùng cho chính các API xác thực.
   Future<dynamic> postKhongToken(String duongDan, Object than) async {

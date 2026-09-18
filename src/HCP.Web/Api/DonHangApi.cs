@@ -9,6 +9,7 @@ using HCP.Domain.Enums;
 using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.DonHangNhan;
 using HCP.Infrastructure.Services.Kho;
+using HCP.Infrastructure.Services.TraCuu;
 using Microsoft.AspNetCore.Authorization;
 
 namespace HCP.Web.Api;
@@ -103,6 +104,19 @@ public static class DonHangApi
             var don = await svc.LayTheoIdAsync(id);
             if (don is null) return Results.NotFound(new LoiDto("Không tìm thấy đơn hàng."));
             return Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, ns)));
+        });
+
+        // Ảnh QR (PNG, kèm dòng chữ mã đơn dưới mã QR) để xem/tải trên app - cùng nội dung QR với web.
+        ban.MapGet("/{id:int}/qr", async (int id, ITraCuuCongKhaiService traCuu, IConfiguration cauHinh,
+                                          HttpRequest req, CancellationToken ct) =>
+        {
+            var qr = await traCuu.LayQrDonHangAsync(id, ct);
+            if (qr is null) return Results.NotFound(new LoiDto("Không tìm thấy đơn hàng."));
+
+            var goc = DuongDanTraCuu.Goc(cauHinh, $"{req.Scheme}://{req.Host}{req.PathBase}");
+            var noiDung = DuongDanTraCuu.NoiDungQr(qr, LoaiTraCuu.DonHang, goc);
+            var png = QrApi.TaoPng(noiDung, QrApi.ChuThich(qr, LoaiTraCuu.DonHang));
+            return Results.Bytes(png, "image/png");
         });
 
         // Quét mã QR trên phiếu giao (QR tra cứu của hệ thống hoặc link truy xuất HanoiCheck) -> mở đúng đơn.

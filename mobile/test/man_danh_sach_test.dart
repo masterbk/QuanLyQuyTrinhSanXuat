@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +56,8 @@ class KhoGia implements KhoLenhSanXuat {
   Future<List<CoSo>> coSo() async => [];
   @override
   Future<List<NhanSu>> nhanSu() async => [];
+  @override
+  Future<Uint8List> qrPng(int id) async => Uint8List(0);
 }
 
 LenhSanXuat _lenh({

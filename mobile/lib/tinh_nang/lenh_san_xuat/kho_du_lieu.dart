@@ -94,6 +94,9 @@ class KhoLenhSanXuat {
   Future<List<T>> _dm<T>(String duongDan, T Function(Map<String, dynamic>) doc) async =>
       ((await _api.get('/api/v1/danh-muc/$duongDan')) as List)
           .map((e) => doc(e as Map<String, dynamic>)).toList();
+
+  /// Ảnh QR (PNG, đã kèm chữ mã lệnh) - cùng nội dung QR với web.
+  Future<Uint8List> qrPng(int id) => _api.getBytes('/api/v1/lenh-san-xuat/$id/qr');
 }
 
 final khoLenhProvider = Provider<KhoLenhSanXuat>((ref) => KhoLenhSanXuat(ref.watch(apiProvider)));

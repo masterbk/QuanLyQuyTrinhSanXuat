@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,6 +64,8 @@ class KhoDonGia implements KhoDonHang {
   Future<List<KhachHang>> khachHang() async => const [];
   @override
   Future<List<ThanhPham>> thanhPhamBan() async => const [];
+  @override
+  Future<Uint8List> qrPng(int id) async => Uint8List(0);
 }
 
 DonHangBan _don({int id = 1, String ma = 'DH-001', String trangThai = 'DangGiao', String? nguoiGiao}) => DonHangBan(

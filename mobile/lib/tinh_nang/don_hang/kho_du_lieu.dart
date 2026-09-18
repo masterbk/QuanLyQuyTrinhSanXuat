@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,6 +107,9 @@ class KhoDonHang {
 
   Future<List<ThanhPham>> thanhPhamBan() async => ((await _api.get('/api/v1/danh-muc/thanh-pham-ban')) as List)
       .map((e) => ThanhPham.tuJson(e as Map<String, dynamic>)).toList();
+
+  /// Ảnh QR (PNG, đã kèm chữ mã đơn) - cùng nội dung QR với web.
+  Future<Uint8List> qrPng(int id) => _api.getBytes('/api/v1/don-hang-ban/$id/qr');
 }
 
 final khoDonProvider = Provider<KhoDonHang>((ref) => KhoDonHang(ref.watch(apiProvider)));
