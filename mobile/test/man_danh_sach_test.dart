@@ -5,6 +5,7 @@ import 'package:hcp_mobile/loi/api.dart';
 import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/kho_du_lieu.dart';
 import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/man_danh_sach.dart';
 import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/mo_hinh.dart';
+import 'package:hcp_mobile/tinh_nang/xac_thuc/xac_thuc.dart';
 
 /// Kho dữ liệu giả: trả sẵn dữ liệu, không gọi mạng.
 class KhoGia implements KhoLenhSanXuat {
@@ -15,7 +16,8 @@ class KhoGia implements KhoLenhSanXuat {
   KhoGia({this.duLieu = const [], this.nem});
 
   @override
-  Future<TrangDuLieu<LenhSanXuat>> danhSach({String? trangThai, int trang = 1, int soDong = 20}) async {
+  Future<TrangDuLieu<LenhSanXuat>> danhSach(
+      {String? trangThai, int trang = 1, int soDong = 20, bool cuaToi = false}) async {
     if (nem != null) throw nem!;
     locDaNhan = trangThai;
     final loc = trangThai == null ? duLieu : duLieu.where((l) => l.trangThai == trangThai).toList();
@@ -24,6 +26,10 @@ class KhoGia implements KhoLenhSanXuat {
 
   @override
   Future<LenhSanXuat> chiTiet(int id) async => duLieu.firstWhere((l) => l.id == id);
+  @override
+  Future<LenhSanXuat> theoMa(String maLenh) async => duLieu.firstWhere((l) => l.maLenh == maLenh);
+  @override
+  Future<String> thamGia(int id, List<int> khauIds) async => 'Đã tham gia';
   @override
   Future<String> tao(Map<String, dynamic> than) async => 'Đã tạo';
   @override
@@ -56,6 +62,7 @@ LenhSanXuat _lenh({
   String trangThai = 'MoiTao',
   String hienThi = 'Mới tạo',
   double soLuong = 10,
+  List<KhauLenh> khau = const [],
 }) =>
     LenhSanXuat(
       id: id,
@@ -72,12 +79,26 @@ LenhSanXuat _lenh({
           soLuong: soLuong,
           maLoThanhPham: 'LO-$id',
           maQuyTrinh: 'QT01',
+          khau: khau,
         ),
       ],
     );
 
-Widget _app(KhoGia kho) => ProviderScope(
-      overrides: [khoLenhProvider.overrideWithValue(kho)],
+/// Người dùng đăng nhập giả (null = chưa đăng nhập / không có quyền tham gia).
+class _XacThucGia extends XacThucNotifier {
+  final NguoiDung? nguoiDung;
+
+  _XacThucGia(this.nguoiDung);
+
+  @override
+  TrangThaiXacThuc build() => TrangThaiXacThuc(nguoiDung: nguoiDung);
+}
+
+Widget _app(KhoGia kho, {NguoiDung? nguoiDung}) => ProviderScope(
+      overrides: [
+        khoLenhProvider.overrideWithValue(kho),
+        xacThucProvider.overrideWith(() => _XacThucGia(nguoiDung)),
+      ],
       child: const MaterialApp(home: ManDanhSachLenh()),
     );
 
@@ -127,5 +148,33 @@ void main() {
 
     expect(find.text('Không kết nối được máy chủ.'), findsOneWidget);
     expect(find.text('Thử lại'), findsOneWidget);
+  });
+
+  testWidgets('Nhân viên sản xuất bấm Tham gia ngay trên danh sách; đã tham gia thì hiện Sửa khâu', (t) async {
+    const khauTrong = KhauLenh(id: 11, maKhau: 'K1', thuTu: 1, maCoSo: 'CS');
+    const khauCoToi = KhauLenh(id: 21, maKhau: 'K1', thuTu: 1, maCoSo: 'CS', nguoiThucHien: ['NS01']);
+    final kho = KhoGia(duLieu: [
+      _lenh(id: 1, ma: 'LSX-001', khau: const [khauTrong]),
+      _lenh(id: 2, ma: 'LSX-002', khau: const [khauCoToi]),
+      _lenh(id: 3, ma: 'LSX-003', trangThai: 'HoanThanh', hienThi: 'Hoàn thành', khau: const [khauTrong]),
+    ]);
+
+    await t.pumpWidget(_app(kho,
+        nguoiDung: NguoiDung(id: 'u1', email: '', vaiTro: ['TenantSanXuat'], maNhanSu: 'NS01')));
+    await t.pumpAndSettle();
+
+    expect(find.text('Tham gia'), findsOneWidget);       // chỉ LSX-001 (lệnh hoàn thành không có nút)
+    expect(find.text('Sửa khâu'), findsOneWidget);       // LSX-002 đã có mình
+    expect(find.text('Đã tham gia'), findsOneWidget);
+    expect(find.text('Quét mã lệnh'), findsOneWidget);   // QR vẫn là cách phụ
+    expect(find.text('Của tôi'), findsOneWidget);
+
+    // Người không có vai trò sản xuất thì không thấy gì liên quan tham gia (dựng lại ProviderScope mới).
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(_app(kho, nguoiDung: NguoiDung(id: 'u2', email: '', vaiTro: ['TenantStaff'])));
+    await t.pumpAndSettle();
+    expect(find.text('Tham gia'), findsNothing);
+    expect(find.text('Quét mã lệnh'), findsNothing);
+    expect(find.text('Tạo lệnh'), findsOneWidget);
   });
 }

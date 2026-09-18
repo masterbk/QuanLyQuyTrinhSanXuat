@@ -1,5 +1,6 @@
 @using HCP.Domain.Constants
 
+@* Menu theo vai trò; người nhiều vai trò thấy gộp các mục. AuthorizeView lồng nhau phải đặt Context riêng. *@
 <MudNavMenu>
     <AuthorizeView Roles="@AppRoles.PlatformSuperAdmin">
         <MudNavLink Href="/admin/dashboard" Icon="@Icons.Material.Filled.Dashboard">
@@ -13,7 +14,7 @@
         </MudNavLink>
     </AuthorizeView>
 
-    <AuthorizeView Roles="@(AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)">
+    <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="nhapLieu">
         <MudNavLink Href="/app/dashboard" Icon="@Icons.Material.Filled.Dashboard">
             Tổng quan
         </MudNavLink>
@@ -46,33 +47,45 @@
                 Món ăn
             </MudNavLink>
         </MudNavGroup>
+    </AuthorizeView>
 
+    <AuthorizeView Roles="@AppRoles.QuyenSanXuat" Context="sanXuat">
         <MudNavGroup Title="Kho & Sản xuất" Icon="@Icons.Material.Filled.Inventory" Expanded="true">
             <MudNavLink Href="/app/kho-noi-bo" Icon="@Icons.Material.Filled.Warehouse">
                 Tồn kho &amp; nhập
             </MudNavLink>
-            <MudNavLink Href="/app/dinh-muc" Icon="@Icons.Material.Filled.Rule">
-                Định mức
-            </MudNavLink>
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="dinhMuc">
+                <MudNavLink Href="/app/dinh-muc" Icon="@Icons.Material.Filled.Rule">
+                    Định mức
+                </MudNavLink>
+            </AuthorizeView>
             <MudNavLink Href="/app/lenh-san-xuat" Icon="@Icons.Material.Filled.Factory">
                 Lệnh sản xuất
             </MudNavLink>
         </MudNavGroup>
+    </AuthorizeView>
 
+    <AuthorizeView Roles="@AppRoles.QuyenGiaoHang" Context="giaoHang">
         <MudNavGroup Title="Bán hàng" Icon="@Icons.Material.Filled.PointOfSale" Expanded="true">
-            <MudNavLink Href="/app/khach-hang" Icon="@Icons.Material.Filled.People">
-                Khách hàng
-            </MudNavLink>
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="khachHang">
+                <MudNavLink Href="/app/khach-hang" Icon="@Icons.Material.Filled.People">
+                    Khách hàng
+                </MudNavLink>
+            </AuthorizeView>
             <MudNavLink Href="/app/don-hang-ban" Icon="@Icons.Material.Filled.ReceiptLong">
                 Đơn hàng bán
             </MudNavLink>
-            <ChiKhiBatHnC>
-                <MudNavLink Href="/app/don-hang-nhan" Icon="@Icons.Material.Filled.CloudDownload">
-                    Đơn hàng từ trường (HanoiCheck)
-                </MudNavLink>
-            </ChiKhiBatHnC>
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="donTruong">
+                <ChiKhiBatHnC>
+                    <MudNavLink Href="/app/don-hang-nhan" Icon="@Icons.Material.Filled.CloudDownload">
+                        Đơn hàng từ trường (HanoiCheck)
+                    </MudNavLink>
+                </ChiKhiBatHnC>
+            </AuthorizeView>
         </MudNavGroup>
+    </AuthorizeView>
 
+    <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="nhatKy">
         <ChiKhiBatHnC>
             <MudNavLink Href="/app/nhat-ky-dong-bo" Icon="@Icons.Material.Filled.Sync">
                 Nhật ký đồng bộ
@@ -80,7 +93,7 @@
         </ChiKhiBatHnC>
     </AuthorizeView>
 
-    <AuthorizeView Roles="@AppRoles.TenantAdmin">
+    <AuthorizeView Roles="@AppRoles.TenantAdmin" Context="quanTri">
         <MudNavLink Href="/app/cai-dat-ket-noi" Icon="@Icons.Material.Filled.Link">
             Cài đặt kết nối HanoiCheck
         </MudNavLink>

@@ -17,17 +17,29 @@ class KhoLenhSanXuat {
 
   KhoLenhSanXuat(this._api);
 
-  Future<TrangDuLieu<LenhSanXuat>> danhSach({String? trangThai, int trang = 1, int soDong = 20}) async {
+  Future<TrangDuLieu<LenhSanXuat>> danhSach(
+      {String? trangThai, int trang = 1, int soDong = 20, bool cuaToi = false}) async {
     final j = await _api.get('/api/v1/lenh-san-xuat', thamSo: {
       'trangThai': ?trangThai,
       'trang': trang,
       'soDong': soDong,
+      if (cuaToi) 'cuaToi': true,
     }) as Map<String, dynamic>;
     return TrangDuLieu.tuJson(j, LenhSanXuat.tuJson);
   }
 
   Future<LenhSanXuat> chiTiet(int id) async =>
       LenhSanXuat.tuJson(await _api.get('/api/v1/lenh-san-xuat/$id') as Map<String, dynamic>);
+
+  /// Tra lệnh theo mã (sau khi quét mã QR của lệnh).
+  Future<LenhSanXuat> theoMa(String maLenh) async => LenhSanXuat.tuJson(
+      await _api.get('/api/v1/lenh-san-xuat/theo-ma/${Uri.encodeComponent(maLenh)}') as Map<String, dynamic>);
+
+  /// Tham gia các khâu đã chọn của lệnh (rỗng = rời lệnh).
+  Future<String> thamGia(int id, List<int> khauIds) async {
+    final j = await _api.post('/api/v1/lenh-san-xuat/$id/tham-gia', than: {'khauIds': khauIds}) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã tham gia lệnh.';
+  }
 
   Future<String> tao(Map<String, dynamic> than) async {
     final j = await _api.post('/api/v1/lenh-san-xuat', than: than) as Map<String, dynamic>;
@@ -98,6 +110,16 @@ class LocTrangThaiNotifier extends Notifier<String?> {
   void dat(String? ma) => state = ma;
 }
 
+/// Lọc "Của tôi": chỉ lệnh có khâu mình là người thực hiện (dành cho nhân viên sản xuất).
+final locCuaToiProvider = NotifierProvider<LocCuaToiNotifier, bool>(LocCuaToiNotifier.new);
+
+class LocCuaToiNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void dat(bool v) => state = v;
+}
+
 /// Danh sách lệnh theo bộ lọc hiện tại. Tự tải lại khi đổi bộ lọc.
 final danhSachLenhProvider =
     AsyncNotifierProvider<DanhSachLenhNotifier, List<LenhSanXuat>>(DanhSachLenhNotifier.new);
@@ -113,8 +135,10 @@ class DanhSachLenhNotifier extends AsyncNotifier<List<LenhSanXuat>> {
   @override
   Future<List<LenhSanXuat>> build() async {
     final loc = ref.watch(locTrangThaiProvider);
+    final cuaToi = ref.watch(locCuaToiProvider);
     _trang = 1;
-    final trang = await ref.read(khoLenhProvider).danhSach(trangThai: loc, trang: 1, soDong: _soDong);
+    final trang =
+        await ref.read(khoLenhProvider).danhSach(trangThai: loc, trang: 1, soDong: _soDong, cuaToi: cuaToi);
     _conTrangSau = trang.conTrangSau;
     return trang.duLieu;
   }
@@ -130,8 +154,8 @@ class DanhSachLenhNotifier extends AsyncNotifier<List<LenhSanXuat>> {
     _dangTaiThem = true;
     try {
       final loc = ref.read(locTrangThaiProvider);
-      final trang = await ref.read(khoLenhProvider)
-          .danhSach(trangThai: loc, trang: _trang + 1, soDong: _soDong);
+      final trang = await ref.read(khoLenhProvider).danhSach(
+          trangThai: loc, trang: _trang + 1, soDong: _soDong, cuaToi: ref.read(locCuaToiProvider));
       _trang++;
       _conTrangSau = trang.conTrangSau;
       state = AsyncValue.data([...(state.value ?? []), ...trang.duLieu]);

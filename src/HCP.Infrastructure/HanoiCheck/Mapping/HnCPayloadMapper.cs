@@ -185,7 +185,7 @@ public static class HnCPayloadMapper
                     ma_lo_nhap = s.MaLoNhap,
                     ma_lo_nguyen_lieu = s.MaLoNguyenLieu,
                     ma_lo_san_xuat = s.MaLoSanXuat,
-                    thoi_gian = s.ThoiGian?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    thoi_gian = s.ThoiGian?.ToString("yyyy-MM-dd HH:mm:ss"),   // ThoiGian đã là giờ Việt Nam
                     danh_sach_nguoi_thuc_hien = s.NguoiThucHien.Count == 0 ? null : s.NguoiThucHien.ToArray(),
                     dia_chi = s.DiaChi,
                     trang_thai = s.TrangThai,
@@ -235,7 +235,7 @@ public static class HnCPayloadMapper
                     ma_buoc_sx = s.MaBuocSx,
                     ma_khau = s.MaKhau,
                     thu_tu = s.ThuTu,
-                    thoi_gian = s.ThoiGian?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    thoi_gian = s.ThoiGian?.ToString("yyyy-MM-dd HH:mm:ss"),   // ThoiGian đã là giờ Việt Nam
                     danh_sach_nguoi_thuc_hien = s.NguoiThucHien.Count == 0 ? null : s.NguoiThucHien.ToArray(),
                     dia_chi = s.DiaChi,
                     trang_thai = s.TrangThai,

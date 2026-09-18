@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'tinh_nang/don_hang/man_danh_sach.dart';
 import 'tinh_nang/lenh_san_xuat/man_danh_sach.dart';
 import 'tinh_nang/xac_thuc/xac_thuc.dart';
 
-/// Khung chính sau khi đăng nhập: 2 mục đúng phạm vi app - Lệnh sản xuất và Đơn hàng.
+/// Khung chính sau khi đăng nhập: Lệnh sản xuất và Đơn hàng, chỉ hiện mục người dùng có quyền.
 class ManChinh extends ConsumerStatefulWidget {
   const ManChinh({super.key});
 
@@ -12,16 +13,38 @@ class ManChinh extends ConsumerStatefulWidget {
   ConsumerState<ManChinh> createState() => _ManChinhState();
 }
 
+/// Vai trò được dùng từng mục (khớp AppRoles phía máy chủ; người nhiều vai trò thấy gộp).
+const _quyenLenhSanXuat = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
+const _quyenDonHang = {'TenantAdmin', 'TenantStaff', 'TenantGiaoHang'};
+
 class _ManChinhState extends ConsumerState<ManChinh> {
   int _tab = 0;
 
   @override
   Widget build(BuildContext context) {
     final nd = ref.watch(xacThucProvider).nguoiDung;
+    final vaiTro = nd?.vaiTro ?? const <String>[];
+    final muc = <({String ten, Widget man, NavigationDestination nut})>[
+      if (vaiTro.any(_quyenLenhSanXuat.contains))
+        (
+          ten: 'Lệnh sản xuất',
+          man: const ManDanhSachLenh(),
+          nut: const NavigationDestination(icon: Icon(Icons.factory_outlined),
+                                           selectedIcon: Icon(Icons.factory), label: 'Lệnh sản xuất'),
+        ),
+      if (vaiTro.any(_quyenDonHang.contains))
+        (
+          ten: 'Đơn hàng',
+          man: const ManDanhSachDon(),
+          nut: const NavigationDestination(icon: Icon(Icons.receipt_long_outlined),
+                                           selectedIcon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
+        ),
+    ];
+    final tab = muc.isEmpty ? 0 : _tab.clamp(0, muc.length - 1);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_tab == 0 ? 'Lệnh sản xuất' : 'Đơn hàng'),
+        title: Text(muc.isEmpty ? 'Quản lý sản xuất' : muc[tab].ten),
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Tài khoản',
@@ -60,23 +83,17 @@ class _ManChinhState extends ConsumerState<ManChinh> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _tab,
-        children: const [
-          ManDanhSachLenh(),
-          _ChuaLam('Đơn hàng', Icons.receipt_long_outlined),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.factory_outlined),
-                                selectedIcon: Icon(Icons.factory), label: 'Lệnh sản xuất'),
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined),
-                                selectedIcon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
-        ],
-      ),
+      body: muc.isEmpty
+          ? const _ChuaLam('Tài khoản chưa được phân quyền dùng ứng dụng', Icons.lock_outline)
+          : IndexedStack(index: tab, children: [for (final m in muc) m.man]),
+      // NavigationBar cần ít nhất 2 mục: chỉ một quyền thì không hiện thanh chuyển mục.
+      bottomNavigationBar: muc.length < 2
+          ? null
+          : NavigationBar(
+              selectedIndex: tab,
+              onDestinationSelected: (i) => setState(() => _tab = i),
+              destinations: [for (final m in muc) m.nut],
+            ),
     );
   }
 }
@@ -97,7 +114,8 @@ class _ChuaLam extends StatelessWidget {
             const SizedBox(height: 12),
             Text(ten, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text('Đang xây dựng', style: Theme.of(context).textTheme.bodySmall),
+            if (bieuTuong != Icons.lock_outline)
+              Text('Đang xây dựng', style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       );

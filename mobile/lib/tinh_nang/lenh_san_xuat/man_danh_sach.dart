@@ -1,3 +1,5 @@
+import '../xac_thuc/xac_thuc.dart';
+import 'tham_gia.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -41,11 +43,18 @@ class _ManDanhSachLenhState extends ConsumerState<ManDanhSachLenh> {
   Widget build(BuildContext context) {
     final ds = ref.watch(danhSachLenhProvider);
     final loc = ref.watch(locTrangThaiProvider);
+    final cuaToi = ref.watch(locCuaToiProvider);
+    final thamGiaDuoc = ref.watch(xacThucProvider).nguoiDung?.coTheThamGiaLenh ?? false;
 
     return Scaffold(
       body: Column(
         children: [
-          _BoLoc(dangChon: loc, khiChon: (v) => ref.read(locTrangThaiProvider.notifier).dat(v)),
+          _BoLoc(
+            dangChon: loc,
+            khiChon: (v) => ref.read(locTrangThaiProvider.notifier).dat(v),
+            cuaToi: thamGiaDuoc ? cuaToi : null,
+            khiDoiCuaToi: (v) => ref.read(locCuaToiProvider.notifier).dat(v),
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => ref.read(danhSachLenhProvider.notifier).taiLai(),
@@ -70,16 +79,38 @@ class _ManDanhSachLenhState extends ConsumerState<ManDanhSachLenh> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final xong = await Navigator.push<bool>(
-              context, MaterialPageRoute(builder: (_) => const ManSuaLenh()));
-          if (xong == true) ref.read(danhSachLenhProvider.notifier).taiLai();
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Tạo lệnh'),
-      ),
+      floatingActionButton: thamGiaDuoc
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.small(
+                    heroTag: 'tao-lenh', tooltip: 'Tạo lệnh', onPressed: _taoLenh, child: const Icon(Icons.add)),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'quet-ma-lenh',
+                  onPressed: _quetMaLenh,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Quét mã lệnh'),
+                ),
+              ],
+            )
+          : FloatingActionButton.extended(
+              onPressed: _taoLenh,
+              icon: const Icon(Icons.add),
+              label: const Text('Tạo lệnh'),
+            ),
     );
+  }
+
+  Future<void> _taoLenh() async {
+    final xong = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const ManSuaLenh()));
+    if (xong == true && mounted) ref.read(danhSachLenhProvider.notifier).taiLai();
+  }
+
+  Future<void> _quetMaLenh() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManQuetMaLenh()));
+    if (mounted) ref.read(danhSachLenhProvider.notifier).taiLai();
   }
 }
 
@@ -87,7 +118,11 @@ class _BoLoc extends StatelessWidget {
   final String? dangChon;
   final ValueChanged<String?> khiChon;
 
-  const _BoLoc({required this.dangChon, required this.khiChon});
+  /// null = không hiện ô "Của tôi" (chỉ nhân viên sản xuất mới có).
+  final bool? cuaToi;
+  final ValueChanged<bool> khiDoiCuaToi;
+
+  const _BoLoc({required this.dangChon, required this.khiChon, this.cuaToi, required this.khiDoiCuaToi});
 
   static const _muc = <({String? ma, String ten})>[
     (ma: null, ten: 'Tất cả'),
@@ -102,13 +137,21 @@ class _BoLoc extends StatelessWidget {
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          itemCount: _muc.length,
+          itemCount: _muc.length + (cuaToi == null ? 0 : 1),
           separatorBuilder: (_, _) => const SizedBox(width: 8),
-          itemBuilder: (c, i) => ChoiceChip(
-            label: Text(_muc[i].ten),
-            selected: dangChon == _muc[i].ma,
-            onSelected: (_) => khiChon(_muc[i].ma),
-          ),
+          itemBuilder: (c, i) {
+            if (cuaToi != null) {
+              if (i == 0) {
+                return FilterChip(label: const Text('Của tôi'), selected: cuaToi!, onSelected: khiDoiCuaToi);
+              }
+              i--;
+            }
+            return ChoiceChip(
+              label: Text(_muc[i].ten),
+              selected: dangChon == _muc[i].ma,
+              onSelected: (_) => khiChon(_muc[i].ma),
+            );
+          },
         ),
       );
 }
@@ -121,6 +164,17 @@ class _TheLenh extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mau = _mauTrangThai(context, lenh);
+    final nd = ref.watch(xacThucProvider).nguoiDung;
+    final maToi = (nd?.maNhanSu ?? '').toLowerCase();
+    final thamGiaDuoc = lenh.moiTao && (nd?.coTheThamGiaLenh ?? false);
+    final daThamGia = maToi.isNotEmpty &&
+        lenh.sanPham.any((s) => s.khau.any((k) => k.nguoiThucHien.any((m) => m.toLowerCase() == maToi)));
+
+    Future<void> moThamGia() async {
+      final xong = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => ManThamGia(lenh: lenh)));
+      if (xong == true && context.mounted) ref.read(danhSachLenhProvider.notifier).taiLai();
+    }
+
     return Card(
       margin: EdgeInsets.zero,
       child: InkWell(
@@ -162,6 +216,26 @@ class _TheLenh extends ConsumerWidget {
                   _Dong(Icons.event_outlined, _ngayVn.format(lenh.ngaySanXuat)),
                 ],
               ),
+              // Nhân viên sản xuất tham gia ngay từ danh sách (QR của lệnh chỉ là cách phụ).
+              if (thamGiaDuoc) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    if (daThamGia)
+                      const Chip(
+                        avatar: Icon(Icons.check_circle, size: 16),
+                        label: Text('Đã tham gia'),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    const Spacer(),
+                    daThamGia
+                        ? OutlinedButton.icon(
+                            onPressed: moThamGia, icon: const Icon(Icons.tune, size: 18), label: const Text('Sửa khâu'))
+                        : FilledButton.icon(
+                            onPressed: moThamGia, icon: const Icon(Icons.group_add, size: 18), label: const Text('Tham gia')),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

@@ -1,6 +1,8 @@
 /// Mô hình dữ liệu lệnh sản xuất - khớp DTO của API /api/v1/lenh-san-xuat.
 library;
 
+import '../../loi/gio_viet_nam.dart';
+
 /// Lệnh sản xuất: phần đầu dùng chung + nhiều sản phẩm, mỗi sản phẩm là một lô riêng.
 class LenhSanXuat {
   final int id;
@@ -16,6 +18,9 @@ class LenhSanXuat {
   final String? ghiChu;
   final List<SanPhamLenh> sanPham;
 
+  /// Nhân viên đã quét mã QR tham gia lệnh.
+  final List<ThamGiaLenh> thamGia;
+
   const LenhSanXuat({
     required this.id,
     required this.maLenh,
@@ -29,6 +34,7 @@ class LenhSanXuat {
     this.lyDoHuy,
     this.ghiChu,
     this.sanPham = const [],
+    this.thamGia = const [],
   });
 
   bool get moiTao => trangThai == 'MoiTao';
@@ -44,7 +50,7 @@ class LenhSanXuat {
         id: j['id'] as int,
         maLenh: j['maLenh'] as String? ?? '',
         maKho: j['maKho'] as String? ?? '',
-        ngaySanXuat: _ngay(j['ngaySanXuat']) ?? DateTime.now(),
+        ngaySanXuat: _ngay(j['ngaySanXuat']) ?? bayGioVietNam(),
         trangThai: j['trangThai'] as String? ?? '',
         trangThaiHienThi: j['trangThaiHienThi'] as String? ?? '',
         taoLoDongBo: j['taoLoDongBo'] as bool? ?? false,
@@ -53,7 +59,48 @@ class LenhSanXuat {
         lyDoHuy: j['lyDoHuy'] as String?,
         ghiChu: j['ghiChu'] as String?,
         sanPham: _ds(j['sanPham'], SanPhamLenh.tuJson),
+        thamGia: _ds(j['thamGia'], ThamGiaLenh.tuJson),
       );
+}
+
+/// Một nhân viên đã quét mã QR tham gia lệnh.
+class ThamGiaLenh {
+  final String maNhanSu;
+  final String hoTen;
+  final DateTime thoiGianUtc;
+
+  const ThamGiaLenh({required this.maNhanSu, required this.hoTen, required this.thoiGianUtc});
+
+  factory ThamGiaLenh.tuJson(Map<String, dynamic> j) => ThamGiaLenh(
+        maNhanSu: j['maNhanSu'] as String? ?? '',
+        hoTen: j['hoTen'] as String? ?? j['maNhanSu'] as String? ?? '',
+        thoiGianUtc: _ngay(j['thoiGianUtc']) ?? DateTime.now().toUtc(),
+      );
+}
+
+/// Tiền tố nội dung QR của lệnh sản xuất (khớp máy chủ).
+const tienToQrLenh = 'LSX:';
+
+/// Mã lệnh đọc từ QR hoặc ô nhập tay. QR phải có tiền tố "LSX:" (QR khác loại như link tra cứu lô trả null);
+/// ô nhập tay nhận thêm mã lệnh gõ thẳng.
+String? maLenhTuQr(String? noiDung, {bool nhapTay = false}) {
+  final s = (noiDung ?? '').trim();
+  if (s.toUpperCase().startsWith(tienToQrLenh)) {
+    final ma = s.substring(tienToQrLenh.length).trim();
+    return ma.isEmpty ? null : ma;
+  }
+  if (!nhapTay || s.isEmpty || s.contains('://') || s.contains(' ')) return null;
+  return s;
+}
+
+/// Khâu tick sẵn ở màn tham gia: đã tham gia thì giữ các khâu đang làm, chưa tham gia thì chọn tất cả.
+Set<int> khauChonMacDinh(LenhSanXuat lenh, String maNhanSu) {
+  final tatCa = [for (final s in lenh.sanPham) ...s.khau];
+  final cuaToi = tatCa
+      .where((k) => k.nguoiThucHien.any((m) => m.toLowerCase() == maNhanSu.toLowerCase()))
+      .map((k) => k.id)
+      .toSet();
+  return cuaToi.isNotEmpty ? cuaToi : tatCa.map((k) => k.id).toSet();
 }
 
 /// Một thành phẩm trong lệnh = một lô: quy trình, các khâu (người + cơ sở) và ảnh lô.

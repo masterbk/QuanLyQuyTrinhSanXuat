@@ -73,7 +73,9 @@ builder.Services
     {
         options.SignIn.RequireConfirmedAccount = false;
         options.Password.RequiredLength = 8;
-        options.User.RequireUniqueEmail = true;
+        // Tài khoản nhân viên đăng nhập bằng số điện thoại, email không bắt buộc -> không để Identity bắt email.
+        // Email vẫn không được trùng: đăng ký cơ sở và TaiKhoanNhanVienService tự kiểm tra.
+        options.User.RequireUniqueEmail = false;
         options.Lockout.MaxFailedAccessAttempts = 5;
     })
     .AddEntityFrameworkStores<AppDbContext>()
@@ -81,6 +83,9 @@ builder.Services
 
 // Gắn claim tenantId khi đăng nhập - mắt xích nối Identity với Finbuckle.
 builder.Services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, AppUserClaimsPrincipalFactory>();
+
+// Đổi quyền / khoá / đặt lại mật khẩu nhân viên thì phiên web cũ phải hết hiệu lực nhanh (mặc định 30 phút).
+builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(1));
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -166,6 +171,7 @@ builder.Services.AddScoped<ISyncOutboxProcessor, SyncOutboxProcessor>();
 builder.Services.AddScoped<ISyncOutboxWriter, SyncOutboxWriter>();
 builder.Services.AddScoped<IDongBoHnCTongService, DongBoHnCTongService>();
 builder.Services.AddScoped<TrangThaiHnC>();
+builder.Services.AddScoped<ITaiKhoanNhanVienService, TaiKhoanNhanVienService>();
 builder.Services.AddScoped<HCP.Infrastructure.Services.TraCuu.ITraCuuCongKhaiService, HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService>();
 builder.Services.AddScoped<IStandardFoodsSyncJob, StandardFoodsSyncJob>();
 builder.Services.AddScoped<IHanoiCheckOrderQueryClient, HanoiCheckOrderQueryClient>();
@@ -220,14 +226,14 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("QuanTriNenTang", p => p.RequireRole(AppRoles.PlatformSuperAdmin));
     options.AddPolicy("QuanTriCoSo", p => p.RequireRole(AppRoles.TenantAdmin));
-    options.AddPolicy("NguoiDungCoSo", p => p.RequireRole(AppRoles.TenantAdmin, AppRoles.TenantStaff));
+    options.AddPolicy("NguoiDungCoSo", p => p.RequireRole(AppRoles.VaiTroCoSo));
 
     // API di động: CHỈ nhận JWT (không nhận cookie) để tránh bị gọi chéo từ trình duyệt đang
     // đăng nhập web - đó cũng là lý do không cần chống CSRF cho nhóm API này.
     options.AddPolicy(ApiAuth.ChinhSach, p => p
         .AddAuthenticationSchemes(ApiAuth.Scheme)
         .RequireAuthenticatedUser()
-        .RequireRole(AppRoles.TenantAdmin, AppRoles.TenantStaff));
+        .RequireRole(AppRoles.VaiTroCoSo));
 });
 
 // --- UI ---
@@ -318,7 +324,8 @@ using (var scope = app.Services.CreateScope())
     recurringJobs.AddOrUpdate<IStandardFoodsSyncJob>(
         "cap-nhat-danh-muc-chuan",
         j => j.DongBoAsync(CancellationToken.None),
-        Cron.Daily);
+        Cron.Daily,
+        new RecurringJobOptions { TimeZone = HCP.Domain.GioVietNam.MuiGio });
 
     // Kéo đơn hàng từ trường về (GET /orders) - đơn theo ngày, 15 phút một lần là đủ.
     recurringJobs.AddOrUpdate<IDongBoDonHangJob>(

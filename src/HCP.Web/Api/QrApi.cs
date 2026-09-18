@@ -21,6 +21,10 @@ public static class QrApi
         qr.MapGet("/lo/{id:int}", async (int id, bool? tai, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
                                          HttpRequest req, CancellationToken ct) =>
             TraAnh(await svc.LayQrLoAsync(id, ct), LoaiTraCuu.Lo, tai, cauHinh, req));
+
+        qr.MapGet("/lenh-san-xuat/{id:int}", async (int id, bool? tai, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
+                                                    HttpRequest req, CancellationToken ct) =>
+            TraAnh(await svc.LayQrLenhSanXuatAsync(id, ct), LoaiTraCuu.LenhSanXuat, tai, cauHinh, req));
     }
 
     private static IResult TraAnh(QrTraCuu? qr, LoaiTraCuu loai, bool? tai, IConfiguration cauHinh, HttpRequest req)

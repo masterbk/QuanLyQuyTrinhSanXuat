@@ -1,0 +1,271 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import '../../loi/api.dart';
+import '../xac_thuc/xac_thuc.dart';
+import 'kho_du_lieu.dart';
+import 'man_chi_tiet.dart';
+import 'mo_hinh.dart';
+import 'quet_don.dart';
+import 'xac_nhan_giao.dart';
+
+final _ngayVn = DateFormat('dd/MM/yyyy');
+
+/// Danh sách đơn hàng cho nhân viên giao hàng: nhận đơn đã xuất kho và xác nhận đã giao.
+class ManDanhSachDon extends ConsumerWidget {
+  const ManDanhSachDon({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ds = ref.watch(danhSachDonProvider);
+    final loc = ref.watch(locDonProvider);
+
+    return Scaffold(
+      body: Column(
+        children: [
+          _BoLoc(dangChon: loc, khiChon: (v) => ref.read(locDonProvider.notifier).dat(v)),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(danhSachDonProvider.notifier).taiLai(),
+              child: ds.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => _Loi(
+                  thongBao: e is LoiApi ? e.thongBao : 'Không tải được danh sách: $e',
+                  thuLai: () => ref.read(danhSachDonProvider.notifier).taiLai(),
+                ),
+                data: (ds) => ds.isEmpty
+                    ? _Rong(loc: loc)
+                    : ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
+                        itemCount: ds.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (c, i) => TheDonHang(don: ds[i]),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManQuetDonHang()));
+          if (context.mounted) ref.read(danhSachDonProvider.notifier).taiLai();
+        },
+        icon: const Icon(Icons.qr_code_scanner),
+        label: const Text('Quét QR đơn'),
+      ),
+    );
+  }
+}
+
+/// Thẻ một đơn: thông tin giao + nút Nhận đơn / Xác nhận đã giao.
+class TheDonHang extends ConsumerWidget {
+  final DonHangBan don;
+
+  /// true khi dùng trong màn chi tiết (bỏ phần bấm mở chi tiết).
+  final bool trongChiTiet;
+
+  const TheDonHang({super.key, required this.don, this.trongChiTiet = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final maToi = ref.watch(xacThucProvider).nguoiDung?.maNhanSu;
+    final cuaToi = don.cuaToi(maToi);
+    final nhanDuoc = don.dangGiao && don.chuaCoNguoiGiao;
+    final giaoDuoc = don.dangGiao && (cuaToi || don.chuaCoNguoiGiao);
+
+    Future<void> chay(Future<String> Function() viec) async {
+      try {
+        final tb = await viec();
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+        ref.read(danhSachDonProvider.notifier).taiLai();
+      } on LoiApi catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.thongBao)));
+      }
+    }
+
+    Future<void> xacNhanGiao() async {
+      final tb = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => ManXacNhanGiao(don: don)));
+      if (tb == null || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+      ref.read(danhSachDonProvider.notifier).taiLai();
+    }
+
+    final noiDung = Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(don.maDonHang, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: _mau(context, don).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                child: Text(don.trangThaiHienThi,
+                    style: TextStyle(color: _mau(context, don), fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(don.tenKhachHang ?? '', style: Theme.of(context).textTheme.bodyLarge),
+          if ((don.diaChiGiao ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                children: [
+                  const Icon(Icons.place_outlined, size: 16),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text(don.diaChiGiao!, style: Theme.of(context).textTheme.bodySmall)),
+                ],
+              ),
+            ),
+          const SizedBox(height: 6),
+          Text(don.tomTat, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          Wrap(spacing: 16, runSpacing: 4, children: [
+            if (don.ngayGiao != null) _Dong(Icons.event_outlined, 'Hẹn ${_ngayVn.format(don.ngayGiao!)}'),
+            if (!don.chuaCoNguoiGiao)
+              _Dong(Icons.person_outline, cuaToi ? 'Bạn nhận' : 'Người giao: ${don.tenNguoiGiao ?? don.maNguoiGiao}'),
+          ]),
+          if (nhanDuoc || giaoDuoc) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (nhanDuoc)
+                  FilledButton.tonalIcon(
+                    onPressed: () => chay(() => ref.read(khoDonProvider).nhanDon(don.id)),
+                    icon: const Icon(Icons.local_shipping_outlined, size: 18),
+                    label: const Text('Nhận đơn'),
+                  ),
+                if (nhanDuoc && giaoDuoc) const SizedBox(width: 8),
+                if (giaoDuoc)
+                  FilledButton.icon(
+                    onPressed: xacNhanGiao,
+                    icon: const Icon(Icons.done_all, size: 18),
+                    label: const Text('Đã giao'),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: trongChiTiet
+          ? noiDung
+          : InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => ManChiTietDon(id: don.id)));
+                if (context.mounted) ref.read(danhSachDonProvider.notifier).taiLai();
+              },
+              child: noiDung,
+            ),
+    );
+  }
+
+  static Color _mau(BuildContext c, DonHangBan d) => d.daGiao
+      ? Colors.green
+      : d.dangGiao
+          ? Theme.of(c).colorScheme.primary
+          : Theme.of(c).hintColor;
+}
+
+class _BoLoc extends StatelessWidget {
+  final LocDon dangChon;
+  final ValueChanged<LocDon> khiChon;
+
+  const _BoLoc({required this.dangChon, required this.khiChon});
+
+  static const _muc = <({LocDon ma, String ten})>[
+    (ma: LocDon.canGiao, ten: 'Cần giao'),
+    (ma: LocDon.cuaToi, ten: 'Của tôi'),
+    (ma: LocDon.tatCa, ten: 'Tất cả'),
+  ];
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 50,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          itemCount: _muc.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (c, i) => ChoiceChip(
+            label: Text(_muc[i].ten),
+            selected: dangChon == _muc[i].ma,
+            onSelected: (_) => khiChon(_muc[i].ma),
+          ),
+        ),
+      );
+}
+
+class _Dong extends StatelessWidget {
+  final IconData bieuTuong;
+  final String chu;
+
+  const _Dong(this.bieuTuong, this.chu);
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(bieuTuong, size: 16, color: Theme.of(context).hintColor),
+          const SizedBox(width: 4),
+          Text(chu, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      );
+}
+
+class _Rong extends StatelessWidget {
+  final LocDon loc;
+
+  const _Rong({required this.loc});
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
+        children: [
+          Icon(Icons.local_shipping_outlined, size: 56, color: Theme.of(context).hintColor),
+          const SizedBox(height: 12),
+          Text(
+            loc == LocDon.cuaToi ? 'Bạn chưa nhận đơn nào' : 'Không có đơn cần giao',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text('Đơn xuất hiện ở đây sau khi bộ phận kho xuất hàng.',
+              textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      );
+}
+
+class _Loi extends StatelessWidget {
+  final String thongBao;
+  final VoidCallback thuLai;
+
+  const _Loi({required this.thongBao, required this.thuLai});
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
+        children: [
+          Text(thongBao, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          Center(child: FilledButton(onPressed: thuLai, child: const Text('Thử lại'))),
+        ],
+      );
+}

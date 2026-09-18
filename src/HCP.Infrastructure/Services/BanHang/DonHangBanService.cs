@@ -48,7 +48,17 @@ public interface IDonHangBanService
                                      string? ghiChu = null, IReadOnlyList<AnhDauVao>? anhTongQuan = null,
                                      CancellationToken ct = default);
 
-    Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, CancellationToken ct = default);
+    /// <summary>
+    /// Xác nhận đã giao - BẮT BUỘC ít nhất 1 ảnh chứng minh (app chụp tại chỗ, web chọn tệp). Đơn nguồn HanoiCheck:
+    /// gửi ảnh sang HnC (điều kiện bắt buộc của trạng thái "Đã giao") rồi đẩy trạng thái DA_GIAO.
+    /// </summary>
+    Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, IReadOnlyList<AnhDauVao> anhGiao, CancellationToken ct = default);
+
+    /// <summary>Nhân viên giao hàng nhận đơn ĐÃ XUẤT KHO (đang giao): gán mình làm người giao.</summary>
+    Task<KetQuaThaoTac> NhanDonAsync(int id, string maNhanSu, CancellationToken ct = default);
+
+    /// <summary>Tìm đơn theo nội dung mã QR: QR tra cứu của hệ thống, link truy xuất HanoiCheck, hoặc chính mã đơn.</summary>
+    Task<DonHangBan?> TimTheoQrAsync(string noiDung, CancellationToken ct = default);
 
     Task<KetQuaThaoTac> HuyAsync(int id, string? lyDo, CancellationToken ct = default);
 
@@ -301,11 +311,16 @@ public sealed class DonHangBanService : IDonHangBanService
         // để NCC bấm lại (process ghi đè toàn bộ mỗi lần gọi nên gọi lại an toàn).
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
-            var chiTiet = chot.Where(p => dongTheoId[p.DongId].MaTruyVetHnC is not null)
-                .GroupBy(p => dongTheoId[p.DongId].MaTruyVetHnC!)
+            // Dòng hàng định danh bằng trace_code; đơn kéo về trước khi hệ thống lưu mã truy vết (hoặc chưa lấy được
+            // chi tiết đơn) thì đặc tả cho dùng ma_thuc_pham thay thế - gộp theo mã để mỗi thực phẩm chỉ một dòng.
+            var chiTiet = chot
+                .GroupBy(p => dongTheoId[p.DongId].MaTruyVetHnC is { } truyVet
+                    ? (TruyVet: truyVet, MaThucPham: (string?)null)
+                    : (TruyVet: (string?)null, MaThucPham: dongTheoId[p.DongId].MaThanhPham))
                 .Select(g => new ProcessOrderLine
                 {
-                    TraceCode = g.Key,
+                    TraceCode = g.Key.TruyVet,
+                    MaThucPham = g.Key.MaThucPham,
                     PhanBo = g.Select(p => new ProcessOrderAllocation(p.MaLo, don.MaKho, p.SoLuong)).ToList()
                 }).ToList();
 
@@ -344,8 +359,15 @@ public sealed class DonHangBanService : IDonHangBanService
         don.GhiChu = string.IsNullOrWhiteSpace(ghiChu) ? don.GhiChu : ghiChu.Trim();
         if (anhTongQuan is not null)
         {
-            _db.DonHangBanAnhs.RemoveRange(don.AnhTongQuan);
-            don.AnhTongQuan = anhTongQuan.Select(a => new DonHangBanAnh { TenAnh = a.TenAnh, DuongDan = a.DuongDan }).ToList();
+            // Chỉ thay ảnh tổng quan; ảnh chứng minh đã giao (nếu có) giữ nguyên.
+            _db.DonHangBanAnhs.RemoveRange(don.AnhTongQuan.Where(a => a.Loai == LoaiAnhDonHang.TongQuan).ToList());
+            foreach (var a in anhTongQuan)
+            {
+                don.AnhTongQuan.Add(new DonHangBanAnh
+                {
+                    TenAnh = a.TenAnh, DuongDan = a.DuongDan, Loai = LoaiAnhDonHang.TongQuan
+                });
+            }
         }
         don.TrangThai = TrangThaiDonHangBan.DangGiao;
         don.ThoiGianXuatKhoUtc = now;
@@ -354,17 +376,130 @@ public sealed class DonHangBanService : IDonHangBanService
                                 + "chuyển sang Đang giao.");
     }
 
-    public async Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, CancellationToken ct = default)
+    /// <summary>Số ảnh tối đa HanoiCheck nhận cho một đơn (danh_sach_anh).</summary>
+    public const int SoAnhToiDa = 3;
+
+    public async Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, IReadOnlyList<AnhDauVao> anhGiao,
+                                                      CancellationToken ct = default)
     {
-        var don = await _db.DonHangBans.FirstOrDefaultAsync(d => d.Id == id, ct);
+        var don = await QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
         if (don is null) return KetQuaThaoTac.Loi("Không tìm thấy đơn hàng.");
         if (don.TrangThai != TrangThaiDonHangBan.DangGiao)
             return KetQuaThaoTac.Loi("Chỉ xác nhận đã giao cho đơn đang giao.");
 
+        var anh = (anhGiao ?? Array.Empty<AnhDauVao>())
+            .Where(a => !string.IsNullOrWhiteSpace(a.DuongDan)).Take(SoAnhToiDa).ToList();
+        if (anh.Count == 0) return KetQuaThaoTac.Loi("Cần ít nhất 1 ảnh chứng minh đã giao hàng.");
+
+        // Đơn từ trường: HanoiCheck bắt buộc đơn có 1-3 ảnh tổng quan trước khi chuyển "Đã giao" (API status không
+        // nhận ảnh), nên gửi ảnh qua "process" trước - ưu tiên ảnh giao, thiếu chỗ thì bù ảnh lúc xuất kho.
+        // Lỗi thật thì dừng, giữ nguyên "Đang giao" để bấm lại (process ghi đè nên gọi lại an toàn).
+        if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
+        {
+            var duongDanAnh = anh.Select(a => a.DuongDan)
+                .Concat(don.AnhTongQuan.Where(a => a.Loai == LoaiAnhDonHang.TongQuan).Select(a => a.DuongDan))
+                .Distinct().Take(SoAnhToiDa).ToList();
+
+            var ketAnh = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
+            {
+                MaNguoiGiao = don.MaNguoiGiao,   // gửi null là HnC hiểu "bỏ người giao" nên gửi lại người hiện tại
+                GhiChu = don.GhiChu,
+                DanhSachAnh = duongDanAnh
+            }, ct);
+            if (!ketAnh.ThanhCong && !ketAnh.ChuaCauHinh)
+                return KetQuaThaoTac.Loi($"Không gửi được ảnh giao hàng sang HanoiCheck: {ketAnh.ThongBao}");
+
+            if (ketAnh.ThanhCong)
+            {
+                var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DA_GIAO", null, ct);
+                if (!ketTrangThai.ThanhCong)
+                    return KetQuaThaoTac.Loi($"Không đẩy được trạng thái \"Đã giao\" sang HanoiCheck: {ketTrangThai.ThongBao}");
+            }
+        }
+
+        // Ảnh giao thay thế ảnh giao của lần trước (nếu bấm lại), giữ nguyên ảnh tổng quan lúc xuất kho.
+        _db.DonHangBanAnhs.RemoveRange(don.AnhTongQuan.Where(a => a.Loai == LoaiAnhDonHang.Giao).ToList());
+        foreach (var a in anh)
+            don.AnhTongQuan.Add(new DonHangBanAnh { TenAnh = a.TenAnh, DuongDan = a.DuongDan, Loai = LoaiAnhDonHang.Giao });
+
         don.TrangThai = TrangThaiDonHangBan.DaGiao;
         don.ThoiGianGiaoUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
-        return KetQuaThaoTac.Ok($"Đơn \"{don.MaDonHang}\" đã giao.");
+        return KetQuaThaoTac.Ok($"Đơn \"{don.MaDonHang}\" đã giao ({anh.Count} ảnh).");
+    }
+
+    public async Task<KetQuaThaoTac> NhanDonAsync(int id, string maNhanSu, CancellationToken ct = default)
+    {
+        var don = await QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (don is null) return KetQuaThaoTac.Loi("Không tìm thấy đơn hàng.");
+        if (don.TrangThai != TrangThaiDonHangBan.DangGiao)
+            return KetQuaThaoTac.Loi(don.TrangThai is TrangThaiDonHangBan.ChoXacNhan or TrangThaiDonHangBan.DaXacNhan
+                ? "Đơn chưa xuất kho - bộ phận kho xuất hàng xong bạn mới nhận được."
+                : "Đơn này không còn cần giao.");
+
+        var nhanSu = await _db.Staff.AsNoTracking().FirstOrDefaultAsync(s => s.MaNhanSu == maNhanSu, ct);
+        if (nhanSu is null) return KetQuaThaoTac.Loi("Tài khoản chưa gắn với hồ sơ nhân sự của cơ sở.");
+        if (!nhanSu.TrangThai) return KetQuaThaoTac.Loi("Hồ sơ nhân sự của bạn đang ở trạng thái nghỉ.");
+
+        if (string.Equals(don.MaNguoiGiao, maNhanSu, StringComparison.OrdinalIgnoreCase))
+            return KetQuaThaoTac.Ok($"Bạn đang giao đơn \"{don.MaDonHang}\".");
+        if (!string.IsNullOrWhiteSpace(don.MaNguoiGiao))
+        {
+            var maCu = don.MaNguoiGiao;
+            var tenCu = await _db.Staff.AsNoTracking().Where(s => s.MaNhanSu == maCu)
+                .Select(s => s.HoTen).FirstOrDefaultAsync(ct);
+            return KetQuaThaoTac.Loi($"Đơn này do {tenCu ?? maCu} nhận rồi. Cần đổi người giao thì nhờ quản trị sửa trên web.");
+        }
+
+        // Đơn từ trường: báo người giao mới sang HanoiCheck trước (process ghi đè), lỗi thật thì không nhận.
+        if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
+        {
+            var ket = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
+            {
+                MaNguoiGiao = maNhanSu,
+                GhiChu = don.GhiChu
+            }, ct);
+            if (!ket.ThanhCong && !ket.ChuaCauHinh)
+                return KetQuaThaoTac.Loi($"Không báo được người giao sang HanoiCheck: {ket.ThongBao}");
+        }
+
+        don.MaNguoiGiao = maNhanSu;
+        await _db.SaveChangesAsync(ct);
+        return KetQuaThaoTac.Ok($"Bạn đã nhận giao đơn \"{don.MaDonHang}\".");
+    }
+
+    public async Task<DonHangBan?> TimTheoQrAsync(string noiDung, CancellationToken ct = default)
+    {
+        var s = (noiDung ?? "").Trim();
+        if (s.Length == 0) return null;
+
+        // QR tra cứu của hệ thống: {tên miền}/tra-cuu/don-hang/{mã tra cứu}
+        var vt = s.IndexOf("/tra-cuu/don-hang/", StringComparison.OrdinalIgnoreCase);
+        if (vt >= 0)
+        {
+            var ma = DoanCuoi(s[(vt + "/tra-cuu/don-hang/".Length)..]);
+            return await QueryDayDu().FirstOrDefaultAsync(d => d.MaTraCuu == ma, ct);
+        }
+
+        // QR truy xuất của HanoiCheck: .../truy-xuat/{mã đơn HanoiCheck}
+        vt = s.IndexOf("/truy-xuat/", StringComparison.OrdinalIgnoreCase);
+        if (vt >= 0)
+        {
+            var ma = DoanCuoi(s[(vt + "/truy-xuat/".Length)..]);
+            return await QueryDayDu().FirstOrDefaultAsync(d => d.MaDonHnC == ma, ct);
+        }
+
+        if (s.Contains("://")) return null;   // link khác (vd QR của lô sản xuất) - không phải đơn hàng
+        var maDon = s.StartsWith("DH:", StringComparison.OrdinalIgnoreCase) ? s[3..].Trim() : s;
+        return await QueryDayDu().FirstOrDefaultAsync(d => d.MaDonHang == maDon, ct);
+    }
+
+    /// <summary>Đoạn cuối của đường dẫn (bỏ query/fragment) - chính là mã trong QR.</summary>
+    private static string DoanCuoi(string duongDan)
+    {
+        var ma = duongDan.Split('?', '#')[0].TrimEnd('/');
+        var vt = ma.LastIndexOf('/');
+        return vt >= 0 ? ma[(vt + 1)..] : ma;
     }
 
     public async Task<KetQuaThaoTac> HuyAsync(int id, string? lyDo, CancellationToken ct = default)

@@ -1,3 +1,4 @@
+using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
@@ -60,7 +61,7 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
 
     public async Task<KetQuaDongBoDon> DongBoMotCoSoAsync(string tenantId, CancellationToken ct = default)
     {
-        var homNay = DateOnly.FromDateTime(_clock.GetUtcNow().UtcDateTime);
+        var homNay = DateOnly.FromDateTime(GioVietNam.TuUtc(_clock.GetUtcNow().UtcDateTime));
         var filter = new OrderQueryFilter { OrderDateFrom = homNay.AddDays(-SoNgayCuaSo) };
 
         var kq = await _client.LayDanhSachAsync(tenantId, filter, ct);

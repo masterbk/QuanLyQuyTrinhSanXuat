@@ -118,14 +118,14 @@ class _ManDangNhapState extends ConsumerState<ManDangNhap> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _email,
-                      keyboardType: TextInputType.emailAddress,
+                      keyboardType: TextInputType.text,
                       autocorrect: false,
                       decoration: const InputDecoration(
-                        labelText: 'Email',
+                        labelText: 'Email hoặc số điện thoại',
                         prefixIcon: Icon(Icons.person_outline),
                         border: OutlineInputBorder(),
                       ),
-                      validator: (v) => (v ?? '').trim().isEmpty ? 'Nhập email' : null,
+                      validator: (v) => (v ?? '').trim().isEmpty ? 'Nhập email hoặc số điện thoại' : null,
                     ),
                     const SizedBox(height: 14),
                     TextFormField(

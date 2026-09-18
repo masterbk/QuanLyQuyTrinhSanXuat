@@ -49,14 +49,31 @@ public static class AuthApi
                 user.FindFirstValue("hoTen"),
                 user.FindFirstValue(AppClaimTypes.TenantIdentifier),
                 user.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList(),
-                await HanoiCheckBatAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id, ct))))
+                await HanoiCheckBatAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id, ct),
+                await MaNhanSuAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id,
+                                    user.FindFirstValue(ClaimTypes.NameIdentifier), ct))))
             .RequireAuthorization(ApiAuth.ChinhSach);
     }
 
     private static async Task<PhienDto> MapAsync(PhienDangNhap p, AppDbContext db, CancellationToken ct) => new(
         p.AccessToken, p.AccessTokenHetHanUtc, p.RefreshToken, p.RefreshTokenHetHanUtc,
         new NguoiDungDto(p.NguoiDung.Id, p.NguoiDung.Email ?? "", p.NguoiDung.HoTen,
-                         p.NguoiDung.TenantId, p.VaiTro, await HanoiCheckBatAsync(db, p.NguoiDung.TenantId, ct)));
+                         p.NguoiDung.TenantId, p.VaiTro, await HanoiCheckBatAsync(db, p.NguoiDung.TenantId, ct),
+                         await MaNhanSuAsync(db, p.NguoiDung.TenantId, p.NguoiDung.Id, ct)));
+
+    /// <summary>
+    /// Mã nhân sự của tài khoản nhân viên (null với quản trị) - app dùng để biết có được quét mã lệnh tham gia khâu.
+    /// Đọc thẳng theo TenantId vì lúc đăng nhập request chưa có ngữ cảnh cơ sở.
+    /// </summary>
+    private static async Task<string?> MaNhanSuAsync(AppDbContext db, string? tenantId, string? userId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId) || string.IsNullOrWhiteSpace(userId)) return null;
+        var nhanSuId = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.NhanSuId).FirstOrDefaultAsync(ct);
+        return nhanSuId is not { } id
+            ? null
+            : await db.Staff.IgnoreQueryFilters().AsNoTracking()
+                .Where(s => s.Id == id && s.TenantId == tenantId).Select(s => s.MaNhanSu).FirstOrDefaultAsync(ct);
+    }
 
     /// <summary>
     /// Công tắc tổng HanoiCheck (chưa có cấu hình kết nối = tắt). Đọc thẳng theo TenantId vì lúc đăng nhập request

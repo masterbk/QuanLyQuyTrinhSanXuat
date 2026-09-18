@@ -1,3 +1,4 @@
+using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck.Mapping;
@@ -25,7 +26,8 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
 
     public async Task<IReadOnlyList<LenhSanXuat>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.LenhSanXuats.AsNoTracking()
-            .Include(l => l.SanPham)
+            .Include(l => l.SanPham).ThenInclude(s => s.Khau)
+            .Include(l => l.ThamGia)
             .OrderByDescending(l => l.NgaySanXuat).ThenByDescending(l => l.Id)
             .ToListAsync(ct);
 
@@ -36,7 +38,8 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         _db.LenhSanXuats
             .Include(l => l.SanPham).ThenInclude(s => s.Khau)
             .Include(l => l.SanPham).ThenInclude(s => s.TieuHao)
-            .Include(l => l.SanPham).ThenInclude(s => s.Anh);
+            .Include(l => l.SanPham).ThenInclude(s => s.Anh)
+            .Include(l => l.ThamGia);
 
     // ==================== Xem trước nguyên liệu ====================
 
@@ -214,13 +217,13 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         if (quyTrinh.DanhSachKhau.Count == 0)
             return $"Quy trình \"{quyTrinh.TenQuyTrinh}\" chưa khai khâu nào.";
         if (sp.Khau.Count == 0)
-            return $"\"{tp.TenSanPham}\": phải khai người thực hiện cho các khâu của quy trình.";
+            return $"\"{tp.TenSanPham}\": phải khai các khâu của quy trình.";
 
         var khauCanCo = quyTrinh.DanhSachKhau.Select(k => k.MaKhau).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var khauDaKhai = sp.Khau.Select(k => (k.MaKhau ?? "").Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var thieuKhau = khauCanCo.Except(khauDaKhai, StringComparer.OrdinalIgnoreCase).ToList();
         if (thieuKhau.Count > 0)
-            return $"\"{tp.TenSanPham}\": còn khâu chưa khai người thực hiện ({string.Join(", ", thieuKhau)}).";
+            return $"\"{tp.TenSanPham}\": còn khâu của quy trình chưa khai ({string.Join(", ", thieuKhau)}).";
 
         foreach (var k in sp.Khau)
         {
@@ -244,9 +247,8 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             return $"\"{tenThanhPham}\" - khâu \"{k.MaKhau}\": chưa chọn cơ sở thực hiện.";
         if (!await _db.Facilities.AnyAsync(c => c.MaCoSo == k.MaCoSo, ct))
             return $"\"{tenThanhPham}\" - khâu \"{k.MaKhau}\": cơ sở \"{k.MaCoSo}\" không có trong danh mục.";
-        if (k.NguoiThucHien.Count == 0)
-            return $"\"{tenThanhPham}\" - khâu \"{k.MaKhau}\": cần ít nhất 1 người thực hiện.";
-
+        // Người thực hiện không bắt buộc lúc lập lệnh: nhân viên sản xuất quét mã QR của lệnh để tự tham gia.
+        // Hoàn thành lệnh mới bắt buộc (xem ThucHienAsync).
         var ma = k.NguoiThucHien.ToList();
         var nhanSuCo = await _db.Staff.AsNoTracking()
             .Where(n => ma.Contains(n.MaNhanSu)).Select(n => n.MaNhanSu).ToListAsync(ct);
@@ -294,6 +296,14 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             var loiKhau = await ApDungKhauSuaLaiAsync(lenh, khauSuaLai, ct);
             if (loiKhau is not null) return KetQuaThaoTac.Loi(loiKhau);
         }
+
+        // Hoàn thành thì mỗi khâu phải có người thực hiện - dữ liệu truy xuất của lô (và HanoiCheck) cần có.
+        var khauThieuNguoi = lenh.SanPham
+            .SelectMany(s => s.Khau.Where(k => k.NguoiThucHien.Count == 0).Select(k => $"{s.MaThanhPham} - {k.MaKhau}"))
+            .ToList();
+        if (khauThieuNguoi.Count > 0)
+            return KetQuaThaoTac.Loi($"Còn khâu chưa có người thực hiện: {string.Join("; ", khauThieuNguoi)}. "
+                                     + "Nhân viên sản xuất quét mã QR của lệnh để tham gia, hoặc chọn người thực hiện khi hoàn thành.");
 
         // Nhu cầu nguyên liệu tính riêng từng dòng (để chia tiêu hao) rồi GỘP lại để so tồn.
         var canTungDong = await NhuCauTungDongAsync(
@@ -398,6 +408,64 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         return KetQuaThaoTac.Ok(thongBao);
     }
 
+    public Task<LenhSanXuat?> LayTheoMaAsync(string maLenh, CancellationToken ct = default)
+    {
+        var ma = (maLenh ?? "").Trim();
+        return QueryDayDu().FirstOrDefaultAsync(l => l.MaLenh == ma, ct);
+    }
+
+    public async Task<KetQuaThaoTac> ThamGiaAsync(int lenhId, string maNhanSu, IReadOnlyCollection<int> khauIds,
+                                                  CancellationToken ct = default)
+    {
+        var lenh = await QueryDayDu().FirstOrDefaultAsync(l => l.Id == lenhId, ct);
+        if (lenh is null) return KetQuaThaoTac.Loi("Không tìm thấy lệnh sản xuất.");
+        if (lenh.TrangThai != TrangThaiLenhSX.MoiTao)
+            return KetQuaThaoTac.Loi($"Lệnh {lenh.MaLenh} đã "
+                                     + (lenh.TrangThai == TrangThaiLenhSX.HoanThanh ? "hoàn thành" : "huỷ")
+                                     + ", không tham gia được nữa.");
+
+        var nhanSu = await _db.Staff.AsNoTracking().FirstOrDefaultAsync(n => n.MaNhanSu == maNhanSu, ct);
+        if (nhanSu is null) return KetQuaThaoTac.Loi("Tài khoản chưa gắn với hồ sơ nhân sự của cơ sở.");
+        if (!nhanSu.TrangThai) return KetQuaThaoTac.Loi("Hồ sơ nhân sự của bạn đang ở trạng thái nghỉ.");
+
+        var tatCaKhau = lenh.SanPham.SelectMany(s => s.Khau).ToList();
+        var chon = khauIds.ToHashSet();
+        if (chon.Any(id => tatCaKhau.All(k => k.Id != id)))
+            return KetQuaThaoTac.Loi("Có khâu không thuộc lệnh này.");
+
+        // Gắn / gỡ đúng người này ở từng khâu; người đã được giao sẵn giữ nguyên thứ tự.
+        foreach (var k in tatCaKhau)
+        {
+            var coMat = k.NguoiThucHien.Contains(nhanSu.MaNhanSu, StringComparer.OrdinalIgnoreCase);
+            if (chon.Contains(k.Id) == coMat) continue;
+            var ds = k.NguoiThucHien.Where(m => !string.Equals(m, nhanSu.MaNhanSu, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (chon.Contains(k.Id)) ds.Add(nhanSu.MaNhanSu);
+            k.NguoiThucHienCsv = string.Join(",", ds);
+        }
+
+        var banGhi = lenh.ThamGia.FirstOrDefault(t => string.Equals(t.MaNhanSu, nhanSu.MaNhanSu, StringComparison.OrdinalIgnoreCase));
+        if (chon.Count == 0)
+        {
+            if (banGhi is not null) _db.LenhSanXuatThamGias.Remove(banGhi);
+        }
+        else if (banGhi is null)
+        {
+            lenh.ThamGia.Add(new LenhSanXuatThamGia
+            {
+                MaNhanSu = nhanSu.MaNhanSu, HoTen = nhanSu.HoTen, ThoiGianUtc = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            banGhi.HoTen = nhanSu.HoTen;   // giữ thời điểm tham gia lần đầu
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return chon.Count == 0
+            ? KetQuaThaoTac.Ok($"Đã rời lệnh {lenh.MaLenh}.")
+            : KetQuaThaoTac.Ok($"Đã tham gia lệnh {lenh.MaLenh}: {chon.Count}/{tatCaKhau.Count} khâu.");
+    }
+
     /// <summary>Cập nhật người thực hiện / cơ sở của khâu ngay trước khi chốt lệnh.</summary>
     private async Task<string?> ApDungKhauSuaLaiAsync(
         LenhSanXuat lenh, IReadOnlyList<LenhSanXuatKhau> suaLai, CancellationToken ct)
@@ -492,7 +560,8 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
                 MaBuocSx = $"{sp.MaLoThanhPham}-B{thuTu}",
                 MaKhau = k.MaKhau,
                 ThuTu = thuTu,
-                ThoiGian = now,
+                // Thời gian khâu lưu theo giờ Việt Nam: màn Lô sản xuất và HanoiCheck (thoi_gian) đều hiểu là giờ VN.
+                ThoiGian = GioVietNam.TuUtc(now),
                 MaLoSanXuat = sp.MaLoThanhPham,
                 // Khâu đầu gắn lô nguyên liệu đã tiêu hao để truy xuất ngược về đầu vào.
                 MaLoNguyenLieu = thuTu == 1 ? string.Join(", ", sp.TieuHao.Select(t => t.MaLo).Distinct()) : null,

@@ -32,7 +32,7 @@
             }
             @if (d.ThoiGianGiaoUtc is { } giaoUtc)
             {
-                <div class="col-12"><span class="nhan">Đã giao lúc:</span> @giaoUtc.AddHours(7).ToString("HH:mm dd/MM/yyyy")</div>
+                <div class="col-12"><span class="nhan">Đã giao lúc:</span> @GioVietNam.TuUtc(giaoUtc).ToString("HH:mm dd/MM/yyyy")</div>
             }
         </div>
     </div>

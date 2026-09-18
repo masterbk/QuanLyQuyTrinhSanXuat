@@ -1,3 +1,4 @@
+using HCP.Domain;
 using Finbuckle.MultiTenant.Abstractions;
 using HCP.Infrastructure.Services.Kho;
 using Microsoft.AspNetCore.Components.Forms;
@@ -76,7 +77,7 @@ public sealed class LuuTruAnhService : ILuuTruAnhService
         var goc = _moiTruong.WebRootPath;
         if (string.IsNullOrWhiteSpace(goc)) goc = Path.Combine(_moiTruong.ContentRootPath, "wwwroot");
 
-        var homNay = DateTime.Now;
+        var homNay = GioVietNam.Nay;
         var thuMucTuongDoi = Path.Combine("uploads", tenantId, homNay.ToString("yyyy"), homNay.ToString("MM"));
         var thuMuc = Path.Combine(goc, thuMucTuongDoi);
         Directory.CreateDirectory(thuMuc);

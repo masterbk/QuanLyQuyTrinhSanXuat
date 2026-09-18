@@ -66,7 +66,7 @@ else
             </MudTd>
             <MudTd DataLabel="Đồng bộ lúc">
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                    @context.LanDongBoUtc.ToLocalTime().ToString("dd/MM HH:mm")
+                    @GioVietNam.TuUtc(context.LanDongBoUtc).ToString("dd/MM HH:mm")
                 </MudText>
             </MudTd>
             <MudTd>

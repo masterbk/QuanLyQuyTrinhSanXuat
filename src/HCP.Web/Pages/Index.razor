@@ -43,6 +43,20 @@
                 </MudButton>
             </MudPaper>
         </AuthorizeView>
+
+        <AuthorizeView Roles="@(AppRoles.TenantSanXuat + "," + AppRoles.TenantGiaoHang)" Context="nhanVienContext">
+            <MudPaper Class="pa-5 mb-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-3">Công việc của bạn</MudText>
+                <AuthorizeView Roles="@AppRoles.TenantSanXuat" Context="sx">
+                    <MudButton Href="/app/lenh-san-xuat" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Factory" Class="mr-2 mb-2">Lệnh sản xuất</MudButton>
+                </AuthorizeView>
+                <AuthorizeView Roles="@AppRoles.TenantGiaoHang" Context="gh">
+                    <MudButton Href="/app/don-hang-ban" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.LocalShipping" Class="mr-2 mb-2">Đơn hàng cần giao</MudButton>
+                </AuthorizeView>
+            </MudPaper>
+        </AuthorizeView>
     </Authorized>
 
     <NotAuthorized>

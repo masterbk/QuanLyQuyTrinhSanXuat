@@ -5,8 +5,9 @@ namespace HCP.Domain.Entities.Business;
 /// <summary>
 /// Một khâu sản xuất của lô thành phẩm: ai làm và làm ở cơ sở nào.
 ///
-/// Khâu lấy từ quy trình đã chọn; mỗi khâu BẮT BUỘC có ít nhất một người thực hiện và một
-/// cơ sở - đây chính là dữ liệu HanoiCheck cần cho truy xuất nguồn gốc (danh_sach_nguoi_thuc_hien).
+/// Khâu lấy từ quy trình đã chọn và bắt buộc có cơ sở. Người thực hiện KHÔNG bắt buộc lúc lập lệnh (nhân viên sản
+/// xuất quét mã QR của lệnh để tự tham gia) nhưng phải có khi hoàn thành - đây là dữ liệu HanoiCheck cần cho truy xuất
+/// nguồn gốc (danh_sach_nguoi_thuc_hien).
 /// </summary>
 public class LenhSanXuatKhau : TenantEntity
 {

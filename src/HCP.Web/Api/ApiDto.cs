@@ -10,7 +10,7 @@ public sealed record DangXuatRequest(string RefreshToken);
 
 /// <param name="HanoiCheckBat">Công tắc đồng bộ HanoiCheck của cơ sở: tắt thì app ẩn phần HanoiCheck.</param>
 public sealed record NguoiDungDto(string Id, string Email, string? HoTen, string? MaCoSo,
-                                  IReadOnlyList<string> VaiTro, bool HanoiCheckBat);
+                                  IReadOnlyList<string> VaiTro, bool HanoiCheckBat, string? MaNhanSu);
 
 public sealed record PhienDto(string AccessToken, DateTime AccessTokenHetHanUtc,
                               string RefreshToken, DateTime RefreshTokenHetHanUtc,
@@ -38,7 +38,14 @@ public sealed record LenhSanXuatDto(
     int Id, string MaLenh, string MaKho, DateOnly NgaySanXuat,
     string TrangThai, string TrangThaiHienThi, bool TaoLoDongBo,
     DateTime? ThoiGianHoanThanhUtc, DateTime? ThoiGianHuyUtc, string? LyDoHuy, string? GhiChu,
-    IReadOnlyList<LenhSanXuatSanPhamDto> SanPham);
+    IReadOnlyList<LenhSanXuatSanPhamDto> SanPham,
+    IReadOnlyList<LenhSanXuatThamGiaDto> ThamGia);
+
+/// <summary>Nhân viên đã quét mã QR tham gia lệnh.</summary>
+public sealed record LenhSanXuatThamGiaDto(string MaNhanSu, string? HoTen, DateTime ThoiGianUtc);
+
+/// <summary>Các khâu (Id) nhân viên chọn tham gia; rỗng = rời lệnh.</summary>
+public sealed record ThamGiaLenhRequest(IReadOnlyList<int>? KhauIds);
 
 public sealed record LenhSanXuatSanPhamDto(
     int Id, string MaThanhPham, string? TenThanhPham, decimal SoLuong,
@@ -115,7 +122,8 @@ public sealed record PhanBoDto(string? MaPhieuXuat, string? MaThucPhamNcc, strin
 
 public sealed record DonHangBanDto(
     int Id, string MaDonHang, string MaKhachHang, string? TenKhachHang, string MaKho, DateOnly NgayDat,
-    DateOnly? NgayGiao, string? DiaChiGiao, string? MaNguoiGiao, string TrangThai, string TrangThaiHienThi,
+    DateOnly? NgayGiao, string? DiaChiGiao, string? MaNguoiGiao, string? TenNguoiGiao,
+    string TrangThai, string TrangThaiHienThi,
     string Nguon, string? MaDonHnC, string? GhiChu, string? LyDoHuy, decimal TongTien,
     DateTime? ThoiGianXuatKhoUtc, DateTime? ThoiGianGiaoUtc, IReadOnlyList<DonHangBanDongDto> Dong);
 

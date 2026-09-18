@@ -33,8 +33,8 @@ public class LoginModel : PageModel
 
     public class InputModel
     {
-        [Required(ErrorMessage = "Vui lòng nhập email")]
-        [EmailAddress(ErrorMessage = "Email không hợp lệ")]
+        /// <summary>Email (quản trị cơ sở) hoặc số điện thoại (tài khoản nhân viên).</summary>
+        [Required(ErrorMessage = "Vui lòng nhập email hoặc số điện thoại")]
         public string Email { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Vui lòng nhập mật khẩu")]
@@ -54,10 +54,10 @@ public class LoginModel : PageModel
     {
         if (!ModelState.IsValid) return Page();
 
-        var user = await _userManager.FindByEmailAsync(Input.Email.Trim());
+        var user = await TenDangNhap.TimAsync(_userManager, Input.Email);
 
-        // Thông báo chung cho email sai hoặc mật khẩu sai, tránh lộ email nào tồn tại.
-        const string LoiDangNhapChung = "Email hoặc mật khẩu không đúng.";
+        // Thông báo chung cho tên đăng nhập sai hoặc mật khẩu sai, tránh lộ tài khoản nào tồn tại.
+        const string LoiDangNhapChung = "Tên đăng nhập hoặc mật khẩu không đúng.";
 
         if (user is null)
         {
@@ -119,7 +119,7 @@ public class LoginModel : PageModel
         user.LastLoginAtUtc = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
-        _logger.LogInformation("Người dùng {Email} đăng nhập thành công.", user.Email);
+        _logger.LogInformation("Người dùng {TenDangNhap} đăng nhập thành công.", user.UserName);
 
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)) return LocalRedirect(returnUrl);
 

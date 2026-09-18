@@ -803,6 +803,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<int>("Loai")
+                        .HasColumnType("int");
+
                     b.Property<string>("TenAnh")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -1598,6 +1601,57 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.HasIndex("LenhSanXuatId");
 
                     b.ToTable("LenhSanXuatSanPham", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatThamGia", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HoTen")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("LenhSanXuatId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaNhanSu")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("ThoiGianUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LenhSanXuatId", "MaNhanSu", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_LenhSanXuatThamGia_LenhSanXuatId_MaNhanSu");
+
+                    b.ToTable("LenhSanXuatThamGia", (string)null);
 
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
@@ -2487,6 +2541,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<int?>("NhanSuId")
+                        .HasColumnType("int");
+
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -2529,6 +2586,8 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "NhanSuId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -2831,6 +2890,17 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Navigation("LenhSanXuat");
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatThamGia", b =>
+                {
+                    b.HasOne("HCP.Domain.Entities.Business.LenhSanXuat", "LenhSanXuat")
+                        .WithMany("ThamGia")
+                        .HasForeignKey("LenhSanXuatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LenhSanXuat");
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatTieuHao", b =>
                 {
                     b.HasOne("HCP.Domain.Entities.Business.LenhSanXuatSanPham", "LenhSanXuatSanPham")
@@ -2958,6 +3028,8 @@ namespace HCP.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuat", b =>
                 {
                     b.Navigation("SanPham");
+
+                    b.Navigation("ThamGia");
                 });
 
             modelBuilder.Entity("HCP.Domain.Entities.Business.LenhSanXuatSanPham", b =>

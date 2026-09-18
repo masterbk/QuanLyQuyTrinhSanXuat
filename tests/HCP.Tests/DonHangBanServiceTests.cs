@@ -44,6 +44,10 @@ public class DonHangBanServiceTests
 
     private static DonHangBanService Svc(AppDbContext db) => new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient());
 
+    /// <summary>Xác nhận đã giao bắt buộc có ảnh chứng minh.</summary>
+    internal static readonly IReadOnlyList<AnhDauVao> AnhGiaoMau =
+        new[] { new AnhDauVao("giao.jpg", "/uploads/coso-a/2026/09/giao.jpg") };
+
     /// <summary>BANH_MI tồn 2 lô: LOTP_A 5 (HSD 20/09, hết hạn trước), LOTP_B 10 (HSD 30/09).</summary>
     private void Seed()
     {
@@ -247,7 +251,7 @@ public class DonHangBanServiceTests
         Seed();
         var id = await TaoAsync(Don((2, 5000)));
 
-        Assert.False((await ChayAsync(s => s.HoanTatGiaoAsync(id))).ThanhCong);   // chưa xuất kho
+        Assert.False((await ChayAsync(s => s.HoanTatGiaoAsync(id, AnhGiaoMau))).ThanhCong);   // chưa xuất kho
         Assert.True((await ChayAsync(s => s.XacNhanAsync(id))).ThanhCong);
         Assert.False((await ChayAsync(s => s.XacNhanAsync(id))).ThanhCong);      // không xác nhận hai lần
         Assert.True((await ChayAsync(s => s.XuatKhoAsync(id, null, null))).ThanhCong);
@@ -256,7 +260,7 @@ public class DonHangBanServiceTests
         var sua = Don((9, 1)); sua.Id = id;
         Assert.Contains("chưa xuất kho", (await ChayAsync(s => s.CapNhatAsync(sua))).ThongBao);
 
-        Assert.True((await ChayAsync(s => s.HoanTatGiaoAsync(id))).ThanhCong);
+        Assert.True((await ChayAsync(s => s.HoanTatGiaoAsync(id, AnhGiaoMau))).ThanhCong);
         Assert.Contains("đã giao", (await ChayAsync(s => s.HuyAsync(id, "thử"))).ThongBao);
         Assert.Equal(3m, TonLo("LOTP_A"));                                          // chỉ trừ đúng 1 lần
 

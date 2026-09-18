@@ -80,10 +80,10 @@ public sealed class MobileTokenService : IMobileTokenService
     public async Task<KetQuaDangNhap> DangNhapAsync(string email, string matKhau, string? thietBi,
                                                     CancellationToken ct = default)
     {
-        email = email?.Trim() ?? "";
-        var user = string.IsNullOrEmpty(email) ? null : await _userManager.FindByEmailAsync(email);
-        // Thông báo chung cho cả sai email lẫn sai mật khẩu - không tiết lộ email nào có thật.
-        const string SAI = "Email hoặc mật khẩu không đúng.";
+        // Ô đăng nhập nhận email (quản trị) hoặc số điện thoại (tài khoản nhân viên).
+        var user = await TenDangNhap.TimAsync(_userManager, email);
+        // Thông báo chung cho cả sai tên đăng nhập lẫn sai mật khẩu - không tiết lộ tài khoản nào có thật.
+        const string SAI = "Tên đăng nhập hoặc mật khẩu không đúng.";
         if (user is null) return KetQuaDangNhap.Loi(SAI);
 
         if (await _userManager.IsLockedOutAsync(user))
@@ -95,6 +95,9 @@ public sealed class MobileTokenService : IMobileTokenService
             return KetQuaDangNhap.Loi(SAI);
         }
         await _userManager.ResetAccessFailedCountAsync(user);
+
+        if (!user.DangHoatDong)
+            return KetQuaDangNhap.Loi("Tài khoản đã bị khoá. Liên hệ quản trị cơ sở.");
 
         if (!user.EmailConfirmed && _userManager.Options.SignIn.RequireConfirmedAccount)
             return KetQuaDangNhap.Loi("Tài khoản chưa được xác nhận.");
@@ -113,6 +116,12 @@ public sealed class MobileTokenService : IMobileTokenService
 
         var user = await _userManager.FindByIdAsync(ban.UserId);
         if (user is null) return KetQuaDangNhap.Loi("Tài khoản không còn tồn tại.");
+        if (!user.DangHoatDong)
+        {
+            ban.RevokedAtUtc = now;
+            await _db.SaveChangesAsync(ct);
+            return KetQuaDangNhap.Loi("Tài khoản đã bị khoá. Liên hệ quản trị cơ sở.");
+        }
 
         ban.RevokedAtUtc = now;          // xoay vòng: token cũ dùng một lần rồi bỏ
         var vaiTro = await _userManager.GetRolesAsync(user);

@@ -6,13 +6,13 @@
 @inject ISnackbar Snackbar
 
 @* Nút mở mã QR tra cứu của đơn hàng bán / lô sản xuất: xem, mở trang, tải PNG. *@
-<MudTooltip Text="Mã QR tra cứu">
+<MudTooltip Text="@(Loai == LoaiTraCuu.LenhSanXuat ? "Mã QR để nhân viên sản xuất tham gia" : "Mã QR tra cứu")">
     <MudIconButton Icon="@Icons.Material.Filled.QrCode2" Size="Size.Small" OnClick="MoAsync" />
 </MudTooltip>
 
 <MudDialog @bind-Visible="_hien" Options="_tuyChon">
     <TitleContent>
-        <MudText Typo="Typo.h6">Mã QR @(Loai == LoaiTraCuu.DonHang ? "đơn hàng" : "lô") @Ma</MudText>
+        <MudText Typo="Typo.h6">Mã QR @TenLoai @Ma</MudText>
     </TitleContent>
     <DialogContent>
         @if (_qr is null)
@@ -24,14 +24,24 @@
             <div class="d-flex flex-column align-center">
                 <img src="@_anh" alt="Mã QR @_qr.Ma" style="width:260px;height:260px;image-rendering:pixelated" />
                 <MudText Typo="Typo.body2" Class="mt-2 mud-text-secondary">@_qr.MoTa</MudText>
-                <MudLink Href="@_noiDung" Target="_blank" Typo="Typo.caption" Style="word-break:break-all">@_noiDung</MudLink>
+                @if (LaTrangWeb)
+                {
+                    <MudLink Href="@_noiDung" Target="_blank" Typo="Typo.caption" Style="word-break:break-all">@_noiDung</MudLink>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2"><b>@_noiDung</b></MudText>
+                }
             </div>
         }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _hien = false)">Đóng</MudButton>
-        <MudButton Href="@_noiDung" Target="_blank" Disabled="@(_qr is null)"
-                   StartIcon="@Icons.Material.Filled.OpenInNew">Mở trang</MudButton>
+        @if (LaTrangWeb)
+        {
+            <MudButton Href="@_noiDung" Target="_blank" Disabled="@(_qr is null)"
+                       StartIcon="@Icons.Material.Filled.OpenInNew">Mở trang</MudButton>
+        }
         @* Thuộc tính download: trình duyệt tải file, Blazor không chặn link để điều hướng nội bộ. *@
         <MudButton Href="@($"{_anh}&tai=true")" Target="_blank" Disabled="@(_qr is null)"
                    Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
@@ -54,13 +64,23 @@
     private string _anh = "";
     private string _noiDung = "";
 
+    private string TenLoai => Loai switch { LoaiTraCuu.DonHang => "đơn hàng", LoaiTraCuu.Lo => "lô", _ => "lệnh sản xuất" };
+
+    /// <summary>QR tra cứu là link web; QR lệnh sản xuất là mã cho app ("LSX:...") nên không có trang để mở.</summary>
+    private bool LaTrangWeb => _noiDung.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+
     private async Task MoAsync()
     {
         _qr = null;
         _hien = true;
         try
         {
-            _qr = Loai == LoaiTraCuu.DonHang ? await TraCuu.LayQrDonHangAsync(Id) : await TraCuu.LayQrLoAsync(Id);
+            _qr = Loai switch
+            {
+                LoaiTraCuu.DonHang => await TraCuu.LayQrDonHangAsync(Id),
+                LoaiTraCuu.Lo => await TraCuu.LayQrLoAsync(Id),
+                _ => await TraCuu.LayQrLenhSanXuatAsync(Id)
+            };
         }
         catch (Exception ex)
         {
@@ -78,6 +98,7 @@
 
         _noiDung = DuongDanTraCuu.NoiDungQr(_qr, Loai, DuongDanTraCuu.Goc(CauHinh, Nav.BaseUri));
         // v=...: tránh trình duyệt dùng ảnh cũ trong cache khi nội dung QR vừa đổi (vd đơn HnC vừa có link).
-        _anh = $"/app/qr/{(Loai == LoaiTraCuu.DonHang ? "don-hang" : "lo")}/{Id}?v={DateTime.UtcNow.Ticks}";
+        var duongDan = Loai switch { LoaiTraCuu.DonHang => "don-hang", LoaiTraCuu.Lo => "lo", _ => "lenh-san-xuat" };
+        _anh = $"/app/qr/{duongDan}/{Id}?v={DateTime.UtcNow.Ticks}";
     }
 }

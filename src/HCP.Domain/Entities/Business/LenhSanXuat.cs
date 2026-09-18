@@ -39,4 +39,7 @@ public class LenhSanXuat : TenantEntity
 
     /// <summary>Các thành phẩm của lệnh - mỗi dòng là một lô riêng, có quy trình và khâu riêng.</summary>
     public List<LenhSanXuatSanPham> SanPham { get; set; } = new();
+
+    /// <summary>Nhân viên sản xuất đã quét mã QR của lệnh để tham gia.</summary>
+    public List<LenhSanXuatThamGia> ThamGia { get; set; } = new();
 }

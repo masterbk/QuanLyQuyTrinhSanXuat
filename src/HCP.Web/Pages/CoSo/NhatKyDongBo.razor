@@ -72,7 +72,7 @@ else
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
-                <MudTd DataLabel="Thời gian">@context.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                <MudTd DataLabel="Thời gian">@GioVietNam.TuUtc(context.CreatedAtUtc).ToString("dd/MM/yyyy HH:mm")</MudTd>
                 <MudTd DataLabel="Loại">@TenLoai(context.EntityType)</MudTd>
                 <MudTd DataLabel="Khoá"><b>@context.EntityKey</b></MudTd>
                 <MudTd DataLabel="Trạng thái">
@@ -83,7 +83,7 @@ else
                     @if (context.Status == SyncOutboxStatus.Failed && context.NextRetryAtUtc is { } tt2)
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
-                            Thử lại lúc @tt2.ToLocalTime().ToString("HH:mm dd/MM")
+                            Thử lại lúc @GioVietNam.TuUtc(tt2).ToString("HH:mm dd/MM")
                         </MudText>
                     }
                 </MudTd>

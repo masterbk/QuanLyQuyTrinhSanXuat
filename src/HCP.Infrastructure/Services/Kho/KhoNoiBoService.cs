@@ -1,3 +1,4 @@
+using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
@@ -39,7 +40,7 @@ public sealed class KhoNoiBoService : IKhoNoiBoService
             SoLuong = req.SoLuong,                 // nhập: dương
             HanSuDung = req.HanSuDung,
             Loai = LoaiGiaoDichKho.NhapNguyenLieu,
-            ChungTu = "NK-" + DateTime.Now.ToString("yyMMdd-HHmmss"),
+            ChungTu = "NK-" + GioVietNam.Nay.ToString("yyMMdd-HHmmss"),
             MaNccDauVao = string.IsNullOrWhiteSpace(req.MaNccDauVao) ? null : req.MaNccDauVao.Trim(),
             GhiChu = req.GhiChu?.Trim(),
             ThoiGianUtc = DateTime.UtcNow
@@ -85,7 +86,7 @@ public sealed class KhoNoiBoService : IKhoNoiBoService
             SoLuong = chenhLech,                   // dương: tăng; âm: giảm
             HanSuDung = hsd,                       // giữ hạn dùng để không tách nhóm tồn
             Loai = LoaiGiaoDichKho.DieuChinh,
-            ChungTu = "DC-" + DateTime.Now.ToString("yyMMdd-HHmmss"),
+            ChungTu = "DC-" + GioVietNam.Nay.ToString("yyMMdd-HHmmss"),
             GhiChu = string.IsNullOrWhiteSpace(req.LyDo) ? null : req.LyDo.Trim(),
             ThoiGianUtc = DateTime.UtcNow
         });

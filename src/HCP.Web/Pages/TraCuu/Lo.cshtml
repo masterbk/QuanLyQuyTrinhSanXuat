@@ -29,7 +29,7 @@
             {
                 <div class="col-6">
                     <span class="nhan">Hạn sử dụng:</span>
-                    <span class="@(hsd < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)) ? "text-danger fw-bold" : "")">@hsd.ToString("dd/MM/yyyy")</span>
+                    <span class="@(hsd < GioVietNam.HomNay ? "text-danger fw-bold" : "")">@hsd.ToString("dd/MM/yyyy")</span>
                 </div>
             }
             <div class="col-6"><span class="nhan">Ngày nhập kho:</span> @lo.NgayNhap.ToString("dd/MM/yyyy")</div>

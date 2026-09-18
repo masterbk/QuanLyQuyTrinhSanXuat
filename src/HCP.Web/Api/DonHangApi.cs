@@ -1,3 +1,7 @@
+using HCP.Web.Services;
+using HCP.Infrastructure.Persistence;
+using System.Security.Claims;
+using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services.DanhMuc;
 using HCP.Domain.Enums;
@@ -19,6 +23,7 @@ public static class DonHangApi
         // ---------- Đơn từ trường (chiều kéo) ----------
         var nhan = app.MapGroup("/api/v1/don-hang-nhan")
             .RequireAuthorization(ApiAuth.ChinhSach)
+            .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenGiaoHang })
             .WithTags("Đơn hàng từ trường");
 
         nhan.MapGet("", async (IDonHangNhanService svc, string? trangThai, string? tuKhoa,
@@ -62,42 +67,119 @@ public static class DonHangApi
         // ---------- Đơn hàng bán của nhà cung cấp (mọi khách hàng) ----------
         var ban = app.MapGroup("/api/v1/don-hang-ban")
             .RequireAuthorization(ApiAuth.ChinhSach)
+            .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenGiaoHang })
             .WithTags("Đơn hàng bán");
 
+        // canGiao: việc của nhân viên giao hàng (đơn đang giao); cuaToi: đơn mình đã nhận.
         ban.MapGet("", async (IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp,
-                              string? trangThai, int trang = 1, int soDong = 20) =>
+                              IDanhMucService<Staff> ns, ClaimsPrincipal user, AppDbContext db,
+                              string? trangThai, bool canGiao = false, bool cuaToi = false,
+                              int trang = 1, int soDong = 20) =>
         {
             IEnumerable<DonHangBan> ds = await svc.LayTatCaAsync();
             if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiDonHangBan>(trangThai, true, out var tt))
                 ds = ds.Where(d => d.TrangThai == tt);
+            if (canGiao) ds = ds.Where(d => d.TrangThai == TrangThaiDonHangBan.DangGiao);
+            if (cuaToi)
+            {
+                var maToi = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
+                ds = maToi is null
+                    ? Enumerable.Empty<DonHangBan>()
+                    : ds.Where(d => string.Equals(d.MaNguoiGiao, maToi, StringComparison.OrdinalIgnoreCase));
+            }
+
             var tatCa = ds.ToList();
-            var (tenKhach, tenSp) = await LayTenAsync(kh, sp);
+            var ten = await LayTenAsync(kh, sp, ns);
             var (t, n) = LenhSanXuatApi.ChuanHoaTrang(trang, soDong);
             return Results.Ok(new TrangDuLieu<DonHangBanDto>(
-                tatCa.Skip((t - 1) * n).Take(n).Select(d => MapDonBan(d, tenKhach, tenSp)).ToList(), t, n, tatCa.Count));
+                tatCa.Skip((t - 1) * n).Take(n).Select(d => MapDonBan(d, ten)).ToList(), t, n, tatCa.Count));
         });
 
-        ban.MapGet("/{id:int}", async (int id, IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp) =>
+        ban.MapGet("/{id:int}", async (int id, IDonHangBanService svc, IKhachHangService kh,
+                                       IDanhMucService<Product> sp, IDanhMucService<Staff> ns) =>
         {
             var don = await svc.LayTheoIdAsync(id);
             if (don is null) return Results.NotFound(new LoiDto("Không tìm thấy đơn hàng."));
-            var (tenKhach, tenSp) = await LayTenAsync(kh, sp);
-            return Results.Ok(MapDonBan(don, tenKhach, tenSp));
+            return Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, ns)));
         });
+
+        // Quét mã QR trên phiếu giao (QR tra cứu của hệ thống hoặc link truy xuất HanoiCheck) -> mở đúng đơn.
+        ban.MapGet("/quet", async (string? noiDung, IDonHangBanService svc, IKhachHangService kh,
+                                   IDanhMucService<Product> sp, IDanhMucService<Staff> ns) =>
+        {
+            var don = await svc.TimTheoQrAsync(noiDung ?? "");
+            return don is null
+                ? Results.NotFound(new LoiDto("Mã QR này không phải của đơn hàng nào trong cơ sở."))
+                : Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, ns)));
+        });
+
+        ban.MapPost("/{id:int}/nhan-don", async (int id, ClaimsPrincipal user, AppDbContext db,
+                                                 IDonHangBanService svc) =>
+        {
+            var maNhanSu = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
+            if (maNhanSu is null)
+                return Results.BadRequest(new LoiDto(
+                    "Tài khoản chưa gắn với hồ sơ nhân sự đang làm việc - liên hệ quản trị cơ sở."));
+            var kq = await svc.NhanDonAsync(id, maNhanSu);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        });
+
+        // Xác nhận đã giao: multipart/form-data kèm ảnh chụp tại chỗ (bắt buộc).
+        ban.MapPost("/{id:int}/da-giao", async (int id, HttpRequest http, IDonHangBanService svc,
+                                                ILuuTruAnhService luuAnh, CancellationToken ct) =>
+        {
+            if (!http.HasFormContentType)
+                return Results.BadRequest(new LoiDto("Cần gửi dạng multipart/form-data kèm ảnh giao hàng."));
+
+            IFormCollection form;
+            try
+            {
+                form = await http.ReadFormAsync(ct);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException)
+            {
+                return Results.BadRequest(new LoiDto("Dữ liệu ảnh gửi lên không đọc được. Vui lòng thử lại."));
+            }
+
+            var anh = new List<AnhDauVao>();
+            foreach (var f in form.Files.Where(f => f.Length > 0).Take(DonHangBanService.SoAnhToiDa))
+            {
+                try
+                {
+                    await using var luong = f.OpenReadStream();
+                    var daLuu = await luuAnh.LuuAsync(luong, f.FileName, f.ContentType, f.Length, ct);
+                    anh.Add(new AnhDauVao(daLuu.TenFile, daLuu.DuongDan));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.BadRequest(new LoiDto(ex.Message));
+                }
+            }
+
+            var kq = await svc.HoanTatGiaoAsync(id, anh, ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).DisableAntiforgery();
     }
 
-    private static async Task<(Dictionary<string, string> Khach, Dictionary<string, string> SanPham)> LayTenAsync(
-        IKhachHangService kh, IDanhMucService<Product> sp) =>
-        ((await kh.LayTatCaAsync()).GroupBy(k => k.MaKhachHang).ToDictionary(g => g.Key, g => g.First().TenKhachHang),
-         (await sp.LayTatCaAsync()).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham));
+    private sealed record BangTenDon(IReadOnlyDictionary<string, string> Khach,
+                                     IReadOnlyDictionary<string, string> SanPham,
+                                     IReadOnlyDictionary<string, string> NhanSu);
 
-    private static DonHangBanDto MapDonBan(DonHangBan d, IReadOnlyDictionary<string, string> tenKhach,
-                                           IReadOnlyDictionary<string, string> tenSp) => new(
-        d.Id, d.MaDonHang, d.MaKhachHang, tenKhach.GetValueOrDefault(d.MaKhachHang), d.MaKho, d.NgayDat, d.NgayGiao,
-        d.DiaChiGiao, d.MaNguoiGiao, d.TrangThai.ToString(), TenTrangThaiBan(d.TrangThai), d.Nguon.ToString(),
+    private static async Task<BangTenDon> LayTenAsync(IKhachHangService kh, IDanhMucService<Product> sp,
+                                                      IDanhMucService<Staff> ns) => new(
+        (await kh.LayTatCaAsync()).GroupBy(k => k.MaKhachHang).ToDictionary(g => g.Key, g => g.First().TenKhachHang),
+        (await sp.LayTatCaAsync()).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham),
+        (await ns.LayTatCaAsync()).GroupBy(n => n.MaNhanSu).ToDictionary(g => g.Key, g => g.First().HoTen));
+
+    private static DonHangBanDto MapDonBan(DonHangBan d, BangTenDon ten) => new(
+        d.Id, d.MaDonHang, d.MaKhachHang, ten.Khach.GetValueOrDefault(d.MaKhachHang), d.MaKho, d.NgayDat, d.NgayGiao,
+        d.DiaChiGiao, d.MaNguoiGiao, d.MaNguoiGiao is null ? null : ten.NhanSu.GetValueOrDefault(d.MaNguoiGiao),
+        d.TrangThai.ToString(), TenTrangThaiBan(d.TrangThai), d.Nguon.ToString(),
         d.MaDonHnC, d.GhiChu, d.LyDoHuy, d.TongTien, d.ThoiGianXuatKhoUtc, d.ThoiGianGiaoUtc,
         d.Dong.OrderBy(l => l.Id).Select(l => new DonHangBanDongDto(
-            l.Id, l.MaThanhPham, tenSp.GetValueOrDefault(l.MaThanhPham), l.SoLuong, l.DonGia, l.ThanhTien,
+            l.Id, l.MaThanhPham, ten.SanPham.GetValueOrDefault(l.MaThanhPham), l.SoLuong, l.DonGia, l.ThanhTien,
             l.XuatLo.Select(x => new XuatLoDto(x.MaLo, x.HanSuDung, x.SoLuong)).ToList())).ToList());
 
     private static string TenTrangThaiBan(TrangThaiDonHangBan t) => t switch

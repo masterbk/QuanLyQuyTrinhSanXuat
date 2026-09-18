@@ -1,3 +1,4 @@
+using HCP.Domain;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.NhatKyDongBo;
@@ -49,7 +50,7 @@ public sealed class DashboardCoSoService : IDashboardCoSoService
         var sanPham = await _db.Products.AsNoTracking().ToListAsync(ct);
         var spTheoMa = sanPham.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First());
 
-        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        var homNay = GioVietNam.HomNay;
         var nguong = homNay.AddDays(soNgay);
         var ds = new List<CanhBaoTonKho>();
 
@@ -118,7 +119,7 @@ public sealed class DashboardCoSoService : IDashboardCoSoService
     /// </summary>
     private async Task<IReadOnlyList<CanhBaoGiayTo>> LayCanhBaoGiayToAsync(int soNgay, CancellationToken ct)
     {
-        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        var homNay = GioVietNam.HomNay;
         var nguong = homNay.AddDays(soNgay);
         var ds = new List<CanhBaoGiayTo>();
 

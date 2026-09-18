@@ -35,7 +35,10 @@ class KhauSua {
         ghiChu: k.ghiChu,
       );
 
-  /// Lỗi còn thiếu, null nếu đủ.
+  /// Lỗi khi lập/sửa lệnh: người thực hiện KHÔNG bắt buộc (nhân viên sản xuất quét mã QR của lệnh để tham gia).
+  String? get loiKhiLap => maCoSo == null ? 'chưa chọn cơ sở thực hiện' : null;
+
+  /// Lỗi còn thiếu khi hoàn thành (phải có cơ sở và người thực hiện), null nếu đủ.
   String? get loi => maCoSo == null
       ? 'chưa chọn cơ sở thực hiện'
       : nguoi.isEmpty
@@ -73,7 +76,10 @@ class OKhau extends ConsumerWidget {
   final VoidCallback khiDoi;
   final bool khoa;
 
-  const OKhau({super.key, required this.khau, required this.khiDoi, this.khoa = false});
+  /// Hoàn thành lệnh thì bắt buộc người thực hiện; lập lệnh thì không.
+  final bool batBuocNguoi;
+
+  const OKhau({super.key, required this.khau, required this.khiDoi, this.khoa = false, this.batBuocNguoi = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -108,11 +114,11 @@ class OKhau extends ConsumerWidget {
             onTap: khoa ? null : () => _chonNguoi(context, nhanSu),
             child: InputDecorator(
               decoration: InputDecoration(
-                labelText: 'Người thực hiện *',
+                labelText: batBuocNguoi ? 'Người thực hiện *' : 'Người thực hiện (không bắt buộc)',
                 border: const OutlineInputBorder(),
                 isDense: true,
                 suffixIcon: const Icon(Icons.people_alt_outlined, size: 18),
-                errorText: khau.nguoi.isEmpty ? 'Chọn ít nhất 1 người' : null,
+                errorText: batBuocNguoi && khau.nguoi.isEmpty ? 'Chọn ít nhất 1 người' : null,
                 errorStyle: TextStyle(color: mauLoi),
               ),
               child: khau.nguoi.isEmpty

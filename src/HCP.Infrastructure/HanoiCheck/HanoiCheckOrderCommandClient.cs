@@ -45,14 +45,19 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
             MaNguoiGiao = noiDung.MaNguoiGiao,
             GhiChu = noiDung.GhiChu,
             DanhSachAnh = noiDung.DanhSachAnh?.Select(a => new ProcessPayloadAnh { DuongDan = a }).ToList(),
-            ChiTiet = noiDung.ChiTiet.Select(l => new ProcessPayloadLine
-            {
-                TraceCode = l.TraceCode,
-                PhanBo = l.PhanBo.Select(p => new ProcessPayloadAllocation
+            // chi_tiet rỗng bị HanoiCheck từ chối 422 ("phải có ít nhất 1 dòng") - không có dòng nào thì BỎ HẲN khoá,
+            // lúc đó dịch vụ chỉ cập nhật người giao / ghi chú / ảnh.
+            ChiTiet = noiDung.ChiTiet is not { Count: > 0 }
+                ? null
+                : noiDung.ChiTiet.Select(l => new ProcessPayloadLine
                 {
-                    MaLo = p.MaLo, MaKho = p.MaKho, SoLuong = p.SoLuong
+                    TraceCode = l.TraceCode,
+                    MaThucPham = l.MaThucPham,
+                    PhanBo = l.PhanBo.Select(p => new ProcessPayloadAllocation
+                    {
+                        MaLo = p.MaLo, MaKho = p.MaKho, SoLuong = p.SoLuong
+                    }).ToList()
                 }).ToList()
-            }).ToList()
         };
         var path = "/api/supplier/orders/" + maDon + "/process";
         return GuiAsync(tenantId, path, JsonSerializer.Serialize(payload, JsonOpts), ct);
@@ -165,7 +170,13 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
 
     private sealed class ProcessPayloadLine
     {
-        [JsonPropertyName("trace_code")] public string TraceCode { get; set; } = string.Empty;
+        [JsonPropertyName("trace_code"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? TraceCode { get; set; }
+
+        /// <summary>Dùng thay trace_code với đơn cũ chưa lấy được mã truy vết (đặc tả cho phép, mã phải duy nhất trong đơn).</summary>
+        [JsonPropertyName("ma_thuc_pham"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MaThucPham { get; set; }
+
         [JsonPropertyName("phan_bo")] public List<ProcessPayloadAllocation> PhanBo { get; set; } = new();
     }
 
@@ -175,7 +186,8 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
         [JsonPropertyName("ghi_chu")] public string? GhiChu { get; set; }
         [JsonPropertyName("danh_sach_anh"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ProcessPayloadAnh>? DanhSachAnh { get; set; }
-        [JsonPropertyName("chi_tiet")] public List<ProcessPayloadLine> ChiTiet { get; set; } = new();
+        [JsonPropertyName("chi_tiet"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<ProcessPayloadLine>? ChiTiet { get; set; }
     }
 
     private sealed class StatusPayload

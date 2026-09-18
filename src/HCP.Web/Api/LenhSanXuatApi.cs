@@ -1,3 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+using HCP.Infrastructure.Persistence;
+using System.Security.Claims;
+using HCP.Domain.Constants;
+using HCP.Domain;
 using System.Text.Json;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
@@ -22,16 +27,26 @@ public static class LenhSanXuatApi
     {
         var nhom = app.MapGroup("/api/v1/lenh-san-xuat")
             .RequireAuthorization(ApiAuth.ChinhSach)
+            .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenSanXuat })
             .WithTags("Lệnh sản xuất");
 
         nhom.MapGet("", async (ILenhSanXuatService svc, IDanhMucService<Product> sp,
                                IDanhMucService<ProductionProcess> qt, IDanhMucService<ProductionStep> khau,
-                               IDanhMucService<Facility> coSo,
-                               string? trangThai, int trang = 1, int soDong = 20) =>
+                               IDanhMucService<Facility> coSo, ClaimsPrincipal user, AppDbContext db,
+                               string? trangThai, int trang = 1, int soDong = 20, bool cuaToi = false) =>
         {
             var tatCa = await svc.LayTatCaAsync();
             if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiLenhSX>(trangThai, true, out var tt))
                 tatCa = tatCa.Where(l => l.TrangThai == tt).ToList();
+            if (cuaToi)
+            {
+                // "Của tôi" = lệnh có khâu mà người đang đăng nhập là người thực hiện.
+                var ma = await MaNhanSuHienTaiAsync(user, db);
+                tatCa = ma is null
+                    ? new List<LenhSanXuat>()
+                    : tatCa.Where(l => l.SanPham.Any(s => s.Khau.Any(k =>
+                          k.NguoiThucHien.Contains(ma, StringComparer.OrdinalIgnoreCase)))).ToList();
+            }
 
             var ten = await LayTenAsync(sp, qt, khau, coSo);
             var (t, n) = ChuanHoaTrang(trang, soDong);
@@ -49,6 +64,31 @@ public static class LenhSanXuatApi
                 ? Results.NotFound(new LoiDto("Không tìm thấy lệnh sản xuất."))
                 : Results.Ok(Map(lenh, await LayTenAsync(sp, qt, khau, coSo)));
         });
+
+        // App quét mã QR lệnh (nội dung "LSX:<mã lệnh>") rồi tra lệnh theo mã.
+        nhom.MapGet("/theo-ma/{maLenh}", async (string maLenh, ILenhSanXuatService svc, IDanhMucService<Product> sp,
+                                                IDanhMucService<ProductionProcess> qt,
+                                                IDanhMucService<ProductionStep> khau,
+                                                IDanhMucService<Facility> coSo) =>
+        {
+            var lenh = await svc.LayTheoMaAsync(maLenh);
+            return lenh is null
+                ? Results.NotFound(new LoiDto($"Không tìm thấy lệnh sản xuất \"{maLenh}\"."))
+                : Results.Ok(Map(lenh, await LayTenAsync(sp, qt, khau, coSo)));
+        });
+
+        // Nhân viên sản xuất tham gia các khâu đã chọn (chọn rỗng = rời lệnh).
+        nhom.MapPost("/{id:int}/tham-gia", async (int id, ThamGiaLenhRequest req, ClaimsPrincipal user, AppDbContext db,
+                                                  ILenhSanXuatService svc) =>
+        {
+            var maNhanSu = await MaNhanSuHienTaiAsync(user, db);
+            if (maNhanSu is null)
+                return Results.BadRequest(new LoiDto(
+                    "Tài khoản chưa gắn với hồ sơ nhân sự đang làm việc - liên hệ quản trị cơ sở."));
+            var kq = await svc.ThamGiaAsync(id, maNhanSu, req.KhauIds ?? Array.Empty<int>());
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.TenantSanXuat });
 
         nhom.MapPost("", async (LenhSanXuatLuuRequest req, ILenhSanXuatService svc) =>
         {
@@ -238,6 +278,17 @@ public static class LenhSanXuatApi
         return false;
     }
 
+    /// <summary>Mã nhân sự (đang làm việc) gắn với tài khoản đang gọi API; null nếu tài khoản không gắn hồ sơ nhân sự.</summary>
+    internal static async Task<string?> MaNhanSuHienTaiAsync(ClaimsPrincipal user, AppDbContext db)
+    {
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return null;
+        var nhanSuId = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.NhanSuId).FirstOrDefaultAsync();
+        return nhanSuId is not { } id
+            ? null
+            : await db.Staff.AsNoTracking().Where(s => s.Id == id && s.TrangThai).Select(s => s.MaNhanSu).FirstOrDefaultAsync();
+    }
+
     private sealed record BangTen(
         IReadOnlyDictionary<string, string> ThanhPham,
         IReadOnlyDictionary<string, string> QuyTrinh,
@@ -256,7 +307,7 @@ public static class LenhSanXuatApi
     {
         lenh.MaLenh = r.MaLenh ?? "";
         lenh.MaKho = r.MaKho;
-        lenh.NgaySanXuat = r.NgaySanXuat ?? DateOnly.FromDateTime(DateTime.Today);
+        lenh.NgaySanXuat = r.NgaySanXuat ?? GioVietNam.HomNay;
         lenh.TaoLoDongBo = r.TaoLoDongBo;
         lenh.GhiChu = r.GhiChu;
         lenh.SanPham = (r.SanPham ?? Array.Empty<LenhSanXuatSanPhamRequest>()).Select(s => new LenhSanXuatSanPham
@@ -288,7 +339,9 @@ public static class LenhSanXuatApi
             s.Khau.OrderBy(k => k.ThuTu).Select(k => new LenhSanXuatKhauDto(
                 k.Id, k.MaKhau, ten.Khau.GetValueOrDefault(k.MaKhau), k.ThuTu,
                 k.MaCoSo, ten.CoSo.GetValueOrDefault(k.MaCoSo), k.NguoiThucHien, k.GhiChu)).ToList(),
-            s.Anh.Select(a => new AnhLenhDto(a.MaFile, a.TenFile, a.DuongDan)).ToList())).ToList());
+            s.Anh.Select(a => new AnhLenhDto(a.MaFile, a.TenFile, a.DuongDan)).ToList())).ToList(),
+        l.ThamGia.OrderBy(t => t.ThoiGianUtc)
+            .Select(t => new LenhSanXuatThamGiaDto(t.MaNhanSu, t.HoTen, t.ThoiGianUtc)).ToList());
 
     private static string TenTrangThai(TrangThaiLenhSX t) => t switch
     {

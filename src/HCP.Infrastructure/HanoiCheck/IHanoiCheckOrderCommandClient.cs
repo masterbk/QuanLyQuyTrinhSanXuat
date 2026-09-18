@@ -3,10 +3,16 @@ namespace HCP.Infrastructure.HanoiCheck;
 /// <summary>Một dòng ảnh gửi kèm process (đơn giản hoá còn mỗi đường dẫn - loại/tên không cần với HnC).</summary>
 public sealed record ProcessOrderAllocation(string MaLo, string MaKho, decimal SoLuong);
 
-/// <summary>Một dòng hàng cần khai nguồn hàng, định danh bằng trace_code (đơn thực phẩm - food_fulfillment).</summary>
+/// <summary>
+/// Một dòng hàng cần khai nguồn hàng của đơn thực phẩm. Định danh bằng <see cref="TraceCode"/>; đơn cũ chưa lấy được
+/// mã truy vết thì dùng <see cref="MaThucPham"/> (đặc tả cho phép, với điều kiện mã đó chỉ xuất hiện một lần trong đơn).
+/// </summary>
 public sealed class ProcessOrderLine
 {
-    public string TraceCode { get; set; } = string.Empty;
+    public string? TraceCode { get; set; }
+
+    public string? MaThucPham { get; set; }
+
     public List<ProcessOrderAllocation> PhanBo { get; set; } = new();
 }
 

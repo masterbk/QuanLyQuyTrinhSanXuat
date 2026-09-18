@@ -2,9 +2,11 @@
 @using HCP.Domain.Constants
 @using HCP.Domain.Entities.Business
 @using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Identity
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
 @inject IDanhMucService<Staff> NhanSuService
+@inject ITaiKhoanNhanVienService TaiKhoanService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -42,6 +44,7 @@ else
             <MudTh>Vai trò</MudTh>
             <MudTh>Giấy tờ</MudTh>
             <MudTh>Trạng thái</MudTh>
+            <MudTh>Tài khoản</MudTh>
             <MudTh Style="width:120px"></MudTh>
         </HeaderContent>
         <RowTemplate>
@@ -89,6 +92,24 @@ else
                 else
                 {
                     <MudChip T="string" Size="Size.Small" Color="Color.Default">Nghỉ</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Tài khoản">
+                @if (_taiKhoan.TryGetValue(context.Id, out var tk))
+                {
+                    <MudText Typo="Typo.body2">@tk.TenDangNhap</MudText>
+                    @foreach (var vt in tk.VaiTro)
+                    {
+                        <MudChip T="string" Size="Size.Small" Class="ma-1">@AppRoles.TenHienThi(vt)</MudChip>
+                    }
+                    @if (!tk.DangHoatDong)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ma-1">Đã khoá</MudChip>
+                    }
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">-</MudText>
                 }
             </MudTd>
             <MudTd>
@@ -213,6 +234,56 @@ else
                               Variant="Variant.Outlined" MaxLength="255" />
             </MudItem>
         </MudGrid>
+
+        @if (_laQuanTri)
+        {
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Tài khoản đăng nhập</MudText>
+            <MudSwitch T="bool" Value="_tk.CoTaiKhoan" ValueChanged="DoiCoTaiKhoan" Color="Color.Primary"
+                       Label="Cho nhân viên này đăng nhập web và ứng dụng" />
+            @if (_daCoTaiKhoan && !_tk.CoTaiKhoan)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                    Bấm Lưu sẽ xoá tài khoản đăng nhập của nhân viên này.
+                </MudAlert>
+            }
+            @if (_tk.CoTaiKhoan)
+            {
+                <MudGrid Class="mt-1">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string" Value="@(TenDangNhap.ChuanHoaSoDienThoai(_input.DienThoai) ?? "(nhập số điện thoại ở trên)")"
+                                      Label="Tên đăng nhập" ReadOnly="true" Variant="Variant.Outlined"
+                                      HelperText="Là số điện thoại của nhân sự." />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_tk.Email" Label="Email (không bắt buộc)" Variant="Variant.Outlined"
+                                      MaxLength="256" HelperText="Có email thì đăng nhập được bằng cả email." />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_tk.MatKhau" Label="@(_daCoTaiKhoan ? "Đặt lại mật khẩu" : "Mật khẩu")"
+                                      InputType="InputType.Password" Variant="Variant.Outlined" autocomplete="new-password"
+                                      HelperText="@(_daCoTaiKhoan ? "Để trống nếu không đổi." : "Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt.")" />
+                    </MudItem>
+                    @if (_daCoTaiKhoan)
+                    {
+                        <MudItem xs="12" sm="6" Class="d-flex align-center">
+                            <MudSwitch @bind-Value="_tk.DangHoatDong" Color="Color.Success" Label="Cho phép đăng nhập" />
+                        </MudItem>
+                    }
+                </MudGrid>
+                <MudText Typo="Typo.body2" Class="mt-3 mb-1">Vai trò (chọn một hoặc nhiều)</MudText>
+                @foreach (var vt in AppRoles.VaiTroNhanVien)
+                {
+                    <MudCheckBox T="bool" Value="@_tk.VaiTro.Contains(vt)" ValueChanged="@(c => DoiVaiTro(vt, c))"
+                                 Color="Color.Primary" Dense="true"
+                                 Label="@($"{AppRoles.TenHienThi(vt)}: {AppRoles.MoTa(vt)}")" />
+                }
+                @if (!_input.TrangThai)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">Nhân sự đang nghỉ nên tài khoản sẽ bị khoá.</MudText>
+                }
+            }
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
@@ -239,12 +310,42 @@ else
 
     private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
 
-    protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // Tài khoản đăng nhập: chỉ quản trị cơ sở được tạo/sửa.
+    private bool _laQuanTri;
+    private IReadOnlyDictionary<int, TaiKhoanNhanVien> _taiKhoan = new Dictionary<int, TaiKhoanNhanVien>();
+    private YeuCauTaiKhoan _tk = new();
+    private bool _daCoTaiKhoan;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null) _laQuanTri = (await AuthState).User.IsInRole(AppRoles.TenantAdmin);
+        await TaiDanhSachAsync();
+    }
+
+    private void DoiCoTaiKhoan(bool bat)
+    {
+        _tk.CoTaiKhoan = bat;
+        if (!bat || _tk.VaiTro.Count > 0) return;
+
+        // Gợi ý vai trò theo công việc đã khai ở trên.
+        if (_input.LaNguoiCheBien) _tk.VaiTro.Add(AppRoles.TenantSanXuat);
+        if (_input.LaNguoiGiaoHang) _tk.VaiTro.Add(AppRoles.TenantGiaoHang);
+        if (_tk.VaiTro.Count == 0) _tk.VaiTro.Add(AppRoles.TenantStaff);
+    }
+
+    private void DoiVaiTro(string vaiTro, bool chon)
+    {
+        if (!chon) _tk.VaiTro.Remove(vaiTro);
+        else if (!_tk.VaiTro.Contains(vaiTro)) _tk.VaiTro.Add(vaiTro);
+    }
 
     private async Task TaiDanhSachAsync()
     {
         _dangTai = true;
         _danhSach = (await NhanSuService.LayTatCaAsync()).ToList();
+        _taiKhoan = await TaiKhoanService.LayTheoCoSoAsync();
         _dangTai = false;
     }
 
@@ -253,7 +354,7 @@ else
     {
         if (ns.KskNgayHetHan is not { } het) return null;
 
-        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        var homNay = GioVietNam.HomNay;
         if (het < homNay) return "KSK đã hết hạn";
         if (het <= homNay.AddDays(30)) return "KSK sắp hết hạn";
         return null;
@@ -299,6 +400,11 @@ else
             _attpNgayCap = ns.AttpNgayCap?.ToDateTime(TimeOnly.MinValue);
         }
 
+        _daCoTaiKhoan = ns is not null && _taiKhoan.ContainsKey(ns.Id);
+        _tk = _daCoTaiKhoan && _taiKhoan[ns!.Id] is { } tk
+            ? new YeuCauTaiKhoan { CoTaiKhoan = true, Email = tk.Email, VaiTro = tk.VaiTro.ToList(), DangHoatDong = tk.DangHoatDong }
+            : new YeuCauTaiKhoan();
+
         _hienForm = true;
     }
 
@@ -323,9 +429,39 @@ else
         }
 
         _dangLuu = true;
+
+        var xuLyTaiKhoan = _laQuanTri && (_tk.CoTaiKhoan || _daCoTaiKhoan);
+        if (xuLyTaiKhoan)
+        {
+            // Kiểm tra tài khoản TRƯỚC khi lưu nhân sự để khỏi lưu nửa chừng.
+            var loiTaiKhoan = await TaiKhoanService.KiemTraAsync(_input, _tk);
+            if (loiTaiKhoan is not null)
+            {
+                _dangLuu = false;
+                Snackbar.Add(loiTaiKhoan, Severity.Error);
+                return;
+            }
+        }
+
         var ketQua = _dangSua
             ? await NhanSuService.CapNhatAsync(_input)
             : await NhanSuService.ThemAsync(_input);
+
+        if (ketQua.ThanhCong && xuLyTaiKhoan)
+        {
+            var kqTaiKhoan = await TaiKhoanService.LuuAsync(_input, _tk);
+            if (!kqTaiKhoan.ThanhCong)
+            {
+                // Nhân sự đã lưu: giữ form mở ở chế độ sửa để chỉnh phần tài khoản rồi lưu lại.
+                _dangLuu = false;
+                _dangSua = true;
+                Snackbar.Add($"{ketQua.ThongBao} Nhưng tài khoản chưa lưu được: {kqTaiKhoan.ThongBao}", Severity.Warning);
+                await TaiDanhSachAsync();
+                return;
+            }
+            ketQua = ketQua.KemGhiChu(kqTaiKhoan.ThongBao);
+        }
+
         _dangLuu = false;
 
         Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
@@ -349,6 +485,10 @@ else
         var ketQua = await NhanSuService.XoaAsync(ns.Id);
         Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
 
-        if (ketQua.ThanhCong) await TaiDanhSachAsync();
+        if (ketQua.ThanhCong)
+        {
+            await TaiKhoanService.XoaTheoNhanSuAsync(ns.Id);   // nhân sự không còn thì tài khoản cũng xoá
+            await TaiDanhSachAsync();
+        }
     }
 }

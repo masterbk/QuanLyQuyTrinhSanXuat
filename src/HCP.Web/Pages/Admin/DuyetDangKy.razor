@@ -55,7 +55,7 @@ else
             <MudTd DataLabel="Mã số thuế">@context.MaSoThue</MudTd>
             <MudTd DataLabel="Người đại diện">@context.NguoiDaiDien</MudTd>
             <MudTd DataLabel="Email">@context.EmailLienHe</MudTd>
-            <MudTd DataLabel="Ngày đăng ký">@context.NgayDangKyUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Ngày đăng ký">@GioVietNam.TuUtc(context.NgayDangKyUtc).ToString("dd/MM/yyyy HH:mm")</MudTd>
             <MudTd>
                 @if (context.TrangThai == TenantStatus.PendingApproval)
                 {

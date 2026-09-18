@@ -6,6 +6,7 @@ using HCP.Domain.Entities.Infrastructure;
 using HCP.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace HCP.Infrastructure.Persistence;
 
@@ -87,6 +88,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<LenhSanXuatKhau> LenhSanXuatKhaus => Set<LenhSanXuatKhau>();
     public DbSet<LenhSanXuatTieuHao> LenhSanXuatTieuHaos => Set<LenhSanXuatTieuHao>();
     public DbSet<LenhSanXuatAnh> LenhSanXuatAnhs => Set<LenhSanXuatAnh>();
+    public DbSet<LenhSanXuatThamGia> LenhSanXuatThamGias => Set<LenhSanXuatThamGia>();
     public DbSet<KhachHang> KhachHangs => Set<KhachHang>();
     public DbSet<DonHangBan> DonHangBans => Set<DonHangBan>();
     public DbSet<DonHangBanDong> DonHangBanDongs => Set<DonHangBanDong>();
@@ -118,6 +120,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
             b.Property(u => u.TenantId).HasMaxLength(64);
             b.Property(u => u.HoTen).HasMaxLength(255);
             b.HasIndex(u => u.TenantId);
+            b.HasIndex(u => new { u.TenantId, u.NhanSuId });
         });
 
         // Bảng Tenants do TenantStoreDbContext sở hữu (đó là sổ đăng ký cơ sở).
@@ -314,6 +317,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
               .HasForeignKey(s => s.LenhSanXuatId).OnDelete(DeleteBehavior.Cascade);
         lenhSX.HasIndex(l => l.MaLenh).IsUnique();
         lenhSX.IsMultiTenant().AdjustUniqueIndexes();
+
+        var lenhThamGia = builder.Entity<LenhSanXuatThamGia>();
+        lenhThamGia.ToTable("LenhSanXuatThamGia");
+        lenhThamGia.Property(t => t.MaNhanSu).HasMaxLength(255).IsRequired();
+        lenhThamGia.Property(t => t.HoTen).HasMaxLength(255);
+        lenhThamGia.HasOne(t => t.LenhSanXuat).WithMany(l => l.ThamGia)
+                   .HasForeignKey(t => t.LenhSanXuatId).OnDelete(DeleteBehavior.Cascade);
+        lenhThamGia.HasIndex(t => new { t.LenhSanXuatId, t.MaNhanSu }).IsUnique();
+        lenhThamGia.IsMultiTenant().AdjustUniqueIndexes();
 
         var lenhSP = builder.Entity<LenhSanXuatSanPham>();
         lenhSP.ToTable("LenhSanXuatSanPham");
@@ -606,6 +618,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         standardFood.Property(c => c.Name).HasMaxLength(255).IsRequired();
         standardFood.Property(c => c.MeasureName).HasMaxLength(100);
         standardFood.HasIndex(c => c.Code).IsUnique();
+
+        // Cột thời gian tên *Utc lưu giờ UTC: đọc ra gắn Kind=Utc để API trả JSON có "Z" (app di động quy đổi đúng
+        // sang giờ Việt Nam). Chỉ đổi cách ĐỌC, không đổi dữ liệu hay cấu trúc bảng.
+        var docLaUtc = new ValueConverter<DateTime, DateTime>(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+        foreach (var thuocTinh in builder.Model.GetEntityTypes().SelectMany(e => e.GetProperties())
+                     .Where(p => p.Name.EndsWith("Utc", StringComparison.Ordinal)
+                                 && (p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?))))
+        {
+            thuocTinh.SetValueConverter(docLaUtc);
+        }
 
         // Áp dụng cấu hình multi-tenant cho các entity đã đánh dấu .IsMultiTenant().
         builder.ConfigureMultiTenant();

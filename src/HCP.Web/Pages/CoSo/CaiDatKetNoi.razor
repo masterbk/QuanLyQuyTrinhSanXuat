@@ -98,7 +98,7 @@ else
                         Đã kết nối
                     </MudChip>
                     <MudText Typo="Typo.body2" Class="mt-3 mud-text-secondary">
-                        Xác thực gần nhất: @_cauHinh.NgayXacThucUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                        Xác thực gần nhất: @GioVietNam.TuUtc(_cauHinh.NgayXacThucUtc)?.ToString("dd/MM/yyyy HH:mm")
                     </MudText>
                 }
                 else

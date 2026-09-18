@@ -7,7 +7,7 @@
 @using HCP.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
-@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@attribute [Authorize(Roles = AppRoles.QuyenSanXuat)]
 @inject ILenhSanXuatService LenhService
 @inject IDinhMucService DinhMucService
 @inject IDanhMucService<Product> ThucPhamService
@@ -26,8 +26,8 @@
     <div>
         <MudText Typo="Typo.h5">Lệnh sản xuất</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Mỗi lệnh gồm một hoặc nhiều thành phẩm; mỗi thành phẩm là một lô, có quy trình và người thực hiện
-            từng khâu. Hoàn thành thì tự trừ nguyên liệu (lô hết hạn trước xuất trước) và nhập thành phẩm vào kho.
+            Mỗi lệnh gồm một hoặc nhiều thành phẩm; mỗi thành phẩm là một lô, có quy trình và các khâu. Không cần chọn người thực hiện
+            khi lập lệnh: nhân viên sản xuất quét mã QR của lệnh trên ứng dụng để tham gia các khâu. Hoàn thành thì tự trừ nguyên liệu (lô hết hạn trước xuất trước) và nhập thành phẩm vào kho.
         </MudText>
     </div>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
@@ -69,7 +69,7 @@ else
                 <MudTh>Kho</MudTh>
                 <MudTh>Ngày SX</MudTh>
                 <MudTh>Trạng thái</MudTh>
-                <MudTh Style="width:170px"></MudTh>
+                <MudTh Style="width:210px"></MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
@@ -87,6 +87,12 @@ else
                                 </MudTooltip>
                             }
                         </div>
+                    }
+                    @if (context.ThamGia.Count > 0)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Tham gia: @string.Join(", ", context.ThamGia.OrderBy(t => t.ThoiGianUtc).Select(t => t.HoTen ?? t.MaNhanSu))
+                        </MudText>
                     }
                 </MudTd>
                 <MudTd DataLabel="Kho">@context.MaKho</MudTd>
@@ -113,6 +119,7 @@ else
                         <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
                                    StartIcon="@Icons.Material.Filled.CheckCircle" Disabled="_dangXuLy"
                                    OnClick="@(() => MoHoanThanhAsync(context))">Hoàn thành</MudButton>
+                        <NutQrTraCuu Loai="LoaiTraCuu.LenhSanXuat" Id="@context.Id" Ma="@context.MaLenh" />
                         <MudTooltip Text="Sửa lệnh">
                             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
                                            OnClick="@(() => MoSuaAsync(context))" />
@@ -123,17 +130,19 @@ else
                     else if (context.TrangThai == TrangThaiLenhSX.HoanThanh)
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            @context.ThoiGianHoanThanhUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                            @GioVietNam.TuUtc(context.ThoiGianHoanThanhUtc)?.ToString("dd/MM HH:mm")
                         </MudText>
+                        <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="quyen">
                         <MudTooltip Text="Huỷ lệnh: trả lại nguyên liệu, thu hồi thành phẩm">
                             <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Error"
                                            Disabled="_dangXuLy" OnClick="@(() => MoHuy(context))" />
                         </MudTooltip>
+                        </AuthorizeView>
                     }
                     else
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            Huỷ @context.ThoiGianHuyUtc?.ToLocalTime().ToString("dd/MM HH:mm")
+                            Huỷ @GioVietNam.TuUtc(context.ThoiGianHuyUtc)?.ToString("dd/MM HH:mm")
                         </MudText>
                     }
                 </MudTd>
@@ -489,7 +498,7 @@ else
         _maLenhDangSua = null;
         _input = new LenhSanXuat { MaKho = _kho.Count == 1 ? _kho[0].MaKho : "" };
         ThemSanPham();
-        _ngaySanXuat = DateTime.Today;
+        _ngaySanXuat = GioVietNam.Nay.Date;
         _preview = new List<NguyenLieuCanDto>();
         _hienForm = true;
     }
@@ -596,7 +605,7 @@ else
             await _form.Validate();
             if (!_form.IsValid) return;
         }
-        _input.NgaySanXuat = _ngaySanXuat is { } d ? DateOnly.FromDateTime(d) : DateOnly.FromDateTime(DateTime.Today);
+        _input.NgaySanXuat = _ngaySanXuat is { } d ? DateOnly.FromDateTime(d) : GioVietNam.HomNay;
 
         _dangLuu = true;
         var kq = _idDangSua is null

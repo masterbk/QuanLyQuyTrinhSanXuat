@@ -294,7 +294,7 @@ public class LenhSanXuatServiceTests
     // ==================== Quy trình / khâu ====================
 
     [Fact]
-    public async Task Tao_Lenh_Bat_Buoc_Quy_Trinh_Khau_Nguoi_Va_Co_So()
+    public async Task Tao_Lenh_Bat_Buoc_Quy_Trinh_Khau_Va_Co_So()
     {
         SeedDanhMuc();
         using var db = MoDb();
@@ -313,7 +313,6 @@ public class LenhSanXuatServiceTests
         Assert.Contains("quy trình", await Loi(l => l.SanPham[0].MaQuyTrinh = ""));
         Assert.Contains("Không tìm thấy quy trình", await Loi(l => l.SanPham[0].MaQuyTrinh = "QT_LA"));
         Assert.Contains("KHAU02", await Loi(l => l.SanPham[0].Khau.RemoveAt(1)));              // thiếu khâu của quy trình
-        Assert.Contains("người thực hiện", await Loi(l => l.SanPham[0].Khau[1].NguoiThucHienCsv = " , "));
         Assert.Contains("cơ sở", await Loi(l => l.SanPham[0].Khau[0].MaCoSo = ""));
         Assert.Contains("CS_LA", await Loi(l => l.SanPham[0].Khau[0].MaCoSo = "CS_LA"));
         Assert.Contains("NS_LA", await Loi(l => l.SanPham[0].Khau[0].NguoiThucHienCsv = "NS01,NS_LA"));
@@ -722,8 +721,9 @@ public class LenhSanXuatServiceTests
         {
             var svc = Svc(db);
             Assert.False((await svc.CapNhatAsync(BanSua(id, 0m))).ThanhCong);
-            var thieuNguoi = BanSua(id, 10m); thieuNguoi.SanPham[0].Khau[0].NguoiThucHienCsv = "";
-            Assert.False((await svc.CapNhatAsync(thieuNguoi)).ThanhCong);
+            // Người thực hiện không còn bắt buộc khi lập/sửa lệnh; cơ sở của khâu thì vẫn bắt buộc.
+            var thieuCoSo = BanSua(id, 10m); thieuCoSo.SanPham[0].Khau[0].MaCoSo = "";
+            Assert.False((await svc.CapNhatAsync(thieuCoSo)).ThanhCong);
             Assert.False((await svc.CapNhatAsync(BanSua(9999, 10m))).ThanhCong);
         }
 
@@ -732,6 +732,88 @@ public class LenhSanXuatServiceTests
             var sp = await db.LenhSanXuatSanPhams.SingleAsync(x => x.LenhSanXuatId == id);
             Assert.Equal(12m, sp.SoLuong);                    // chỉ lần hợp lệ được lưu
             Assert.Equal(Lo1, sp.MaLoThanhPham);
+        }
+    }
+
+    // ==================== Nhân viên tự tham gia ====================
+
+    private static LenhSanXuat LenhChuaCoNguoi(decimal sl)
+    {
+        var lenh = Lenh(sl);
+        foreach (var k in lenh.SanPham[0].Khau) k.NguoiThucHienCsv = "";
+        return lenh;
+    }
+
+    [Fact]
+    public async Task Lap_Lenh_Khong_Can_Nguoi_Thuc_Hien_Nhung_Hoan_Thanh_Thi_Phai_Co()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 2m, new DateOnly(2026, 1, 1));
+        var id = await TaoAsync(LenhChuaCoNguoi(10));   // lập lệnh không chọn người
+
+        var kq = await HoanThanhAsync(id);
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("chưa có người thực hiện", kq.ThongBao);
+
+        // Nhân viên sản xuất tham gia mọi khâu -> hoàn thành được; lệnh đã xong thì không tham gia nữa.
+        int[] khauIds;
+        using (var db = MoDb()) khauIds = await db.LenhSanXuatKhaus.Select(k => k.Id).ToArrayAsync();
+        using (var db = MoDb()) Assert.True((await Svc(db).ThamGiaAsync(id, "NS01", khauIds)).ThanhCong);
+
+        var xong = await HoanThanhAsync(id);
+        Assert.True(xong.ThanhCong, xong.ThongBao);
+        using (var db = MoDb())
+            Assert.Contains("đã hoàn thành", (await Svc(db).ThamGiaAsync(id, "NS02", khauIds)).ThongBao);
+    }
+
+    [Fact]
+    public async Task Tham_Gia_Chi_Gan_Khau_Da_Chon_Chinh_Lai_Duoc_Va_Chan_Truong_Hop_Sai()
+    {
+        SeedDanhMuc();
+        var lenh = LenhChuaCoNguoi(10);
+        lenh.SanPham[0].Khau[1].NguoiThucHienCsv = "NS02";   // khâu 2 đã giao sẵn cho NS02
+        var id = await TaoAsync(lenh);
+        int k1, k2;
+        using (var db = MoDb())
+        {
+            var ks = await db.LenhSanXuatKhaus.OrderBy(k => k.ThuTu).ToListAsync();
+            (k1, k2) = (ks[0].Id, ks[1].Id);
+        }
+
+        using (var db = MoDb())
+        {
+            var svc = Svc(db);
+            Assert.Contains("2/2 khâu", (await svc.ThamGiaAsync(id, "NS01", new[] { k1, k2 })).ThongBao);
+            Assert.True((await svc.ThamGiaAsync(id, "NS01", new[] { k1, k2 })).ThanhCong);   // bấm lại không ghi trùng
+        }
+        using (var db = MoDb())
+        {
+            var ks = await db.LenhSanXuatKhaus.OrderBy(k => k.ThuTu).ToListAsync();
+            Assert.Equal("NS01", ks[0].NguoiThucHienCsv);
+            Assert.Equal("NS02,NS01", ks[1].NguoiThucHienCsv);   // giữ người đã được giao sẵn
+            var tg = await db.LenhSanXuatThamGias.SingleAsync();
+            Assert.Equal(("NS01", "Thợ A"), (tg.MaNhanSu, tg.HoTen));
+        }
+
+        // Bỏ bớt khâu 1 -> chỉ còn ở khâu 2.
+        using (var db = MoDb()) Assert.True((await Svc(db).ThamGiaAsync(id, "NS01", new[] { k2 })).ThanhCong);
+        using (var db = MoDb())
+        {
+            var ks = await db.LenhSanXuatKhaus.OrderBy(k => k.ThuTu).ToListAsync();
+            Assert.Equal("", ks[0].NguoiThucHienCsv);
+            Assert.Equal("NS02,NS01", ks[1].NguoiThucHienCsv);
+        }
+
+        // Bỏ chọn hết = rời lệnh.
+        using (var db = MoDb()) Assert.Contains("rời lệnh", (await Svc(db).ThamGiaAsync(id, "NS01", Array.Empty<int>())).ThongBao);
+        using (var db = MoDb())
+        {
+            Assert.Equal("NS02", (await db.LenhSanXuatKhaus.OrderBy(k => k.ThuTu).ToListAsync())[1].NguoiThucHienCsv);
+            Assert.False(await db.LenhSanXuatThamGias.AnyAsync());
+
+            var svc = Svc(db);
+            Assert.Contains("không thuộc lệnh", (await svc.ThamGiaAsync(id, "NS01", new[] { 999999 })).ThongBao);
+            Assert.Contains("hồ sơ nhân sự", (await svc.ThamGiaAsync(id, "NS_LA", new[] { k1 })).ThongBao);
         }
     }
 

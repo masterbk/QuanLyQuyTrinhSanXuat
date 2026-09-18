@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../loi/api.dart';
+import '../../loi/gio_viet_nam.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'hoan_thanh.dart';
 import 'kho_du_lieu.dart';
 import 'man_sua.dart';
 import 'mo_hinh.dart';
+import 'tham_gia.dart';
 
 final _ngayVn = DateFormat('dd/MM/yyyy');
 final _gioVn = DateFormat('dd/MM/yyyy HH:mm');
@@ -187,23 +189,52 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
               _Muc('Ngày sản xuất', _ngayVn.format(l.ngaySanXuat)),
               if (l.ghiChu != null && l.ghiChu!.isNotEmpty) _Muc('Ghi chú', l.ghiChu!),
               if (l.thoiGianHoanThanhUtc != null)
-                _Muc('Hoàn thành lúc', _gioVn.format(l.thoiGianHoanThanhUtc!.toLocal())),
+                _Muc('Hoàn thành lúc', _gioVn.format(gioVietNam(l.thoiGianHoanThanhUtc!))),
               if (l.thoiGianHuyUtc != null) ...[
-                _Muc('Huỷ lúc', _gioVn.format(l.thoiGianHuyUtc!.toLocal())),
+                _Muc('Huỷ lúc', _gioVn.format(gioVietNam(l.thoiGianHuyUtc!))),
                 if (l.lyDoHuy != null) _Muc('Lý do huỷ', l.lyDoHuy!),
               ],
               const SizedBox(height: 12),
               Text('Sản phẩm (${l.sanPham.length})', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               for (final s in l.sanPham) _TheSanPham(sanPham: s, tenNguoi: tenNguoi),
+              if (l.thamGia.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('Nhân viên đã tham gia (${l.thamGia.length})', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                for (final t in l.thamGia) _Muc(t.hoTen, 'từ ${_gioVn.format(gioVietNam(t.thoiGianUtc))}'),
+              ],
               const SizedBox(height: 16),
               if (l.moiTao) ...[
                 if (l.sanPham.any((s) => s.khau.isEmpty))
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Text('Có sản phẩm chưa khai khâu/người thực hiện - bấm Sửa để khai trước khi hoàn thành.',
+                    child: Text('Có sản phẩm chưa khai khâu - bấm Sửa để khai trước khi hoàn thành.',
                         style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ),
+                if (l.sanPham.any((s) => s.khau.any((k) => k.nguoiThucHien.isEmpty)))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text('Còn khâu chưa có người thực hiện: nhân viên sản xuất quét mã QR của lệnh để tham gia, '
+                        'hoặc chọn người khi hoàn thành.',
+                        style: TextStyle(color: Theme.of(context).colorScheme.secondary)),
+                  ),
+                if (ref.watch(xacThucProvider).nguoiDung?.coTheThamGiaLenh ?? false) ...[
+                  FilledButton.tonalIcon(
+                    onPressed: () async {
+                      final xong = await Navigator.push<bool>(
+                          context, MaterialPageRoute(builder: (_) => ManThamGia(lenh: l)));
+                      if (xong == true && mounted) {
+                        _coThayDoi = true;
+                        ref.invalidate(_chiTietProvider(widget.id));
+                      }
+                    },
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                    icon: const Icon(Icons.group_add_outlined),
+                    label: const Text('Chọn khâu tôi tham gia'),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 FilledButton.icon(
                   onPressed: () => _hoanThanh(l),
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),

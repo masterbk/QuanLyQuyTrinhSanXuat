@@ -29,6 +29,16 @@ public interface ILenhSanXuatService
     Task<IReadOnlyList<LenhSanXuat>> LayTatCaAsync(CancellationToken ct = default);
     Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default);
 
+    /// <summary>Tra lệnh theo mã lệnh - app quét mã QR của lệnh (nội dung "LSX:&lt;mã lệnh&gt;").</summary>
+    Task<LenhSanXuat?> LayTheoMaAsync(string maLenh, CancellationToken ct = default);
+
+    /// <summary>
+    /// Nhân viên sản xuất tham gia lệnh "Mới tạo": gắn vào ĐÚNG các khâu đã chọn và gỡ khỏi các khâu còn lại
+    /// (quét lại để chỉnh), chọn rỗng = rời lệnh. Ghi nhận thời điểm tham gia.
+    /// </summary>
+    Task<KetQuaThaoTac> ThamGiaAsync(int lenhId, string maNhanSu, IReadOnlyCollection<int> khauIds,
+                                     CancellationToken ct = default);
+
     /// <summary>
     /// Nguyên liệu cần cho TOÀN BỘ các dòng sản phẩm tại một kho, kèm tồn hiện có.
     /// Nhu cầu của các dòng dùng chung một nguyên liệu được CỘNG DỒN rồi mới so với tồn.

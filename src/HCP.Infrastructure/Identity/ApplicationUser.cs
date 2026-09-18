@@ -17,6 +17,12 @@ public class ApplicationUser : IdentityUser
 
     public string HoTen { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Nhân sự (Staff.Id) của cơ sở gắn với tài khoản nhân viên. null = quản trị cơ sở / quản trị nền tảng.
+    /// Tài khoản nhân viên có tên đăng nhập là số điện thoại, email không bắt buộc.
+    /// </summary>
+    public int? NhanSuId { get; set; }
+
     public bool DangHoatDong { get; set; } = true;
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

@@ -132,6 +132,34 @@ public class DonHangBanServiceHnCTests
     }
 
     [Fact]
+    public async Task Don_Cu_Chua_Co_Trace_Code_Thi_Gui_Ma_Thuc_Pham_Thay_The()
+    {
+        var id = Seed();
+        using (var db = MoDb())
+        {
+            // Đơn kéo về trước khi hệ thống lưu mã truy vết (hoặc chưa lấy được chi tiết đơn).
+            var don = await db.DonHangBans.Include(d => d.Dong).SingleAsync(d => d.Id == id);
+            foreach (var l in don.Dong) l.MaTruyVetHnC = null;
+            await db.SaveChangesAsync();
+        }
+
+        var fake = new FakeHanoiCheckOrderCommandClient();
+        ProcessOrderRequest? daGui = null;
+        fake.XuLyDon = (_, req) => { daGui = req; return OrderCommandResult.Ok(); };
+        fake.DoiTrangThai = (_, _) => OrderCommandResult.Ok();
+
+        using var db2 = MoDb();
+        var kq = await Svc(db2, fake).XuatKhoAsync(id, null, "NS01");
+        Assert.True(kq.ThanhCong, kq.ThongBao);
+
+        // Gộp 2 dòng cùng thực phẩm thành MỘT dòng (HanoiCheck đòi mã thực phẩm chỉ xuất hiện một lần).
+        var dong = Assert.Single(daGui!.ChiTiet);
+        Assert.Null(dong.TraceCode);
+        Assert.Equal("BANH_MI", dong.MaThucPham);
+        Assert.Equal(7m, dong.PhanBo.Sum(p => p.SoLuong));
+    }
+
+    [Fact]
     public async Task Xuat_Kho_Loi_Process_Thi_Khong_Tru_Kho_Khong_Doi_Trang_Thai()
     {
         var id = Seed();

@@ -1,3 +1,4 @@
+using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -55,7 +56,7 @@ public sealed class MaTuSinhService : IMaTuSinhService
     public MaTuSinhService(AppDbContext db) => _db = db;
 
     /// <summary>Hôm nay theo giờ Việt Nam (UTC+7, không có giờ mùa hè) - máy chủ có thể chạy giờ UTC.</summary>
-    public static DateOnly HomNay => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+    public static DateOnly HomNay => GioVietNam.HomNay;
 
     /// <summary>Tiền tố đầy đủ (kể cả dấu gạch cuối) và số chữ số của phần đánh số.</summary>
     public static (string TienTo, int DoRong) DinhDang(LoaiMaTuSinh loai, DateOnly ngay) => loai switch

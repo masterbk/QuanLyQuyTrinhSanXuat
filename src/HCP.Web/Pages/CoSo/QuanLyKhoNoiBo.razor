@@ -5,7 +5,7 @@
 @using HCP.Infrastructure.Services.DanhMuc
 @using HCP.Infrastructure.Services.Kho
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@attribute [Authorize(Roles = AppRoles.QuyenSanXuat)]
 @inject IKhoNoiBoService KhoService
 @inject IDanhMucService<Product> ThucPhamService
 @inject IDanhMucService<Warehouse> KhoDanhMucService
@@ -78,16 +78,19 @@ else
                             <b>@context.SoLuongTon.ToString("0.###")</b> @context.DonViTinh
                         </MudTd>
                         <MudTd Style="text-align:right">
+                            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="quyen">
                             <MudTooltip Text="Kiểm kê / Điều chỉnh tồn">
                                 <MudIconButton Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small"
                                                Color="Color.Primary" OnClick="@(() => MoDieuChinh(context))" />
                             </MudTooltip>
+                            </AuthorizeView>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
             }
         </MudTabPanel>
 
+        <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="quyen">
         <MudTabPanel Text="Nhập nguyên liệu">
             @if (_nguyenLieu.Count == 0 || _kho.Count == 0)
             {
@@ -177,7 +180,7 @@ else
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="STT">@(_lichSu.IndexOf(context)+1)</MudTd>
-                            <MudTd DataLabel="Thời gian">@context.ThoiGianUtc.ToLocalTime().ToString("dd/MM HH:mm")</MudTd>
+                            <MudTd DataLabel="Thời gian">@GioVietNam.TuUtc(context.ThoiGianUtc).ToString("dd/MM HH:mm")</MudTd>
                             <MudTd DataLabel="Loại">@MoTaLoai(context.Loai)</MudTd>
                             <MudTd DataLabel="Sản phẩm">@context.MaSanPham</MudTd>
                             <MudTd DataLabel="Kho">@context.MaKho</MudTd>
@@ -188,6 +191,7 @@ else
                 }
             }
         </MudTabPanel>
+        </AuthorizeView>
     </MudTabs>
 }
 
@@ -262,7 +266,7 @@ else
 
     private static string? CanhBaoHsd(DateOnly hsd)
     {
-        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        var homNay = GioVietNam.HomNay;
         if (hsd < homNay) return "Đã hết hạn";
         if (hsd <= homNay.AddDays(30)) return "Sắp hết hạn";
         return null;

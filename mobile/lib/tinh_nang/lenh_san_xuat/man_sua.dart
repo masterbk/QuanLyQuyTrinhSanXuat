@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../loi/api.dart';
+import '../../loi/gio_viet_nam.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'mo_hinh.dart';
@@ -75,7 +76,7 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
     _maLenh = TextEditingController(text: l?.maLenh ?? '');
     _ghiChu = TextEditingController(text: l?.ghiChu ?? '');
     _maKho = l?.maKho;
-    _ngaySanXuat = l?.ngaySanXuat ?? DateTime.now();
+    _ngaySanXuat = l?.ngaySanXuat ?? bayGioVietNam();
     _taoLoDongBo = l?.taoLoDongBo ?? false;
     _dong = l == null || l.sanPham.isEmpty ? [_DongSp(soLuong: '1')] : l.sanPham.map(_DongSp.tu).toList();
 
@@ -164,7 +165,7 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
       if (d.maQuyTrinh == null) return '$ten: chọn quy trình sản xuất.';
       if (d.khau.isEmpty) return '$ten: quy trình chưa có khâu.';
       for (final k in d.khau) {
-        final loi = k.loi;
+        final loi = k.loiKhiLap;
         if (loi != null) return '$ten - khâu "${k.tenKhau}": $loi.';
       }
     }
@@ -435,7 +436,7 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
                       TextButton(onPressed: () => _chepKhauDau(d), child: const Text('Chép khâu đầu xuống')),
                   ],
                 ),
-                for (final k in d.khau) OKhau(key: ObjectKey(k), khau: k, khiDoi: () => setState(() {})),
+                for (final k in d.khau) OKhau(batBuocNguoi: false, key: ObjectKey(k), khau: k, khiDoi: () => setState(() {})),
               ],
             ],
           ),
@@ -473,7 +474,7 @@ class _OChonNgay extends StatelessWidget {
         onTap: () async {
           final d = await showDatePicker(
             context: context,
-            initialDate: ngay ?? DateTime.now(),
+            initialDate: ngay ?? bayGioVietNam(),
             firstDate: DateTime(2020),
             lastDate: DateTime(2100),
           );

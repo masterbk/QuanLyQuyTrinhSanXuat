@@ -12,7 +12,10 @@ namespace HCP.Infrastructure.Services.TraCuu;
 public enum LoaiTraCuu
 {
     DonHang,
-    Lo
+    Lo,
+
+    /// <summary>Mã QR của lệnh sản xuất - không phải trang tra cứu, app quét để tham gia các khâu.</summary>
+    LenhSanXuat
 }
 
 /// <summary>
@@ -50,6 +53,9 @@ public interface ITraCuuCongKhaiService
     Task<QrTraCuu?> LayQrDonHangAsync(int id, CancellationToken ct = default);
 
     Task<QrTraCuu?> LayQrLoAsync(int id, CancellationToken ct = default);
+
+    /// <summary>QR của lệnh sản xuất: nội dung "LSX:&lt;mã lệnh&gt;" cho app của nhân viên sản xuất quét.</summary>
+    Task<QrTraCuu?> LayQrLenhSanXuatAsync(int id, CancellationToken ct = default);
 
     Task<TraCuuDonHang?> TraCuuDonHangAsync(string maTraCuu, CancellationToken ct = default);
 
@@ -110,6 +116,18 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
 
         if (GanMa(lo)) await _db.SaveChangesAsync(ct);
         return new QrTraCuu(lo.MaLo, null, lo.MaTraCuu, "Trang tra cứu lô sản xuất trên hệ thống.");
+    }
+
+    /// <summary>Tiền tố nội dung QR của lệnh sản xuất - app nhận ra để mở màn tham gia khâu.</summary>
+    public const string TienToQrLenhSanXuat = "LSX:";
+
+    public async Task<QrTraCuu?> LayQrLenhSanXuatAsync(int id, CancellationToken ct = default)
+    {
+        var lenh = await _db.LenhSanXuats.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
+        return lenh is null
+            ? null
+            : new QrTraCuu(lenh.MaLenh, TienToQrLenhSanXuat + lenh.MaLenh, null,
+                "Nhân viên sản xuất mở ứng dụng, bấm \"Quét mã lệnh\" để tham gia các khâu của lệnh.");
     }
 
     public async Task<TraCuuDonHang?> TraCuuDonHangAsync(string maTraCuu, CancellationToken ct = default)

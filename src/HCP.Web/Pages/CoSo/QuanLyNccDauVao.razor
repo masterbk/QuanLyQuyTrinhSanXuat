@@ -286,7 +286,7 @@ else
     /// <summary>Cảnh báo giấy tờ đã hết hạn hoặc sắp hết hạn trong 30 ngày.</summary>
     private static string? CanhBaoHetHan(SubSupplier ncc)
     {
-        var homNay = DateOnly.FromDateTime(DateTime.Today);
+        var homNay = GioVietNam.HomNay;
         var nguong = homNay.AddDays(30);
 
         if (ncc.AttpNgayHetHan is { } attp)
