@@ -18,7 +18,7 @@ class KhoDonHang {
   Future<TrangDuLieu<DonHangBan>> danhSach(
       {bool canGiao = true, bool cuaToi = false, String? trangThai, int trang = 1, int soDong = 20}) async {
     final j = await _api.get('/api/v1/don-hang-ban', thamSo: {
-      if (trangThai != null) 'trangThai': trangThai,
+      'trangThai': ?trangThai,
       if (canGiao && trangThai == null) 'canGiao': true,
       if (cuaToi) 'cuaToi': true,
       'trang': trang,

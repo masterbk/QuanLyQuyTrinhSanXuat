@@ -8,17 +8,20 @@ import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/kho_du_lieu.dart' show AnhDaC
 import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/mo_hinh.dart' show TrangDuLieu;
 import 'package:hcp_mobile/tinh_nang/xac_thuc/xac_thuc.dart';
 
-/// Kho dữ liệu giả: không gọi mạng, ghi lại lệnh nhận đơn để kiểm chứng.
+/// Kho dữ liệu giả: không gọi mạng, ghi lại lệnh nhận đơn/xác nhận để kiểm chứng.
 class KhoDonGia implements KhoDonHang {
   final List<DonHangBan> duLieu;
   int? daNhan;
+  int? daXacNhan;
 
   KhoDonGia(this.duLieu);
 
   @override
   Future<TrangDuLieu<DonHangBan>> danhSach(
-      {bool canGiao = true, bool cuaToi = false, int trang = 1, int soDong = 20}) async {
-    final loc = cuaToi ? duLieu.where((d) => (d.maNguoiGiao ?? '') == 'NS01').toList() : duLieu;
+      {bool canGiao = true, bool cuaToi = false, String? trangThai, int trang = 1, int soDong = 20}) async {
+    var loc = duLieu;
+    if (cuaToi) loc = loc.where((d) => (d.maNguoiGiao ?? '') == 'NS01').toList();
+    if (trangThai != null) loc = loc.where((d) => d.trangThai == trangThai).toList();
     return TrangDuLieu(duLieu: loc, trang: trang, soDong: soDong, tongSo: loc.length);
   }
 
@@ -30,6 +33,12 @@ class KhoDonGia implements KhoDonHang {
   Future<String> nhanDon(int id) async {
     daNhan = id;
     return 'Đã nhận';
+  }
+
+  @override
+  Future<String> xacNhan(int id) async {
+    daXacNhan = id;
+    return 'Đã xác nhận';
   }
 
   @override
