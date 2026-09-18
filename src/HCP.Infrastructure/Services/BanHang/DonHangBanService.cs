@@ -185,10 +185,20 @@ public sealed class DonHangBanService : IDonHangBanService
         if (don.TrangThai != TrangThaiDonHangBan.ChoXacNhan)
             return KetQuaThaoTac.Loi("Chỉ xác nhận được đơn đang chờ xác nhận.");
 
-        // Đơn nguồn HanoiCheck: đẩy ngược "Đang chuẩn bị" TRƯỚC khi lưu nội bộ, để 2 bên luôn khớp -
-        // công tắc HnC tắt/chưa cấu hình thì bỏ qua (ChuaCauHinh), lỗi thật thì chặn xác nhận.
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
+            // Chặn xác nhận khi đơn HnC chưa lấy xong chi tiết (dòng nào chưa có SoLuong coi như
+            // chưa chắc đã đủ mặt hàng) - tránh đơn "kẹt" thiếu dòng vĩnh viễn: sau khi Đã xác nhận,
+            // lần đồng bộ kế tiếp CHỈ gắn cờ HnCCoThayDoi, KHÔNG tự bổ sung lại dòng hàng
+            // (xem DonHangHnCService.CapNhatDon) - nên phải chắc chắn đủ dòng TRƯỚC khi xác nhận.
+            var nhan = await _db.DonHangNhans.Include(n => n.Dong)
+                .FirstOrDefaultAsync(n => n.TenantId == tenantId && n.MaDonHang == don.MaDonHnC, ct);
+            if (nhan is not null && (!nhan.DaLayChiTiet || nhan.Dong.Any(l => l.SoLuong is null)))
+                return KetQuaThaoTac.Loi("Đơn từ HanoiCheck chưa lấy xong chi tiết (số lượng từng dòng hàng) - "
+                    + "đợi hệ thống đồng bộ lại (tự động vài phút, hoặc bấm \"Đồng bộ ngay\" ở Đơn hàng từ trường) rồi xác nhận.");
+
+            // Đẩy ngược "Đang chuẩn bị" TRƯỚC khi lưu nội bộ, để 2 bên luôn khớp - công tắc HnC
+            // tắt/chưa cấu hình thì bỏ qua (ChuaCauHinh), lỗi thật thì chặn xác nhận.
             var ket = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_CHUAN_BI", null, ct);
             if (!ket.ThanhCong && !ket.ChuaCauHinh)
                 return KetQuaThaoTac.Loi($"Không đẩy được trạng thái sang HanoiCheck: {ket.ThongBao}");

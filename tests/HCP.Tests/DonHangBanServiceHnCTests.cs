@@ -103,6 +103,69 @@ public class DonHangBanServiceHnCTests
         Assert.Equal(TrangThaiDonHangBan.DaXacNhan, don.TrangThai);
     }
 
+    /// <summary>Thêm DonHangNhan "NCC-001" khớp đơn seed - tái hiện đúng bảng nguồn job đồng bộ ghi.</summary>
+    private void SeedDonHangNhan(bool daLayChiTiet, params decimal?[] soLuongTungDong)
+    {
+        using var db = MoDb();
+        db.DonHangNhans.Add(new DonHangNhan
+        {
+            TenantId = CoSo, MaDonHang = "NCC-001", DaLayChiTiet = daLayChiTiet,
+            Dong = soLuongTungDong.Select(sl => new DonHangNhanDong
+            {
+                TenantId = CoSo, MaSanPham = "BANH_MI", SoLuong = sl
+            }).ToList()
+        });
+        db.SaveChanges();
+    }
+
+    [Fact]
+    public async Task Xac_Nhan_Chan_Khi_Don_HnC_Chua_Lay_Xong_Chi_Tiet()
+    {
+        var id = Seed();
+        SeedDonHangNhan(daLayChiTiet: false);
+        var fake = new FakeHanoiCheckOrderCommandClient();
+
+        using var db = MoDb();
+        var kq = await Svc(db, fake).XacNhanAsync(id);
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("chưa lấy xong chi tiết", kq.ThongBao);
+
+        var don = await db.DonHangBans.SingleAsync(d => d.Id == id);
+        Assert.Equal(TrangThaiDonHangBan.ChoXacNhan, don.TrangThai);
+    }
+
+    [Fact]
+    public async Task Xac_Nhan_Chan_Khi_Con_Dong_Chua_Co_So_Luong()
+    {
+        var id = Seed();
+        // Đã lấy chi tiết một lần nhưng còn 1 dòng chưa có số lượng (VD trường vừa thêm mặt hàng).
+        SeedDonHangNhan(daLayChiTiet: true, 4m, null);
+        var fake = new FakeHanoiCheckOrderCommandClient();
+
+        using var db = MoDb();
+        var kq = await Svc(db, fake).XacNhanAsync(id);
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("chưa lấy xong chi tiết", kq.ThongBao);
+
+        var don = await db.DonHangBans.SingleAsync(d => d.Id == id);
+        Assert.Equal(TrangThaiDonHangBan.ChoXacNhan, don.TrangThai);
+    }
+
+    [Fact]
+    public async Task Xac_Nhan_Duoc_Khi_Da_Lay_Du_Chi_Tiet()
+    {
+        var id = Seed();
+        SeedDonHangNhan(daLayChiTiet: true, 4m, 3m);
+        var fake = new FakeHanoiCheckOrderCommandClient { DoiTrangThai = (_, _) => OrderCommandResult.Ok() };
+
+        using var db = MoDb();
+        var kq = await Svc(db, fake).XacNhanAsync(id);
+        Assert.True(kq.ThanhCong, kq.ThongBao);
+
+        var don = await db.DonHangBans.SingleAsync(d => d.Id == id);
+        Assert.Equal(TrangThaiDonHangBan.DaXacNhan, don.TrangThai);
+    }
+
     [Fact]
     public async Task Xuat_Kho_Day_Process_Roi_Status_Dung_Thu_Tu_Kem_Trace_Code_Tung_Dong()
     {
