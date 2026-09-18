@@ -15,11 +15,35 @@ import 'xac_nhan_giao.dart';
 final _ngayVn = DateFormat('dd/MM/yyyy');
 
 /// Danh sách đơn hàng cho nhân viên giao hàng: nhận đơn đã xuất kho và xác nhận đã giao.
-class ManDanhSachDon extends ConsumerWidget {
+class ManDanhSachDon extends ConsumerStatefulWidget {
   const ManDanhSachDon({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ManDanhSachDon> createState() => _ManDanhSachDonState();
+}
+
+class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
+  final _cuon = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _cuon.addListener(() {
+      // Gần chạm đáy thì lấy thêm trang sau.
+      if (_cuon.position.pixels >= _cuon.position.maxScrollExtent - 300) {
+        ref.read(danhSachDonProvider.notifier).taiThem();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _cuon.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final ds = ref.watch(danhSachDonProvider);
     final loc = ref.watch(locDonProvider);
     final coQuyenNhapLieu = ref.watch(xacThucProvider).nguoiDung?.coQuyenNhapLieu ?? false;
@@ -65,6 +89,7 @@ class ManDanhSachDon extends ConsumerWidget {
                 data: (ds) => ds.isEmpty
                     ? _Rong(loc: loc)
                     : ListView.separated(
+                        controller: _cuon,
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
                         itemCount: ds.length,

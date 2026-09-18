@@ -128,10 +128,16 @@ final danhSachDonProvider =
 
 class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
   static const _soDong = 30;
+  int _trang = 1;
+  bool _conTrangSau = false;
+  bool _dangTaiThem = false;
+
+  bool get conTrangSau => _conTrangSau;
 
   @override
   Future<List<DonHangBan>> build() async {
     final loc = ref.watch(locDonProvider);
+    _trang = 1;
     final trang = await ref.read(khoDonProvider).danhSach(
           canGiao: loc == LocDon.canGiao || loc == LocDon.cuaToi,
           cuaToi: loc == LocDon.cuaToi,
@@ -142,12 +148,40 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
           },
           soDong: _soDong,
         );
+    _conTrangSau = trang.conTrangSau;
     return trang.duLieu;
   }
 
   Future<void> taiLai() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => build());
+  }
+
+  /// Cuộn tới cuối danh sách thì lấy thêm trang sau.
+  Future<void> taiThem() async {
+    if (_dangTaiThem || !_conTrangSau) return;
+    _dangTaiThem = true;
+    try {
+      final loc = ref.read(locDonProvider);
+      final trang = await ref.read(khoDonProvider).danhSach(
+            canGiao: loc == LocDon.canGiao || loc == LocDon.cuaToi,
+            cuaToi: loc == LocDon.cuaToi,
+            trangThai: switch (loc) {
+              LocDon.choXacNhan => 'ChoXacNhan',
+              LocDon.canXuatKho => 'DaXacNhan',
+              _ => null,
+            },
+            trang: _trang + 1,
+            soDong: _soDong,
+          );
+      _trang++;
+      _conTrangSau = trang.conTrangSau;
+      state = AsyncValue.data([...(state.value ?? []), ...trang.duLieu]);
+    } on LoiApi {
+      // Lỗi tải thêm không nên xoá trắng danh sách đang xem.
+    } finally {
+      _dangTaiThem = false;
+    }
   }
 }
 

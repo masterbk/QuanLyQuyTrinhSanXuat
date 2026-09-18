@@ -78,6 +78,9 @@ else
                                OnClick="@(() => XacNhanXoaAsync(context))" />
             </MudTd>
         </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Số dòng mỗi trang:" />
+        </PagerContent>
     </MudTable>
 }
 
