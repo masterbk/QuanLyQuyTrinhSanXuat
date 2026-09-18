@@ -5,7 +5,7 @@ import 'package:hcp_mobile/tinh_nang/don_hang/kho_du_lieu.dart';
 import 'package:hcp_mobile/tinh_nang/don_hang/man_danh_sach.dart';
 import 'package:hcp_mobile/tinh_nang/don_hang/mo_hinh.dart';
 import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/kho_du_lieu.dart' show AnhDaChon;
-import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/mo_hinh.dart' show TrangDuLieu;
+import 'package:hcp_mobile/tinh_nang/lenh_san_xuat/mo_hinh.dart' show ThanhPham, TrangDuLieu;
 import 'package:hcp_mobile/tinh_nang/xac_thuc/xac_thuc.dart';
 
 /// Kho dữ liệu giả: không gọi mạng, ghi lại lệnh nhận đơn/xác nhận để kiểm chứng.
@@ -43,6 +43,25 @@ class KhoDonGia implements KhoDonHang {
 
   @override
   Future<String> daGiao(int id, List<AnhDaChon> anh) async => 'Đã giao';
+
+  @override
+  Future<String> taoDon(Map<String, dynamic> than) async => 'Đã tạo đơn hàng.';
+  @override
+  Future<String> suaDon(int id, Map<String, dynamic> than) async => 'Đã cập nhật đơn hàng.';
+  @override
+  Future<String> xoaDon(int id) async => 'Đã xoá đơn hàng.';
+  @override
+  Future<String> huyDon(int id, String lyDo) async => 'Đã huỷ đơn hàng.';
+  @override
+  Future<List<DongXuatKho>> goiYXuatKho(int id) async => const [];
+  @override
+  Future<String> xuatKho(int id, List<PhanBoLo> phanBo,
+          {String? maNguoiGiao, String? ghiChu, List<AnhDaChon> anh = const []}) async =>
+      'Đã xuất kho.';
+  @override
+  Future<List<KhachHang>> khachHang() async => const [];
+  @override
+  Future<List<ThanhPham>> thanhPhamBan() async => const [];
 }
 
 DonHangBan _don({int id = 1, String ma = 'DH-001', String trangThai = 'DangGiao', String? nguoiGiao}) => DonHangBan(
@@ -62,10 +81,17 @@ class _XacThucGia extends XacThucNotifier {
       nguoiDung: NguoiDung(id: 'u1', email: '', vaiTro: ['TenantGiaoHang'], maNhanSu: 'NS01'));
 }
 
-Widget _app(KhoDonGia kho) => ProviderScope(
+/// Quản lý/nhập liệu: được Tạo đơn, Xác nhận, Xuất kho - khác shipper thuần ở trên.
+class _XacThucNhapLieuGia extends XacThucNotifier {
+  @override
+  TrangThaiXacThuc build() => TrangThaiXacThuc(
+      nguoiDung: NguoiDung(id: 'u2', email: '', vaiTro: ['TenantStaff'], maNhanSu: 'NS02'));
+}
+
+Widget _app(KhoDonGia kho, {bool nhapLieu = false}) => ProviderScope(
       overrides: [
         khoDonProvider.overrideWithValue(kho),
-        xacThucProvider.overrideWith(_XacThucGia.new),
+        xacThucProvider.overrideWith(nhapLieu ? _XacThucNhapLieuGia.new : _XacThucGia.new),
       ],
       child: const MaterialApp(home: ManDanhSachDon()),
     );
@@ -96,5 +122,31 @@ void main() {
     expect(find.text('Bạn nhận'), findsOneWidget);
     expect(find.text('Nhận đơn'), findsNothing);
     expect(find.text('Đã giao'), findsOneWidget);
+  });
+
+  testWidgets('Nút Tạo đơn KHÔNG hiện với shipper thuần', (t) async {
+    await t.pumpWidget(_app(KhoDonGia([_don(id: 1)])));
+    await t.pumpAndSettle();
+    expect(find.byTooltip('Tạo đơn hàng'), findsNothing);
+  });
+
+  testWidgets('Nút Tạo đơn hiện với quản lý/nhập liệu', (t) async {
+    await t.pumpWidget(_app(KhoDonGia([_don(id: 1)]), nhapLieu: true));
+    await t.pumpAndSettle();
+    expect(find.byTooltip('Tạo đơn hàng'), findsOneWidget);
+  });
+
+  testWidgets('Đơn đã xác nhận: nút Xuất kho KHÔNG hiện với shipper thuần', (t) async {
+    final don = _don(id: 4, ma: 'DH-004', trangThai: 'DaXacNhan');
+    await t.pumpWidget(_app(KhoDonGia([don])));
+    await t.pumpAndSettle();
+    expect(find.text('Xuất kho'), findsNothing);
+  });
+
+  testWidgets('Đơn đã xác nhận: nút Xuất kho hiện với quản lý/nhập liệu', (t) async {
+    final don = _don(id: 4, ma: 'DH-004', trangThai: 'DaXacNhan');
+    await t.pumpWidget(_app(KhoDonGia([don]), nhapLieu: true));
+    await t.pumpAndSettle();
+    expect(find.text('Xuất kho'), findsOneWidget);
   });
 }

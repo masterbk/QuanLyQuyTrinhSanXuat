@@ -6,6 +6,8 @@ import '../../loi/api.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'man_chi_tiet.dart';
+import 'man_sua.dart';
+import 'man_xuat_kho.dart';
 import 'mo_hinh.dart';
 import 'quet_don.dart';
 import 'xac_nhan_giao.dart';
@@ -25,10 +27,31 @@ class ManDanhSachDon extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          _BoLoc(
-            dangChon: loc,
-            hienChoXacNhan: coQuyenNhapLieu,
-            khiChon: (v) => ref.read(locDonProvider.notifier).dat(v),
+          Row(
+            children: [
+              Expanded(
+                child: _BoLoc(
+                  dangChon: loc,
+                  coQuyenNhapLieu: coQuyenNhapLieu,
+                  khiChon: (v) => ref.read(locDonProvider.notifier).dat(v),
+                ),
+              ),
+              if (coQuyenNhapLieu)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: IconButton.filledTonal(
+                    tooltip: 'Tạo đơn hàng',
+                    icon: const Icon(Icons.add),
+                    onPressed: () async {
+                      final tb = await Navigator.push<String>(
+                          context, MaterialPageRoute(builder: (_) => const ManSuaDon()));
+                      if (tb == null || !context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+                      ref.read(danhSachDonProvider.notifier).taiLai();
+                    },
+                  ),
+                ),
+            ],
           ),
           Expanded(
             child: RefreshIndicator(
@@ -81,8 +104,10 @@ class TheDonHang extends ConsumerWidget {
     final cuaToi = don.cuaToi(maToi);
     final nhanDuoc = don.dangGiao && don.chuaCoNguoiGiao;
     final giaoDuoc = don.dangGiao && (cuaToi || don.chuaCoNguoiGiao);
-    // Xác nhận đơn mới: việc của quản lý/nhập liệu, không phải shipper.
-    final xacNhanDuoc = don.choXacNhan && (nguoiDung?.coQuyenNhapLieu ?? false);
+    // Xác nhận/Xuất kho: việc của quản lý/nhập liệu, không phải shipper.
+    final coQuyenNhapLieu = nguoiDung?.coQuyenNhapLieu ?? false;
+    final xacNhanDuoc = don.choXacNhan && coQuyenNhapLieu;
+    final xuatKhoDuoc = don.daXacNhan && coQuyenNhapLieu;
 
     Future<void> chay(Future<String> Function() viec) async {
       try {
@@ -98,6 +123,14 @@ class TheDonHang extends ConsumerWidget {
     Future<void> xacNhanGiao() async {
       final tb = await Navigator.push<String>(
           context, MaterialPageRoute(builder: (_) => ManXacNhanGiao(don: don)));
+      if (tb == null || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+      ref.read(danhSachDonProvider.notifier).taiLai();
+    }
+
+    Future<void> xuatKho() async {
+      final tb = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => ManXuatKho(don: don)));
       if (tb == null || !context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
       ref.read(danhSachDonProvider.notifier).taiLai();
@@ -143,7 +176,7 @@ class TheDonHang extends ConsumerWidget {
             if (!don.chuaCoNguoiGiao)
               _Dong(Icons.person_outline, cuaToi ? 'Bạn nhận' : 'Người giao: ${don.tenNguoiGiao ?? don.maNguoiGiao}'),
           ]),
-          if (xacNhanDuoc || nhanDuoc || giaoDuoc) ...[
+          if (xacNhanDuoc || xuatKhoDuoc || nhanDuoc || giaoDuoc) ...[
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -154,7 +187,14 @@ class TheDonHang extends ConsumerWidget {
                     icon: const Icon(Icons.check_circle_outline, size: 18),
                     label: const Text('Xác nhận'),
                   ),
-                if (xacNhanDuoc && (nhanDuoc || giaoDuoc)) const SizedBox(width: 8),
+                if (xacNhanDuoc && (xuatKhoDuoc || nhanDuoc || giaoDuoc)) const SizedBox(width: 8),
+                if (xuatKhoDuoc)
+                  FilledButton.icon(
+                    onPressed: xuatKho,
+                    icon: const Icon(Icons.local_shipping_outlined, size: 18),
+                    label: const Text('Xuất kho'),
+                  ),
+                if (xuatKhoDuoc && (nhanDuoc || giaoDuoc)) const SizedBox(width: 8),
                 if (nhanDuoc)
                   FilledButton.tonalIcon(
                     onPressed: () => chay(() => ref.read(khoDonProvider).nhanDon(don.id)),
@@ -182,8 +222,11 @@ class TheDonHang extends ConsumerWidget {
           : InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => ManChiTietDon(id: don.id)));
-                if (context.mounted) ref.read(danhSachDonProvider.notifier).taiLai();
+                final tb = await Navigator.push<String>(
+                    context, MaterialPageRoute(builder: (_) => ManChiTietDon(id: don.id)));
+                if (!context.mounted) return;
+                if (tb != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+                ref.read(danhSachDonProvider.notifier).taiLai();
               },
               child: noiDung,
             ),
@@ -199,21 +242,24 @@ class TheDonHang extends ConsumerWidget {
 
 class _BoLoc extends StatelessWidget {
   final LocDon dangChon;
-  final bool hienChoXacNhan;
+  final bool coQuyenNhapLieu;
   final ValueChanged<LocDon> khiChon;
 
-  const _BoLoc({required this.dangChon, required this.hienChoXacNhan, required this.khiChon});
+  const _BoLoc({required this.dangChon, required this.coQuyenNhapLieu, required this.khiChon});
 
   static const _mucCoBan = <({LocDon ma, String ten})>[
     (ma: LocDon.canGiao, ten: 'Cần giao'),
     (ma: LocDon.cuaToi, ten: 'Của tôi'),
   ];
-  static const _mucChoXacNhan = (ma: LocDon.choXacNhan, ten: 'Chờ xác nhận');
+  static const _mucQuanLy = <({LocDon ma, String ten})>[
+    (ma: LocDon.choXacNhan, ten: 'Chờ xác nhận'),
+    (ma: LocDon.canXuatKho, ten: 'Cần xuất kho'),
+  ];
   static const _mucTatCa = (ma: LocDon.tatCa, ten: 'Tất cả');
 
   @override
   Widget build(BuildContext context) {
-    final muc = [..._mucCoBan, if (hienChoXacNhan) _mucChoXacNhan, _mucTatCa];
+    final muc = [..._mucCoBan, if (coQuyenNhapLieu) ..._mucQuanLy, _mucTatCa];
     return SizedBox(
       height: 50,
       child: ListView.separated(
@@ -264,6 +310,7 @@ class _Rong extends StatelessWidget {
             switch (loc) {
               LocDon.cuaToi => 'Bạn chưa nhận đơn nào',
               LocDon.choXacNhan => 'Không có đơn chờ xác nhận',
+              LocDon.canXuatKho => 'Không có đơn cần xuất kho',
               _ => 'Không có đơn cần giao',
             },
             textAlign: TextAlign.center,
@@ -271,9 +318,11 @@ class _Rong extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            loc == LocDon.choXacNhan
-                ? 'Đơn mới đặt từ trường sẽ xuất hiện ở đây để xác nhận.'
-                : 'Đơn xuất hiện ở đây sau khi bộ phận kho xuất hàng.',
+            switch (loc) {
+              LocDon.choXacNhan => 'Đơn mới đặt từ trường sẽ xuất hiện ở đây để xác nhận.',
+              LocDon.canXuatKho => 'Đơn đã xác nhận, chờ chọn lô để xuất kho sẽ xuất hiện ở đây.',
+              _ => 'Đơn xuất hiện ở đây sau khi bộ phận kho xuất hàng.',
+            },
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),

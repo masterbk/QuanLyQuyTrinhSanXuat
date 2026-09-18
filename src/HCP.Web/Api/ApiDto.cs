@@ -131,3 +131,15 @@ public sealed record DonHangBanDongDto(int Id, string MaThanhPham, string? TenTh
                                        decimal DonGia, decimal ThanhTien, IReadOnlyList<XuatLoDto> XuatLo);
 
 public sealed record XuatLoDto(string MaLo, DateOnly? HanSuDung, decimal SoLuong);
+
+/// <summary>NgayDat để trống với đơn mới (server tự lấy hôm nay); dòng cũ gửi lại đúng NgayDat để giữ mã đơn/số tự sinh.</summary>
+public sealed record DonHangBanLuuRequest(
+    string MaKhachHang, string MaKho, DateOnly? NgayDat, DateOnly? NgayGiao,
+    string? DiaChiGiao, string? MaNguoiGiao, string? GhiChu,
+    IReadOnlyList<DonHangBanDongRequest>? Dong);
+
+public sealed record DonHangBanDongRequest(string MaThanhPham, decimal SoLuong, decimal DonGia, string? GhiChu);
+
+public sealed record HuyDonHangRequest(string? LyDo);
+
+public sealed record KhachHangDto(string MaKhachHang, string TenKhachHang, string? DiaChi);

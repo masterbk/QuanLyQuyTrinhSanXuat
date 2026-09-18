@@ -5,8 +5,12 @@ import 'package:intl/intl.dart';
 import '../../loi/api.dart';
 import '../../loi/gio_viet_nam.dart';
 import '../lenh_san_xuat/mo_hinh.dart' show soGon;
+import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'man_danh_sach.dart';
+import 'man_sua.dart';
+import 'man_xuat_kho.dart';
+import 'mo_hinh.dart';
 
 final _ngayVn = DateFormat('dd/MM/yyyy');
 final _gioVn = DateFormat('dd/MM/yyyy HH:mm');
@@ -23,9 +27,16 @@ class ManChiTietDon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chiTiet = ref.watch(_chiTietDonProvider(id));
+    final coQuyenNhapLieu = ref.watch(xacThucProvider).nguoiDung?.coQuyenNhapLieu ?? false;
 
     return Scaffold(
-      appBar: AppBar(title: Text(chiTiet.value?.maDonHang ?? 'Chi tiết đơn')),
+      appBar: AppBar(
+        title: Text(chiTiet.value?.maDonHang ?? 'Chi tiết đơn'),
+        actions: [
+          if (coQuyenNhapLieu && chiTiet.value != null)
+            _MenuHanhDong(don: chiTiet.value!, id: id),
+        ],
+      ),
       body: chiTiet.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -42,6 +53,7 @@ class ManChiTietDon extends ConsumerWidget {
               TheDonHang(don: d, trongChiTiet: true),
               const SizedBox(height: 12),
               if ((d.ghiChu ?? '').isNotEmpty) _Muc('Ghi chú', d.ghiChu!),
+              if (d.daHuy && (d.lyDoHuy ?? '').isNotEmpty) _Muc('Lý do huỷ', d.lyDoHuy!),
               _Muc('Kho xuất', d.maKho),
               if (d.ngayGiao != null) _Muc('Hẹn giao', _ngayVn.format(d.ngayGiao!)),
               if (d.thoiGianGiaoUtc != null) _Muc('Đã giao lúc', _gioVn.format(gioVietNam(d.thoiGianGiaoUtc!))),
@@ -77,6 +89,145 @@ class ManChiTietDon extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Menu "⋮" cho quản lý/nhập liệu: Sửa/Xuất kho luôn/Huỷ/Xoá - đúng điều kiện hiện của web.
+class _MenuHanhDong extends ConsumerWidget {
+  final DonHangBan don;
+  final int id;
+
+  const _MenuHanhDong({required this.don, required this.id});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!don.choXacNhan && !don.daXacNhan && !don.dangGiao) return const SizedBox.shrink();
+
+    Future<void> lamMoi() async => ref.invalidate(_chiTietDonProvider(id));
+
+    Future<void> sua() async {
+      final tb = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => ManSuaDon(don: don)));
+      if (tb == null || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+      await lamMoi();
+    }
+
+    Future<void> xuatKhoLuon() async {
+      final tb = await Navigator.push<String>(
+          context, MaterialPageRoute(builder: (_) => ManXuatKho(don: don)));
+      if (tb == null || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+      await lamMoi();
+    }
+
+    Future<void> huy() async {
+      final lyDo = await showDialog<String>(
+        context: context,
+        builder: (c) => _HopThoaiHuy(don: don),
+      );
+      if (lyDo == null || lyDo.trim().isEmpty || !context.mounted) return;
+      try {
+        final tb = await ref.read(khoDonProvider).huyDon(don.id, lyDo.trim());
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tb)));
+        await lamMoi();
+      } on LoiApi catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.thongBao)));
+      }
+    }
+
+    Future<void> xoa() async {
+      final dongY = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Xoá đơn hàng'),
+          content: Text('Xoá đơn "${don.maDonHang}"? Không thể hoàn tác.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Xoá')),
+          ],
+        ),
+      );
+      if (dongY != true || !context.mounted) return;
+      try {
+        final tb = await ref.read(khoDonProvider).xoaDon(don.id);
+        if (!context.mounted) return;
+        Navigator.pop(context, tb);
+      } on LoiApi catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.thongBao)));
+      }
+    }
+
+    return PopupMenuButton<String>(
+      onSelected: (v) => switch (v) {
+        'sua' => sua(),
+        'xuat-kho' => xuatKhoLuon(),
+        'huy' => huy(),
+        'xoa' => xoa(),
+        _ => null,
+      },
+      itemBuilder: (c) => [
+        if (don.choXacNhan || don.daXacNhan) ...[
+          const PopupMenuItem(value: 'sua', child: Text('Sửa đơn')),
+          if (don.choXacNhan) const PopupMenuItem(value: 'xuat-kho', child: Text('Xuất kho luôn')),
+        ],
+        const PopupMenuItem(value: 'huy', child: Text('Huỷ đơn')),
+        if ((don.choXacNhan || don.daXacNhan) && don.nguon == 'NoiBo')
+          const PopupMenuItem(value: 'xoa', child: Text('Xoá đơn')),
+      ],
+    );
+  }
+}
+
+class _HopThoaiHuy extends StatefulWidget {
+  final DonHangBan don;
+
+  const _HopThoaiHuy({required this.don});
+
+  @override
+  State<_HopThoaiHuy> createState() => _HopThoaiHuyState();
+}
+
+class _HopThoaiHuyState extends State<_HopThoaiHuy> {
+  final _lyDo = TextEditingController();
+
+  @override
+  void dispose() {
+    _lyDo.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text('Huỷ đơn ${widget.don.maDonHang}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.don.dangGiao)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Đơn đã xuất kho: huỷ sẽ trả hàng về đúng các lô đã xuất.',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            TextField(
+              controller: _lyDo,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Lý do huỷ *', border: OutlineInputBorder()),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, _lyDo.text),
+            child: const Text('Huỷ đơn'),
+          ),
+        ],
+      );
 }
 
 class _Muc extends StatelessWidget {

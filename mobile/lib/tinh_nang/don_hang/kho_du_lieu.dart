@@ -1,13 +1,18 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../loi/api.dart';
 import '../lenh_san_xuat/kho_du_lieu.dart' show AnhDaChon;
-import '../lenh_san_xuat/mo_hinh.dart' show TrangDuLieu;
+import '../lenh_san_xuat/mo_hinh.dart' show ThanhPham, TrangDuLieu;
 import '../xac_thuc/xac_thuc.dart';
 import 'mo_hinh.dart';
 
-/// Gọi nhóm API /api/v1/don-hang-ban cho nhân viên giao hàng.
+/// Một lô đã chốt khi xuất kho: dòng nào, lô nào, lấy bao nhiêu.
+typedef PhanBoLo = ({int dongId, String maLo, double soLuong});
+
+/// Gọi nhóm API /api/v1/don-hang-ban và các danh mục liên quan (khách hàng, thành phẩm).
 class KhoDonHang {
   final ApiClient _api;
 
@@ -54,12 +59,60 @@ class KhoDonHang {
     final j = await _api.postFile('/api/v1/don-hang-ban/$id/da-giao', form) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã xác nhận giao hàng.';
   }
+
+  Future<String> taoDon(Map<String, dynamic> than) async {
+    final j = await _api.post('/api/v1/don-hang-ban', than: than) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã tạo đơn hàng.';
+  }
+
+  Future<String> suaDon(int id, Map<String, dynamic> than) async {
+    final j = await _api.put('/api/v1/don-hang-ban/$id', than: than) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã cập nhật đơn hàng.';
+  }
+
+  Future<String> xoaDon(int id) async {
+    final j = await _api.delete('/api/v1/don-hang-ban/$id') as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã xoá đơn hàng.';
+  }
+
+  Future<String> huyDon(int id, String lyDo) async {
+    final j = await _api.post('/api/v1/don-hang-ban/$id/huy', than: {'lyDo': lyDo}) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã huỷ đơn hàng.';
+  }
+
+  Future<List<DongXuatKho>> goiYXuatKho(int id) async =>
+      ((await _api.get('/api/v1/don-hang-ban/$id/goi-y-xuat-kho')) as List)
+          .map((e) => DongXuatKho.tuJson(e as Map<String, dynamic>)).toList();
+
+  /// [phanBo] rỗng = dùng gợi ý FEFO phía máy chủ. [anh]: ảnh tổng quan (chỉ đơn nguồn HanoiCheck cần).
+  Future<String> xuatKho(int id, List<PhanBoLo> phanBo, {String? maNguoiGiao, String? ghiChu,
+      List<AnhDaChon> anh = const []}) async {
+    final form = FormData();
+    if (phanBo.isNotEmpty) {
+      form.fields.add(MapEntry('phanBo', jsonEncode(phanBo
+          .map((p) => {'dongId': p.dongId, 'maLo': p.maLo, 'soLuong': p.soLuong}).toList())));
+    }
+    if (maNguoiGiao != null) form.fields.add(MapEntry('maNguoiGiao', maNguoiGiao));
+    if (ghiChu != null) form.fields.add(MapEntry('ghiChu', ghiChu));
+    for (final a in anh) {
+      form.files.add(MapEntry('anh', MultipartFile.fromBytes(a.byte, filename: a.ten)));
+    }
+    final j = await _api.postFile('/api/v1/don-hang-ban/$id/xuat-kho', form) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã xuất kho.';
+  }
+
+  Future<List<KhachHang>> khachHang() async => ((await _api.get('/api/v1/danh-muc/khach-hang')) as List)
+      .map((e) => KhachHang.tuJson(e as Map<String, dynamic>)).toList();
+
+  Future<List<ThanhPham>> thanhPhamBan() async => ((await _api.get('/api/v1/danh-muc/thanh-pham-ban')) as List)
+      .map((e) => ThanhPham.tuJson(e as Map<String, dynamic>)).toList();
 }
 
 final khoDonProvider = Provider<KhoDonHang>((ref) => KhoDonHang(ref.watch(apiProvider)));
 
-/// Bộ lọc danh sách đơn: "Cần giao" (mặc định), "Của tôi", "Chờ xác nhận" (quản lý/nhập liệu), "Tất cả".
-enum LocDon { canGiao, cuaToi, choXacNhan, tatCa }
+/// Bộ lọc danh sách đơn: "Cần giao" (mặc định), "Của tôi", "Chờ xác nhận"/"Cần xuất kho"
+/// (quản lý/nhập liệu), "Tất cả".
+enum LocDon { canGiao, cuaToi, choXacNhan, canXuatKho, tatCa }
 
 final locDonProvider = NotifierProvider<LocDonNotifier, LocDon>(LocDonNotifier.new);
 
@@ -82,7 +135,11 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
     final trang = await ref.read(khoDonProvider).danhSach(
           canGiao: loc == LocDon.canGiao || loc == LocDon.cuaToi,
           cuaToi: loc == LocDon.cuaToi,
-          trangThai: loc == LocDon.choXacNhan ? 'ChoXacNhan' : null,
+          trangThai: switch (loc) {
+            LocDon.choXacNhan => 'ChoXacNhan',
+            LocDon.canXuatKho => 'DaXacNhan',
+            _ => null,
+          },
           soDong: _soDong,
         );
     return trang.duLieu;
@@ -93,3 +150,6 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
     state = await AsyncValue.guard(() => build());
   }
 }
+
+final khachHangProvider = FutureProvider<List<KhachHang>>((ref) => ref.watch(khoDonProvider).khachHang());
+final thanhPhamBanProvider = FutureProvider<List<ThanhPham>>((ref) => ref.watch(khoDonProvider).thanhPhamBan());

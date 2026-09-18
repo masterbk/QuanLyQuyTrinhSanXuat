@@ -233,6 +233,16 @@ public static class LenhSanXuatApi
         dm.MapGet("/kho", async (IDanhMucService<Warehouse> kho) =>
             Results.Ok((await kho.LayTatCaAsync()).Select(k => new KhoDto(k.MaKho, k.TenKho)).ToList()));
 
+        // Mọi thành phẩm (không lọc theo có định mức) - dùng cho dòng hàng của Đơn hàng bán,
+        // khác /thanh-pham ở trên vốn chỉ phục vụ lập lệnh sản xuất.
+        dm.MapGet("/thanh-pham-ban", async (IDanhMucService<Product> sp) =>
+            Results.Ok((await sp.LayTatCaAsync()).Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham)
+                .Select(p => new ThanhPhamDto(p.MaSanPham, p.TenSanPham, p.DonViTinh, p.MaQuyTrinh)).ToList()));
+
+        dm.MapGet("/khach-hang", async (IKhachHangService kh) =>
+            Results.Ok((await kh.LayTatCaAsync())
+                .Select(k => new KhachHangDto(k.MaKhachHang, k.TenKhachHang, k.DiaChi)).ToList()));
+
         dm.MapGet("/quy-trinh", async (IDanhMucService<ProductionProcess> qt,
                                        IDanhMucService<ProductionStep> khau) =>
         {

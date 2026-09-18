@@ -1,6 +1,7 @@
 using HCP.Web.Services;
 using HCP.Infrastructure.Persistence;
 using System.Security.Claims;
+using System.Text.Json;
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services.DanhMuc;
@@ -8,6 +9,7 @@ using HCP.Domain.Enums;
 using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.DonHangNhan;
 using HCP.Infrastructure.Services.Kho;
+using Microsoft.AspNetCore.Authorization;
 
 namespace HCP.Web.Api;
 
@@ -113,13 +115,109 @@ public static class DonHangApi
                 : Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, ns)));
         });
 
+        // Việc của quản lý/nhập liệu (Tạo/Sửa/Xoá/Huỷ/Xuất kho) - KHÔNG phải shipper, dù nhân viên
+        // giao hàng vẫn xem được danh sách qua QuyenGiaoHang của group. Thu hẹp về Admin/Staff.
+        var quyenXuLyDon = new AuthorizeAttribute { Roles = AppRoles.QuyenNhapLieu };
+
+        ban.MapPost("", async (DonHangBanLuuRequest req, IDonHangBanService svc, CancellationToken ct) =>
+        {
+            var kq = await svc.TaoAsync(ThanhDonHangBan(req), ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(quyenXuLyDon);
+
+        ban.MapPut("/{id:int}", async (int id, DonHangBanLuuRequest req, IDonHangBanService svc, CancellationToken ct) =>
+        {
+            var don = ThanhDonHangBan(req);
+            don.Id = id;
+            var kq = await svc.CapNhatAsync(don, ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(quyenXuLyDon);
+
+        ban.MapDelete("/{id:int}", async (int id, IDonHangBanService svc, CancellationToken ct) =>
+        {
+            var kq = await svc.XoaAsync(id, ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(quyenXuLyDon);
+
+        ban.MapPost("/{id:int}/huy", async (int id, HuyDonHangRequest req, IDonHangBanService svc, CancellationToken ct) =>
+        {
+            var kq = await svc.HuyAsync(id, req.LyDo, ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(quyenXuLyDon);
+
+        // Gợi ý lô để xuất (FEFO) trước khi mở màn Xuất kho.
+        ban.MapGet("/{id:int}/goi-y-xuat-kho", async (int id, IDonHangBanService svc, CancellationToken ct) =>
+            Results.Ok(await svc.GoiYXuatKhoAsync(id, ct))).RequireAuthorization(quyenXuLyDon);
+
+        // Xuất kho: multipart/form-data. Field "phanBo" (JSON [{dongId,maLo,soLuong}], rỗng/bỏ trống =
+        // dùng gợi ý FEFO), "maNguoiGiao", "ghiChu"; files "anh" = ảnh tổng quan (chỉ có ý nghĩa với đơn
+        // nguồn HanoiCheck, tối đa DonHangBanService.SoAnhToiDa).
+        ban.MapPost("/{id:int}/xuat-kho", async (int id, HttpRequest http, IDonHangBanService svc,
+                                                 ILuuTruAnhService luuAnh, CancellationToken ct) =>
+        {
+            if (!http.HasFormContentType)
+                return Results.BadRequest(new LoiDto("Cần gửi dạng multipart/form-data."));
+
+            IFormCollection form;
+            try
+            {
+                form = await http.ReadFormAsync(ct);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException)
+            {
+                return Results.BadRequest(new LoiDto("Dữ liệu gửi lên không đọc được. Vui lòng thử lại."));
+            }
+
+            List<PhanBoLoRequest>? phanBo = null;
+            var phanBoJson = form["phanBo"].ToString();
+            if (!string.IsNullOrWhiteSpace(phanBoJson))
+            {
+                try
+                {
+                    phanBo = JsonSerializer.Deserialize<List<PhanBoLoRequest>>(phanBoJson, JsonForm);
+                }
+                catch (JsonException)
+                {
+                    return Results.BadRequest(new LoiDto("Trường \"phanBo\" không phải JSON hợp lệ."));
+                }
+            }
+
+            var anh = new List<AnhDauVao>();
+            foreach (var f in form.Files.Where(f => f.Length > 0).Take(DonHangBanService.SoAnhToiDa))
+            {
+                try
+                {
+                    await using var luong = f.OpenReadStream();
+                    var daLuu = await luuAnh.LuuAsync(luong, f.FileName, f.ContentType, f.Length, ct);
+                    anh.Add(new AnhDauVao(daLuu.TenFile, daLuu.DuongDan));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.BadRequest(new LoiDto(ex.Message));
+                }
+            }
+
+            var maNguoiGiao = form["maNguoiGiao"].ToString();
+            var ghiChu = form["ghiChu"].ToString();
+            var kq = await svc.XuatKhoAsync(id, phanBo,
+                string.IsNullOrWhiteSpace(maNguoiGiao) ? null : maNguoiGiao,
+                string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu,
+                anh.Count == 0 ? null : anh, ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(quyenXuLyDon).DisableAntiforgery();
+
         // Xác nhận đơn mới (Chờ xác nhận -> Đã xác nhận) - việc của quản lý/nhập liệu, KHÔNG phải shipper.
         ban.MapPost("/{id:int}/xac-nhan", async (int id, IDonHangBanService svc, CancellationToken ct) =>
         {
             var kq = await svc.XacNhanAsync(id, ct);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
-        }).RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenNhapLieu });
+        }).RequireAuthorization(quyenXuLyDon);
 
         ban.MapPost("/{id:int}/nhan-don", async (int id, ClaimsPrincipal user, AppDbContext db,
                                                  IDonHangBanService svc) =>
@@ -170,6 +268,19 @@ public static class DonHangApi
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         }).DisableAntiforgery();
     }
+
+    private static readonly JsonSerializerOptions JsonForm = new() { PropertyNameCaseInsensitive = true };
+
+    private static DonHangBan ThanhDonHangBan(DonHangBanLuuRequest req) => new()
+    {
+        MaKhachHang = req.MaKhachHang, MaKho = req.MaKho,
+        NgayDat = req.NgayDat ?? default, NgayGiao = req.NgayGiao,
+        DiaChiGiao = req.DiaChiGiao, MaNguoiGiao = req.MaNguoiGiao, GhiChu = req.GhiChu,
+        Dong = (req.Dong ?? Array.Empty<DonHangBanDongRequest>()).Select(d => new DonHangBanDong
+        {
+            MaThanhPham = d.MaThanhPham, SoLuong = d.SoLuong, DonGia = d.DonGia, GhiChu = d.GhiChu
+        }).ToList()
+    };
 
     private sealed record BangTenDon(IReadOnlyDictionary<string, string> Khach,
                                      IReadOnlyDictionary<string, string> SanPham,
