@@ -17,6 +17,9 @@ appsettings.Production.json
 appsettings.*.Local.json
 *.pfx
 
+# Key service account Firebase (thông báo đẩy) - xem Firebase:CredentialsPath
+/secrets/
+
 # Uploads (giấy tờ, hình ảnh minh chứng của các cơ sở)
 src/HCP.Web/wwwroot/uploads/
 
