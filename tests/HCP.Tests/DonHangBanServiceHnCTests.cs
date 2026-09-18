@@ -166,6 +166,69 @@ public class DonHangBanServiceHnCTests
         Assert.Equal(TrangThaiDonHangBan.DaXacNhan, don.TrangThai);
     }
 
+    /// <summary>Tái hiện lỗi thật gặp trên production 18/09: mặt hàng thứ 2 của đơn được tạo thẳng
+    /// trên HanoiCheck TRƯỚC, hệ thống chưa có trong danh mục lúc đồng bộ nên bị bỏ (đơn chỉ còn 1
+    /// dòng) - sau đó thêm mặt hàng vào danh mục thì phải CHẶN xác nhận, không được lặng lẽ bỏ qua.</summary>
+    [Fact]
+    public async Task Xac_Nhan_Chan_Khi_Mat_Hang_Da_Duoc_Them_Vao_Danh_Muc_Nhung_Chua_Vao_Don()
+    {
+        var id = Seed();
+        using (var db = MoDb())
+        {
+            db.Products.Add(new Product { MaSanPham = "BANH_NGOT", TenSanPham = "Bánh ngọt", MaLoaiSp = "x",
+                                          LoaiSanPham = LoaiSanPham.ThanhPham, DonViTinh = "cái" });
+            db.DonHangNhans.Add(new DonHangNhan
+            {
+                TenantId = CoSo, MaDonHang = "NCC-001", DaLayChiTiet = true,
+                Dong = new List<DonHangNhanDong>
+                {
+                    new() { TenantId = CoSo, MaSanPham = "BANH_MI", SoLuong = 7 },
+                    new() { TenantId = CoSo, MaSanPham = "BANH_NGOT", TenSanPham = "Bánh ngọt", SoLuong = 5 },
+                }
+            });
+            db.SaveChanges();
+        }
+        var fake = new FakeHanoiCheckOrderCommandClient();
+
+        using var db2 = MoDb();
+        var kq = await Svc(db2, fake).XacNhanAsync(id);
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("BANH_NGOT", kq.ThongBao);
+        Assert.Contains("chưa được đưa vào đơn", kq.ThongBao);
+
+        var don = await db2.DonHangBans.SingleAsync(d => d.Id == id);
+        Assert.Equal(TrangThaiDonHangBan.ChoXacNhan, don.TrangThai);
+    }
+
+    /// <summary>Mặt hàng thiếu nhưng VẪN CHƯA có trong danh mục (chưa kịp thêm) - không chặn được gì
+    /// (không có cách sửa), giữ hành vi cũ: vẫn xác nhận được, ghi chú đã cảnh báo sẵn trên đơn.</summary>
+    [Fact]
+    public async Task Xac_Nhan_Duoc_Khi_Mat_Hang_Thieu_Van_Chua_Co_Trong_Danh_Muc()
+    {
+        var id = Seed();
+        using (var db = MoDb())
+        {
+            db.DonHangNhans.Add(new DonHangNhan
+            {
+                TenantId = CoSo, MaDonHang = "NCC-001", DaLayChiTiet = true,
+                Dong = new List<DonHangNhanDong>
+                {
+                    new() { TenantId = CoSo, MaSanPham = "BANH_MI", SoLuong = 7 },
+                    new() { TenantId = CoSo, MaSanPham = "CHUA_CO_TRONG_DANH_MUC", SoLuong = 5 },
+                }
+            });
+            db.SaveChanges();
+        }
+        var fake = new FakeHanoiCheckOrderCommandClient { DoiTrangThai = (_, _) => OrderCommandResult.Ok() };
+
+        using var db2 = MoDb();
+        var kq = await Svc(db2, fake).XacNhanAsync(id);
+        Assert.True(kq.ThanhCong, kq.ThongBao);
+
+        var don = await db2.DonHangBans.SingleAsync(d => d.Id == id);
+        Assert.Equal(TrangThaiDonHangBan.DaXacNhan, don.TrangThai);
+    }
+
     [Fact]
     public async Task Xuat_Kho_Day_Process_Roi_Status_Dung_Thu_Tu_Kem_Trace_Code_Tung_Dong()
     {
