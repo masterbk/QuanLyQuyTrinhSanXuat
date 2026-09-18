@@ -18,7 +18,8 @@ namespace HCP.Infrastructure.Services.BanHang;
 ///  - Khách hàng: khớp khách loại Trường học theo TÊN trường; chưa có thì tự tạo (mã KH-0001...).
 ///  - App quản lý trạng thái + kho; trạng thái HanoiCheck chỉ lưu để đối chiếu. HnC huỷ/từ chối mà đơn chưa xuất kho
 ///    thì tự huỷ; đã xuất kho thì chỉ gắn cờ để NCC xử lý.
-///  - HnC đổi nội dung đơn: cập nhật khi đơn còn "Chờ xác nhận" (giữ đơn giá NCC đã nhập); đã xác nhận thì chỉ gắn cờ.
+///  - HnC đổi nội dung đơn: cập nhật (giữ đơn giá NCC đã nhập) khi đơn CHƯA XUẤT KHO (Chờ xác nhận hoặc
+///    Đã xác nhận - trường được sửa đơn tới sát lúc xác nhận nhận hàng theo đặc tả); đã xuất kho thì chỉ gắn cờ.
 ///  - Đơn giá: HnC không có giá -> 0, NCC tự nhập.
 /// Chạy trong ngữ cảnh MỘT cơ sở (tenant hiện hành).
 /// </summary>
@@ -184,7 +185,11 @@ public sealed class DonHangHnCService : IDonHangHnCService
         }
         else if (NoiDungKhac(don, dong, n.NgayGiao))
         {
-            if (don.TrangThai == TrangThaiDonHangBan.ChoXacNhan && dong.Count > 0)
+            // Trường được sửa đơn (thêm/đổi dòng, đổi số lượng) tới sát lúc xác nhận nhận hàng
+            // (theo đặc tả HnC v2.5 mục 11.a/11.c) - nên NCC vẫn đồng bộ lại được miễn ĐƠN CHƯA
+            // XUẤT KHO (chưa "Đang giao"), dù đã "Đã xác nhận" nội bộ. Trừ tồn/số dòng chỉ chốt
+            // thật khi xuất kho, nên sửa dòng lúc này không ảnh hưởng gì đã ghi trước đó.
+            if (chuaXuatKho && dong.Count > 0)
             {
                 // Giữ đơn giá NCC đã nhập: khớp theo (mã, trace_code) trước, mã đơn thuần là dự phòng
                 // (đơn cũ trước khi có trace_code, hoặc trace_code đổi nhẹ giữa hai lần đồng bộ).

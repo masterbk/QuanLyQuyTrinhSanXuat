@@ -9,8 +9,8 @@ namespace HCP.Tests;
 
 /// <summary>
 /// Kiểm chứng việc biến đơn HanoiCheck (DonHangNhan) thành Đơn hàng bán: tự khớp/tạo khách trường học,
-/// cập nhật khi còn chờ xác nhận (giữ đơn giá), chỉ gắn cờ sau khi xác nhận, tự huỷ khi HnC huỷ mà chưa xuất kho,
-/// gợi ý lô ưu tiên lô HnC đã phân bổ.
+/// cập nhật khi ĐƠN CHƯA XUẤT KHO (giữ đơn giá) - kể cả đã "Đã xác nhận", chỉ gắn cờ từ khi "Đang giao",
+/// tự huỷ khi HnC huỷ mà chưa xuất kho, gợi ý lô ưu tiên lô HnC đã phân bổ.
 /// </summary>
 public class DonHangHnCServiceTests
 {
@@ -134,8 +134,10 @@ public class DonHangHnCServiceTests
         });
     }
 
+    /// <summary>Trường được sửa đơn (đặc tả HnC v2.5 mục 11.a/11.c) tới sát lúc xác nhận nhận hàng, nên
+    /// NCC vẫn đồng bộ lại được miễn đơn CHƯA XUẤT KHO - kể cả khi đã "Đã xác nhận" nội bộ.</summary>
     [Fact]
-    public async Task HnC_Doi_Don_Cap_Nhat_Khi_Cho_Xac_Nhan_Giu_Don_Gia_Da_Xac_Nhan_Chi_Gan_Co()
+    public async Task HnC_Doi_Don_Cap_Nhat_Khi_Chua_Xuat_Kho_Ke_Ca_Da_Xac_Nhan_Giu_Don_Gia()
     {
         Seed();
         NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 20), ("BANH_MI", 8, null, null));
@@ -158,14 +160,16 @@ public class DonHangHnCServiceTests
 
         using (var db = MoDb()) Assert.True((await SvcBan(db).XacNhanAsync(don.Id)).ThanhCong);
 
-        // Đã xác nhận: HnC đổi tiếp -> KHÔNG ghi đè, chỉ gắn cờ.
-        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 22), ("BANH_MI", 12, null, null));
-        await DongBoAsync();
+        // Đã xác nhận NHƯNG CHƯA XUẤT KHO: HnC đổi tiếp -> VẪN cập nhật, giữ đơn giá, không gắn cờ.
+        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 23), ("BANH_MI", 12, null, null));
+        Assert.Equal(1, await DongBoAsync());
         don = LayDon("HNC-1");
-        Assert.Equal(9m, don.Dong.Single().SoLuong);
-        Assert.True(don.HnCCoThayDoi);
+        Assert.Equal((12m, 5000m), (don.Dong.Single().SoLuong, don.Dong.Single().DonGia));
+        Assert.Equal(new DateOnly(2026, 9, 23), don.NgayGiao);
+        Assert.False(don.HnCCoThayDoi);
+        Assert.Equal(TrangThaiDonHangBan.DaXacNhan, don.TrangThai);   // trạng thái nội bộ không đổi
 
-        // NCC xem lại và lưu đơn -> tắt cờ.
+        // NCC xem lại và lưu đơn dù không có cờ - vẫn sửa được vì chưa xuất kho.
         using (var db = MoDb())
         {
             var ban = new DonHangBan
@@ -175,7 +179,28 @@ public class DonHangHnCServiceTests
             };
             Assert.True((await SvcBan(db).CapNhatAsync(ban)).ThanhCong);
         }
-        Assert.False(LayDon("HNC-1").HnCCoThayDoi);
+    }
+
+    /// <summary>Từ lúc xuất kho (Đang giao), tồn kho đã trừ theo đúng số lượng chốt lúc đó - HnC đổi
+    /// tiếp thì KHÔNG tự ghi đè nữa (khác đoạn "chưa xuất kho" ở test trên), chỉ gắn cờ để NCC xử lý tay.</summary>
+    [Fact]
+    public async Task HnC_Doi_Don_Sau_Khi_Xuat_Kho_Chi_Gan_Co_Khong_Tu_Cap_Nhat()
+    {
+        Seed();
+        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 20), ("BANH_MI", 8, "LO_A", "K-02"));
+        await DongBoAsync();
+        var id = LayDon("HNC-1").Id;
+
+        using (var db = MoDb()) Assert.True((await SvcBan(db).XacNhanAsync(id)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await SvcBan(db).XuatKhoAsync(id, null, null)).ThanhCong);
+
+        // Đã xuất kho (Đang giao): HnC đổi số lượng -> KHÔNG tự cập nhật, chỉ gắn cờ.
+        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 25), ("BANH_MI", 20, null, null));
+        await DongBoAsync();
+        var don = LayDon("HNC-1");
+        Assert.Equal(8m, don.Dong.Single().SoLuong);
+        Assert.Equal(TrangThaiDonHangBan.DangGiao, don.TrangThai);
+        Assert.True(don.HnCCoThayDoi);
     }
 
     [Fact]
