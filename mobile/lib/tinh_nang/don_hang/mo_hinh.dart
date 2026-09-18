@@ -38,6 +38,7 @@ class DonHangBan {
     this.dong = const [],
   });
 
+  bool get choXacNhan => trangThai == 'ChoXacNhan';
   bool get dangGiao => trangThai == 'DangGiao';
   bool get daGiao => trangThai == 'DaGiao';
   bool get chuaCoNguoiGiao => (maNguoiGiao ?? '').isEmpty;

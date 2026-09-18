@@ -113,6 +113,14 @@ public static class DonHangApi
                 : Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, ns)));
         });
 
+        // Xác nhận đơn mới (Chờ xác nhận -> Đã xác nhận) - việc của quản lý/nhập liệu, KHÔNG phải shipper.
+        ban.MapPost("/{id:int}/xac-nhan", async (int id, IDonHangBanService svc, CancellationToken ct) =>
+        {
+            var kq = await svc.XacNhanAsync(id, ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenNhapLieu });
+
         ban.MapPost("/{id:int}/nhan-don", async (int id, ClaimsPrincipal user, AppDbContext db,
                                                  IDonHangBanService svc) =>
         {

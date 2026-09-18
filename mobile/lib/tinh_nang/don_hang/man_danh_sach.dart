@@ -20,11 +20,16 @@ class ManDanhSachDon extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ds = ref.watch(danhSachDonProvider);
     final loc = ref.watch(locDonProvider);
+    final coQuyenNhapLieu = ref.watch(xacThucProvider).nguoiDung?.coQuyenNhapLieu ?? false;
 
     return Scaffold(
       body: Column(
         children: [
-          _BoLoc(dangChon: loc, khiChon: (v) => ref.read(locDonProvider.notifier).dat(v)),
+          _BoLoc(
+            dangChon: loc,
+            hienChoXacNhan: coQuyenNhapLieu,
+            khiChon: (v) => ref.read(locDonProvider.notifier).dat(v),
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => ref.read(danhSachDonProvider.notifier).taiLai(),
@@ -71,10 +76,13 @@ class TheDonHang extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final maToi = ref.watch(xacThucProvider).nguoiDung?.maNhanSu;
+    final nguoiDung = ref.watch(xacThucProvider).nguoiDung;
+    final maToi = nguoiDung?.maNhanSu;
     final cuaToi = don.cuaToi(maToi);
     final nhanDuoc = don.dangGiao && don.chuaCoNguoiGiao;
     final giaoDuoc = don.dangGiao && (cuaToi || don.chuaCoNguoiGiao);
+    // Xác nhận đơn mới: việc của quản lý/nhập liệu, không phải shipper.
+    final xacNhanDuoc = don.choXacNhan && (nguoiDung?.coQuyenNhapLieu ?? false);
 
     Future<void> chay(Future<String> Function() viec) async {
       try {
@@ -135,11 +143,18 @@ class TheDonHang extends ConsumerWidget {
             if (!don.chuaCoNguoiGiao)
               _Dong(Icons.person_outline, cuaToi ? 'Bạn nhận' : 'Người giao: ${don.tenNguoiGiao ?? don.maNguoiGiao}'),
           ]),
-          if (nhanDuoc || giaoDuoc) ...[
+          if (xacNhanDuoc || nhanDuoc || giaoDuoc) ...[
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (xacNhanDuoc)
+                  FilledButton.icon(
+                    onPressed: () => chay(() => ref.read(khoDonProvider).xacNhan(don.id)),
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text('Xác nhận'),
+                  ),
+                if (xacNhanDuoc && (nhanDuoc || giaoDuoc)) const SizedBox(width: 8),
                 if (nhanDuoc)
                   FilledButton.tonalIcon(
                     onPressed: () => chay(() => ref.read(khoDonProvider).nhanDon(don.id)),
@@ -184,31 +199,36 @@ class TheDonHang extends ConsumerWidget {
 
 class _BoLoc extends StatelessWidget {
   final LocDon dangChon;
+  final bool hienChoXacNhan;
   final ValueChanged<LocDon> khiChon;
 
-  const _BoLoc({required this.dangChon, required this.khiChon});
+  const _BoLoc({required this.dangChon, required this.hienChoXacNhan, required this.khiChon});
 
-  static const _muc = <({LocDon ma, String ten})>[
+  static const _mucCoBan = <({LocDon ma, String ten})>[
     (ma: LocDon.canGiao, ten: 'Cần giao'),
     (ma: LocDon.cuaToi, ten: 'Của tôi'),
-    (ma: LocDon.tatCa, ten: 'Tất cả'),
   ];
+  static const _mucChoXacNhan = (ma: LocDon.choXacNhan, ten: 'Chờ xác nhận');
+  static const _mucTatCa = (ma: LocDon.tatCa, ten: 'Tất cả');
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        height: 50,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          itemCount: _muc.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 8),
-          itemBuilder: (c, i) => ChoiceChip(
-            label: Text(_muc[i].ten),
-            selected: dangChon == _muc[i].ma,
-            onSelected: (_) => khiChon(_muc[i].ma),
-          ),
+  Widget build(BuildContext context) {
+    final muc = [..._mucCoBan, if (hienChoXacNhan) _mucChoXacNhan, _mucTatCa];
+    return SizedBox(
+      height: 50,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: muc.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (c, i) => ChoiceChip(
+          label: Text(muc[i].ten),
+          selected: dangChon == muc[i].ma,
+          onSelected: (_) => khiChon(muc[i].ma),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _Dong extends StatelessWidget {
@@ -241,13 +261,22 @@ class _Rong extends StatelessWidget {
           Icon(Icons.local_shipping_outlined, size: 56, color: Theme.of(context).hintColor),
           const SizedBox(height: 12),
           Text(
-            loc == LocDon.cuaToi ? 'Bạn chưa nhận đơn nào' : 'Không có đơn cần giao',
+            switch (loc) {
+              LocDon.cuaToi => 'Bạn chưa nhận đơn nào',
+              LocDon.choXacNhan => 'Không có đơn chờ xác nhận',
+              _ => 'Không có đơn cần giao',
+            },
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 4),
-          Text('Đơn xuất hiện ở đây sau khi bộ phận kho xuất hàng.',
-              textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            loc == LocDon.choXacNhan
+                ? 'Đơn mới đặt từ trường sẽ xuất hiện ở đây để xác nhận.'
+                : 'Đơn xuất hiện ở đây sau khi bộ phận kho xuất hàng.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       );
 }

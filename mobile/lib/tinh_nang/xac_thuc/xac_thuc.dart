@@ -23,6 +23,9 @@ class NguoiDung {
   /// Nhân viên sản xuất chế biến có hồ sơ nhân sự thì mới quét mã lệnh để tham gia các khâu.
   bool get coTheThamGiaLenh => vaiTro.contains('TenantSanXuat') && (maNhanSu?.isNotEmpty ?? false);
 
+  /// Quản trị cơ sở/nhân viên nhập liệu: được xác nhận đơn hàng mới (khớp QuyenNhapLieu phía máy chủ).
+  bool get coQuyenNhapLieu => vaiTro.any({'TenantAdmin', 'TenantStaff'}.contains);
+
   factory NguoiDung.tuJson(Map<String, dynamic> j) => NguoiDung(
         id: j['id'] as String? ?? '',
         email: j['email'] as String? ?? '',
