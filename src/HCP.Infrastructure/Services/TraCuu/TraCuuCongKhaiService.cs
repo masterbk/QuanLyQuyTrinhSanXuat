@@ -264,6 +264,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
     {
         TrangThaiDonHangBan.ChoXacNhan => "Chờ xác nhận",
         TrangThaiDonHangBan.DaXacNhan => "Đã xác nhận",
+        TrangThaiDonHangBan.ChoGiaoHang => "Chờ giao hàng",
         TrangThaiDonHangBan.DangGiao => "Đang giao",
         TrangThaiDonHangBan.DaGiao => "Đã giao",
         TrangThaiDonHangBan.DaHuy => "Đã huỷ",

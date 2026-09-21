@@ -73,7 +73,12 @@ DonHangBan _don({int id = 1, String ma = 'DH-001', String trangThai = 'DangGiao'
       maDonHang: ma,
       tenKhachHang: 'Trường A',
       trangThai: trangThai,
-      trangThaiHienThi: trangThai == 'DangGiao' ? 'Đang giao' : 'Đã giao',
+      trangThaiHienThi: switch (trangThai) {
+        'ChoGiaoHang' => 'Chờ giao hàng',
+        'DangGiao' => 'Đang giao',
+        'DaXacNhan' => 'Đã xác nhận',
+        _ => 'Đã giao',
+      },
       maNguoiGiao: nguoiGiao,
       tenNguoiGiao: nguoiGiao == null ? null : 'Người giao $nguoiGiao',
       dong: const [DongDonHang(id: 1, maThanhPham: 'BANH_MI', tenThanhPham: 'Bánh mì', soLuong: 2)],
@@ -103,8 +108,8 @@ Widget _app(KhoDonGia kho, {bool nhapLieu = false}) => ProviderScope(
 void main() {
   testWidgets('Đơn chưa ai nhận thì có nút Nhận đơn; đơn của người khác thì không', (t) async {
     final kho = KhoDonGia([
-      _don(id: 1, ma: 'DH-001'),
-      _don(id: 2, ma: 'DH-002', nguoiGiao: 'NS09'),
+      _don(id: 1, ma: 'DH-001', trangThai: 'ChoGiaoHang'),   // chưa ai nhận
+      _don(id: 2, ma: 'DH-002', nguoiGiao: 'NS09'),          // đã có người nhận, đang giao
     ]);
     await t.pumpWidget(_app(kho));
     await t.pumpAndSettle();
@@ -112,7 +117,8 @@ void main() {
     expect(find.text('DH-001'), findsOneWidget);
     expect(find.text('Nhận đơn'), findsOneWidget);                 // chỉ đơn chưa ai nhận
     expect(find.text('Người giao: Người giao NS09'), findsOneWidget);
-    expect(find.text('Đã giao'), findsOneWidget);                  // nút xác nhận của đơn chưa ai nhận
+    // "Đã giao" chỉ hiện với đơn CHÍNH MÌNH đã nhận - đơn chưa ai nhận hoặc của người khác đều không có.
+    expect(find.text('Đã giao'), findsNothing);
 
     await t.tap(find.text('Nhận đơn'));
     await t.pumpAndSettle();

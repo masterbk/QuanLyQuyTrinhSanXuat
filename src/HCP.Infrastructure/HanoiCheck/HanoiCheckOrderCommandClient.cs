@@ -182,7 +182,10 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
 
     private sealed class ProcessPayload
     {
-        [JsonPropertyName("ma_nguoi_giao")] public string? MaNguoiGiao { get; set; }
+        // Không gửi khoá này (thay vì gửi null) khi CHƯA muốn đụng tới người giao - gửi null theo đặc tả
+        // nghĩa là CHỦ ĐỘNG bỏ người giao đã gán, không phải "chưa có".
+        [JsonPropertyName("ma_nguoi_giao"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MaNguoiGiao { get; set; }
         [JsonPropertyName("ghi_chu")] public string? GhiChu { get; set; }
         [JsonPropertyName("danh_sach_anh"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ProcessPayloadAnh>? DanhSachAnh { get; set; }

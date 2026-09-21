@@ -273,7 +273,7 @@ public class DonHangBanServiceTests
         Assert.False((await ChayAsync(s => s.HoanTatGiaoAsync(id, AnhGiaoMau))).ThanhCong);   // chưa xuất kho
         Assert.True((await ChayAsync(s => s.XacNhanAsync(id))).ThanhCong);
         Assert.False((await ChayAsync(s => s.XacNhanAsync(id))).ThanhCong);      // không xác nhận hai lần
-        Assert.True((await ChayAsync(s => s.XuatKhoAsync(id, null, null))).ThanhCong);
+        Assert.True((await ChayAsync(s => s.XuatKhoAsync(id, null, "NS01"))).ThanhCong);   // chọn sẵn người giao -> Đang giao luôn
         Assert.False((await ChayAsync(s => s.XuatKhoAsync(id, null, null))).ThanhCong);   // không xuất kho hai lần
 
         var sua = Don((9, 1)); sua.Id = id;

@@ -19,7 +19,7 @@ class KhoDonHang {
 
   KhoDonHang(this._api);
 
-  /// [canGiao] = chỉ đơn đang giao (việc của shipper); [cuaToi] = đơn mình đã nhận;
+  /// [canGiao] = việc của shipper (chờ nhận giao hoặc đang giao); [cuaToi] = đơn mình đã nhận;
   /// [trangThai] = lọc đúng 1 trạng thái (VD "ChoXacNhan" cho quản lý/nhập liệu xác nhận đơn mới).
   Future<TrangDuLieu<DonHangBan>> danhSach(
       {bool canGiao = true, bool cuaToi = false, String? trangThai, int trang = 1, int soDong = 20}) async {

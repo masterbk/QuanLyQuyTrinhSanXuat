@@ -127,8 +127,8 @@ class TheDonHang extends ConsumerWidget {
     final nguoiDung = ref.watch(xacThucProvider).nguoiDung;
     final maToi = nguoiDung?.maNhanSu;
     final cuaToi = don.cuaToi(maToi);
-    final nhanDuoc = don.dangGiao && don.chuaCoNguoiGiao;
-    final giaoDuoc = don.dangGiao && (cuaToi || don.chuaCoNguoiGiao);
+    final nhanDuoc = don.choGiaoHang;
+    final giaoDuoc = don.dangGiao && cuaToi;
     // Xác nhận/Xuất kho: việc của quản lý/nhập liệu, không phải shipper.
     final coQuyenNhapLieu = nguoiDung?.coQuyenNhapLieu ?? false;
     final xacNhanDuoc = don.choXacNhan && coQuyenNhapLieu;
@@ -262,7 +262,9 @@ class TheDonHang extends ConsumerWidget {
       ? Colors.green
       : d.dangGiao
           ? Theme.of(c).colorScheme.primary
-          : Theme.of(c).hintColor;
+          : d.choGiaoHang
+              ? Colors.orange
+              : Theme.of(c).hintColor;
 }
 
 class _BoLoc extends StatelessWidget {

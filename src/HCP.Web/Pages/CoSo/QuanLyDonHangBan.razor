@@ -126,6 +126,9 @@ else
                                                StartIcon="@Icons.Material.Filled.LocalShipping"
                                                OnClick="@(() => MoXuatKhoAsync(context))">Xuất kho</MudButton>
                                     break;
+                                case TrangThaiDonHangBan.ChoGiaoHang:
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Chờ nhận giao</MudText>
+                                    break;
                                 case TrangThaiDonHangBan.DangGiao:
                                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_dangXuLy" FullWidth="true"
                                                StartIcon="@Icons.Material.Filled.DoneAll"
@@ -151,11 +154,12 @@ else
 
                         <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="quyen">
                         <Authorized>
-                        @if (context.TrangThai is TrangThaiDonHangBan.ChoXacNhan or TrangThaiDonHangBan.DaXacNhan or TrangThaiDonHangBan.DangGiao)
+                        @if (context.TrangThai is TrangThaiDonHangBan.ChoXacNhan or TrangThaiDonHangBan.DaXacNhan
+                                               or TrangThaiDonHangBan.ChoGiaoHang or TrangThaiDonHangBan.DangGiao)
                         {
                             <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Disabled="_dangXuLy"
                                      AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                                @if (context.TrangThai == TrangThaiDonHangBan.DangGiao)
+                                @if (context.TrangThai is TrangThaiDonHangBan.DangGiao or TrangThaiDonHangBan.ChoGiaoHang)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.Undo" IconColor="Color.Error"
                                                  OnClick="@(() => MoHuy(context))">Huỷ đơn (trả hàng về kho)</MudMenuItem>
@@ -419,7 +423,7 @@ else
 <MudDialog @bind-Visible="_hienHuy" Options="_dialogNho">
     <TitleContent><MudText Typo="Typo.h6">Huỷ đơn @_donHuy?.MaDonHang</MudText></TitleContent>
     <DialogContent>
-        @if (_donHuy?.TrangThai == TrangThaiDonHangBan.DangGiao)
+        @if (_donHuy?.TrangThai is TrangThaiDonHangBan.DangGiao or TrangThaiDonHangBan.ChoGiaoHang)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
                 Đơn đã xuất kho: huỷ sẽ ghi bút toán đảo, trả hàng về đúng các lô đã xuất.
@@ -516,6 +520,7 @@ else
     {
         TrangThaiDonHangBan.ChoXacNhan => "Chờ xác nhận",
         TrangThaiDonHangBan.DaXacNhan => "Đã xác nhận",
+        TrangThaiDonHangBan.ChoGiaoHang => "Chờ giao hàng",
         TrangThaiDonHangBan.DangGiao => "Đang giao",
         TrangThaiDonHangBan.DaGiao => "Đã giao",
         TrangThaiDonHangBan.DaHuy => "Đã huỷ",
@@ -539,6 +544,7 @@ else
     {
         TrangThaiDonHangBan.ChoXacNhan => Color.Info,
         TrangThaiDonHangBan.DaXacNhan => Color.Primary,
+        TrangThaiDonHangBan.ChoGiaoHang => Color.Tertiary,
         TrangThaiDonHangBan.DangGiao => Color.Warning,
         TrangThaiDonHangBan.DaGiao => Color.Success,
         _ => Color.Default

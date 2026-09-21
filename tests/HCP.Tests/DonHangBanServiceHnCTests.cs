@@ -323,6 +323,53 @@ public class DonHangBanServiceHnCTests
         Assert.Equal(TrangThaiDonHangBan.ChoXacNhan, don.TrangThai);
     }
 
+    /// <summary>Xuất kho KHÔNG chọn người giao: vẫn đẩy "process" (khai nguồn hàng, trừ tồn ngay) nhưng KHÔNG
+    /// đẩy "status" (HnC bắt buộc đã có người giao mới cho chuyển "Đang giao") - đơn chuyển "Chờ giao hàng".
+    /// Nhân viên "Nhận giao hàng" mới đẩy nốt người giao + status "Đang giao".</summary>
+    [Fact]
+    public async Task Xuat_Kho_Khong_Chon_Nguoi_Giao_Thi_Cho_Giao_Hang_Nhan_Don_Moi_Day_Status()
+    {
+        var id = Seed();
+        var fake = new FakeHanoiCheckOrderCommandClient();
+        var thuTuGoi = new List<string>();
+        fake.XuLyDon = (maDon, req) =>
+        {
+            thuTuGoi.Add("process:" + maDon + ":" + (req.MaNguoiGiao ?? "(null)"));
+            return OrderCommandResult.Ok();
+        };
+        fake.DoiTrangThai = (maDon, tt) => { thuTuGoi.Add($"status:{maDon}:{tt}"); return OrderCommandResult.Ok(); };
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db, fake).XuatKhoAsync(id, null, null);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        // Chỉ "process" (khai nguồn hàng) - KHÔNG có "status" vì chưa có người giao.
+        Assert.Equal(new[] { "process:NCC-001:(null)" }, thuTuGoi);
+
+        using (var db = MoDb())
+        {
+            var don = await db.DonHangBans.SingleAsync(d => d.Id == id);
+            Assert.Equal(TrangThaiDonHangBan.ChoGiaoHang, don.TrangThai);
+            Assert.Null(don.MaNguoiGiao);
+            Assert.NotNull(don.ThoiGianXuatKhoUtc);
+            // Hàng đã thật sự rời kho dù chưa có người giao.
+            Assert.Equal(3m, await db.KhoGiaoDichs.Where(g => g.MaLo == "LO1").SumAsync(g => g.SoLuong));
+        }
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db, fake).NhanDonAsync(id, "NS01");
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        Assert.Equal(new[] { "process:NCC-001:(null)", "process:NCC-001:NS01", "status:NCC-001:DANG_GIAO" }, thuTuGoi);
+
+        using var db2 = MoDb();
+        var donSau = await db2.DonHangBans.SingleAsync(d => d.Id == id);
+        Assert.Equal(TrangThaiDonHangBan.DangGiao, donSau.TrangThai);
+        Assert.Equal("NS01", donSau.MaNguoiGiao);
+    }
+
     [Fact]
     public async Task Xuat_Kho_Cong_Tac_Tat_Van_Xuat_Kho_Noi_Bo_Khong_Goi_HanoiCheck()
     {

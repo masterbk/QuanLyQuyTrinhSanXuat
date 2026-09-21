@@ -14,7 +14,7 @@ class DonHangBan {
   final String? diaChiGiao;
   final String? maNguoiGiao;
   final String? tenNguoiGiao;
-  final String trangThai;            // ChoXacNhan | DaXacNhan | DangGiao | DaGiao | DaHuy
+  final String trangThai;            // ChoXacNhan | DaXacNhan | ChoGiaoHang | DangGiao | DaGiao | DaHuy
   final String trangThaiHienThi;
   final String nguon;                // NoiBo | HanoiCheck
   final String? ghiChu;
@@ -46,6 +46,7 @@ class DonHangBan {
 
   bool get choXacNhan => trangThai == 'ChoXacNhan';
   bool get daXacNhan => trangThai == 'DaXacNhan';
+  bool get choGiaoHang => trangThai == 'ChoGiaoHang';
   bool get dangGiao => trangThai == 'DangGiao';
   bool get daGiao => trangThai == 'DaGiao';
   bool get daHuy => trangThai == 'DaHuy';

@@ -102,6 +102,7 @@ public class DonHangGiaoHangTests
     {
         Seed();
         var id = await DonDangGiaoAsync();
+        using (var db = MoDb()) Assert.True((await Svc(db).NhanDonAsync(id, "NS01")).ThanhCong);   // Chờ giao hàng -> Đang giao
         using (var db = MoDb())
         {
             // Ảnh tổng quan lúc xuất kho (xuất kho lại để gắn ảnh) - không bị ảnh giao ghi đè.
@@ -151,12 +152,14 @@ public class DonHangGiaoHangTests
         Assert.Contains("https://app.vn/uploads/giao-1.jpg", anhDaGui);
         // Nhận đơn và xác nhận giao KHÔNG khai lại nguồn hàng - client bỏ hẳn khoá chi_tiet để HnC không trả 422.
         Assert.Equal(new[] { 0, 0 }, soDongDaGui);
-        // Chỉ tính từ lúc gắn hàm giả: "DANG_GIAO" đã đẩy ở bước xuất kho phía trên.
-        Assert.Equal(new[] { "DA_GIAO" }, trangThaiDaGui);
+        // Xuất kho không chọn người giao -> chưa đẩy gì sang HnC; "DANG_GIAO" đẩy lúc NhanDonAsync (Chờ giao hàng ->
+        // Đang giao), "DA_GIAO" đẩy lúc HoanTatGiaoAsync.
+        Assert.Equal(new[] { "DANG_GIAO", "DA_GIAO" }, trangThaiDaGui);
 
-        // HanoiCheck từ chối -> giữ nguyên "Đang giao" để bấm lại.
+        // HanoiCheck từ chối lúc xác nhận giao -> giữ nguyên "Đang giao" để bấm lại.
         var id2 = await DonDangGiaoAsync("DH-HNC-2");
         _hnc.DoiTrangThai = (_, tt) => tt == "DA_GIAO" ? OrderCommandResult.Loi("422 thiếu ảnh") : OrderCommandResult.Ok();
+        using (var db = MoDb()) Assert.True((await Svc(db).NhanDonAsync(id2, "NS02")).ThanhCong);   // Chờ giao hàng -> Đang giao
         using (var db = MoDb())
             Assert.Contains("Không đẩy được trạng thái", (await Svc(db).HoanTatGiaoAsync(id2, AnhGiao)).ThongBao);
         using (var db = MoDb())

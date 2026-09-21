@@ -82,7 +82,7 @@ public static class DonHangApi
             IEnumerable<DonHangBan> ds = await svc.LayTatCaAsync();
             if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiDonHangBan>(trangThai, true, out var tt))
                 ds = ds.Where(d => d.TrangThai == tt);
-            if (canGiao) ds = ds.Where(d => d.TrangThai == TrangThaiDonHangBan.DangGiao);
+            if (canGiao) ds = ds.Where(d => d.TrangThai is TrangThaiDonHangBan.ChoGiaoHang or TrangThaiDonHangBan.DangGiao);
             if (cuaToi)
             {
                 var maToi = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
@@ -319,6 +319,7 @@ public static class DonHangApi
     {
         TrangThaiDonHangBan.ChoXacNhan => "Chờ xác nhận",
         TrangThaiDonHangBan.DaXacNhan => "Đã xác nhận",
+        TrangThaiDonHangBan.ChoGiaoHang => "Chờ giao hàng",
         TrangThaiDonHangBan.DangGiao => "Đang giao",
         TrangThaiDonHangBan.DaGiao => "Đã giao",
         TrangThaiDonHangBan.DaHuy => "Đã huỷ",

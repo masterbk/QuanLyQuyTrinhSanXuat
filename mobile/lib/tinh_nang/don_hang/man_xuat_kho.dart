@@ -51,7 +51,8 @@ class _ODong {
 }
 
 /// Xuất kho: chọn lô (đã gợi ý FEFO, sửa được), người giao, ghi chú + ảnh tổng quan (đơn HanoiCheck).
-/// Chuyển đơn từ "Chờ xác nhận"/"Đã xác nhận" sang "Đang giao" và trừ tồn theo lô.
+/// Trừ tồn theo lô rồi chuyển đơn từ "Chờ xác nhận"/"Đã xác nhận" sang "Đang giao" (đã chọn người giao)
+/// hoặc "Chờ giao hàng" (chưa chọn - chờ nhân viên tự nhận).
 class ManXuatKho extends ConsumerStatefulWidget {
   final DonHangBan don;
 

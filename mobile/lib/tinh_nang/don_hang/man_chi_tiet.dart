@@ -116,7 +116,7 @@ class _MenuHanhDong extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!don.choXacNhan && !don.daXacNhan && !don.dangGiao) return const SizedBox.shrink();
+    if (!don.choXacNhan && !don.daXacNhan && !don.choGiaoHang && !don.dangGiao) return const SizedBox.shrink();
 
     Future<void> lamMoi() async => ref.invalidate(_chiTietDonProvider(id));
 
@@ -220,7 +220,7 @@ class _HopThoaiHuyState extends State<_HopThoaiHuy> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (widget.don.dangGiao)
+            if (widget.don.dangGiao || widget.don.choGiaoHang)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(

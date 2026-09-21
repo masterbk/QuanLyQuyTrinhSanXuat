@@ -42,9 +42,11 @@ public interface IDonHangBanService
     Task<IReadOnlyList<DongXuatKhoDto>> GoiYXuatKhoAsync(int id, CancellationToken ct = default);
 
     /// <summary>
-    /// Xuất kho: trừ tồn theo phân bổ lô rồi chuyển "Đang giao". <paramref name="phanBo"/> rỗng = dùng gợi ý FEFO.
-    /// Với đơn nguồn HanoiCheck: trước khi trừ tồn, gọi đẩy ngược "process" (người giao/ghi chú/ảnh/nguồn hàng)
-    /// rồi "status" (Đang giao) sang HnC - lỗi thật thì KHÔNG trừ tồn/đổi trạng thái nội bộ để 2 bên luôn khớp.
+    /// Xuất kho: trừ tồn theo phân bổ lô. <paramref name="phanBo"/> rỗng = dùng gợi ý FEFO. Có chọn người giao thì
+    /// chuyển "Đang giao"; không chọn thì chuyển "Chờ giao hàng" (chờ nhân viên tự nhận qua <see cref="NhanDonAsync"/>).
+    /// Với đơn nguồn HanoiCheck: trước khi trừ tồn, luôn đẩy ngược "process" (người giao/ghi chú/ảnh/nguồn hàng)
+    /// sang HnC; CHỈ đẩy tiếp "status" (Đang giao) nếu đã chọn người giao - HnC bắt buộc có người giao mới cho
+    /// chuyển trạng thái đó. Lỗi thật thì KHÔNG trừ tồn/đổi trạng thái nội bộ để 2 bên luôn khớp.
     /// </summary>
     Task<KetQuaThaoTac> XuatKhoAsync(int id, IReadOnlyList<PhanBoLoRequest>? phanBo, string? maNguoiGiao,
                                      string? ghiChu = null, IReadOnlyList<AnhDauVao>? anhTongQuan = null,
@@ -56,7 +58,8 @@ public interface IDonHangBanService
     /// </summary>
     Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, IReadOnlyList<AnhDauVao> anhGiao, CancellationToken ct = default);
 
-    /// <summary>Nhân viên giao hàng nhận đơn ĐÃ XUẤT KHO (đang giao): gán mình làm người giao.</summary>
+    /// <summary>Nhân viên giao hàng nhận đơn đang "Chờ giao hàng" (đã xuất kho, chưa có người giao): gán mình
+    /// làm người giao rồi chuyển đơn sang "Đang giao".</summary>
     Task<KetQuaThaoTac> NhanDonAsync(int id, string maNhanSu, CancellationToken ct = default);
 
     /// <summary>Tìm đơn theo nội dung mã QR: QR tra cứu của hệ thống, link truy xuất HanoiCheck, hoặc chính mã đơn.</summary>
@@ -355,9 +358,13 @@ public sealed class DonHangBanService : IDonHangBanService
                                          + $"không xuất được {can:0.###}.");
         }
 
-        // Đơn nguồn HanoiCheck: đẩy ngược process (người giao/ghi chú/ảnh/nguồn hàng) rồi status (Đang giao)
-        // TRƯỚC khi chạm vào kho nội bộ - lỗi thật ở 1 trong 2 bước thì dừng hẳn, giữ nguyên "Đã xác nhận"
-        // để NCC bấm lại (process ghi đè toàn bộ mỗi lần gọi nên gọi lại an toàn).
+        // Đơn nguồn HanoiCheck: luôn đẩy "process" (khai nguồn hàng từng dòng - hàng đã thật sự rời kho) ngay khi
+        // xuất kho; CHỈ đẩy tiếp "status" (Đang giao) nếu ĐÃ có người giao - HnC bắt buộc đơn phải có người giao
+        // mới cho chuyển "Đang giao" (422 "Đơn đã có người giao hàng" nếu chưa - xem mục l đặc tả). Chưa có người
+        // giao thì dừng ở "process": nguồn hàng vẫn được khai đúng lúc, chỉ chưa đổi trạng thái bên HnC - đơn nội
+        // bộ chuyển "Chờ giao hàng", đợi nhân viên tự nhận (NhanDonAsync) mới đẩy nốt người giao + trạng thái.
+        // Lỗi thật ở 1 trong 2 bước thì dừng hẳn, giữ nguyên "Đã xác nhận" để NCC bấm lại (process ghi đè nên gọi
+        // lại an toàn).
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
             // Dòng hàng định danh bằng trace_code; đơn kéo về trước khi hệ thống lưu mã truy vết (hoặc chưa lấy được
@@ -383,7 +390,7 @@ public sealed class DonHangBanService : IDonHangBanService
             if (!ketXuLy.ThanhCong && !ketXuLy.ChuaCauHinh)
                 return KetQuaThaoTac.Loi($"Không đẩy được xử lý đơn sang HanoiCheck: {ketXuLy.ThongBao}");
 
-            if (ketXuLy.ThanhCong)
+            if (ketXuLy.ThanhCong && maNguoiGiao is not null)
             {
                 var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_GIAO", null, ct);
                 if (!ketTrangThai.ThanhCong)
@@ -418,16 +425,22 @@ public sealed class DonHangBanService : IDonHangBanService
                 });
             }
         }
-        don.TrangThai = TrangThaiDonHangBan.DangGiao;
+        don.TrangThai = maNguoiGiao is null ? TrangThaiDonHangBan.ChoGiaoHang : TrangThaiDonHangBan.DangGiao;
         don.ThoiGianXuatKhoUtc = now;
         await _db.SaveChangesAsync(ct);
 
         if (_db.TenantInfo?.Id is { } coSoId)
-            await _push.GuiTheoQuyenAsync(coSoId, AppRoles.QuyenGiaoHang.Split(','), "Đơn sẵn sàng giao",
-                $"Đơn {don.MaDonHang} sẵn sàng giao.", DuLieuThongBao(don.Id), ct);
+        {
+            var (tieuDe, noiDung) = maNguoiGiao is null
+                ? ("Đơn chờ nhận giao", $"Đơn {don.MaDonHang} đã xuất kho, đang chờ nhận giao.")
+                : ("Đơn sẵn sàng giao", $"Đơn {don.MaDonHang} sẵn sàng giao.");
+            await _push.GuiTheoQuyenAsync(coSoId, AppRoles.QuyenGiaoHang.Split(','), tieuDe, noiDung, DuLieuThongBao(don.Id), ct);
+        }
 
-        return KetQuaThaoTac.Ok($"Đã xuất kho đơn \"{don.MaDonHang}\" ({chot.Select(p => p.MaLo).Distinct().Count()} lô), "
-                                + "chuyển sang Đang giao.");
+        var soLo = chot.Select(p => p.MaLo).Distinct().Count();
+        return KetQuaThaoTac.Ok(maNguoiGiao is null
+            ? $"Đã xuất kho đơn \"{don.MaDonHang}\" ({soLo} lô), chờ nhân viên nhận giao."
+            : $"Đã xuất kho đơn \"{don.MaDonHang}\" ({soLo} lô), chuyển sang Đang giao.");
     }
 
     /// <summary>Số ảnh tối đa HanoiCheck nhận cho một đơn (danh_sach_anh).</summary>
@@ -486,26 +499,28 @@ public sealed class DonHangBanService : IDonHangBanService
     {
         var don = await QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
         if (don is null) return KetQuaThaoTac.Loi("Không tìm thấy đơn hàng.");
-        if (don.TrangThai != TrangThaiDonHangBan.DangGiao)
-            return KetQuaThaoTac.Loi(don.TrangThai is TrangThaiDonHangBan.ChoXacNhan or TrangThaiDonHangBan.DaXacNhan
-                ? "Đơn chưa xuất kho - bộ phận kho xuất hàng xong bạn mới nhận được."
-                : "Đơn này không còn cần giao.");
+        if (don.TrangThai != TrangThaiDonHangBan.ChoGiaoHang)
+        {
+            if (don.TrangThai is TrangThaiDonHangBan.ChoXacNhan or TrangThaiDonHangBan.DaXacNhan)
+                return KetQuaThaoTac.Loi("Đơn chưa xuất kho - bộ phận kho xuất hàng xong bạn mới nhận được.");
+            if (don.TrangThai == TrangThaiDonHangBan.DangGiao)
+            {
+                if (string.Equals(don.MaNguoiGiao, maNhanSu, StringComparison.OrdinalIgnoreCase))
+                    return KetQuaThaoTac.Ok($"Bạn đang giao đơn \"{don.MaDonHang}\".");
+                var maCu = don.MaNguoiGiao;
+                var tenCu = await _db.Staff.AsNoTracking().Where(s => s.MaNhanSu == maCu)
+                    .Select(s => s.HoTen).FirstOrDefaultAsync(ct);
+                return KetQuaThaoTac.Loi($"Đơn này do {tenCu ?? maCu} nhận rồi. Cần đổi người giao thì nhờ quản trị sửa trên web.");
+            }
+            return KetQuaThaoTac.Loi("Đơn này không còn cần giao.");
+        }
 
         var nhanSu = await _db.Staff.AsNoTracking().FirstOrDefaultAsync(s => s.MaNhanSu == maNhanSu, ct);
         if (nhanSu is null) return KetQuaThaoTac.Loi("Tài khoản chưa gắn với hồ sơ nhân sự của cơ sở.");
         if (!nhanSu.TrangThai) return KetQuaThaoTac.Loi("Hồ sơ nhân sự của bạn đang ở trạng thái nghỉ.");
 
-        if (string.Equals(don.MaNguoiGiao, maNhanSu, StringComparison.OrdinalIgnoreCase))
-            return KetQuaThaoTac.Ok($"Bạn đang giao đơn \"{don.MaDonHang}\".");
-        if (!string.IsNullOrWhiteSpace(don.MaNguoiGiao))
-        {
-            var maCu = don.MaNguoiGiao;
-            var tenCu = await _db.Staff.AsNoTracking().Where(s => s.MaNhanSu == maCu)
-                .Select(s => s.HoTen).FirstOrDefaultAsync(ct);
-            return KetQuaThaoTac.Loi($"Đơn này do {tenCu ?? maCu} nhận rồi. Cần đổi người giao thì nhờ quản trị sửa trên web.");
-        }
-
-        // Đơn từ trường: báo người giao mới sang HanoiCheck trước (process ghi đè), lỗi thật thì không nhận.
+        // Đơn từ trường: báo người giao mới rồi đẩy trạng thái "Đang giao" sang HanoiCheck TRƯỚC khi lưu nội bộ -
+        // lỗi thật thì không nhận, giữ nguyên "Chờ giao hàng" để bấm lại (process ghi đè nên gọi lại an toàn).
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
             var ket = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
@@ -515,9 +530,17 @@ public sealed class DonHangBanService : IDonHangBanService
             }, ct);
             if (!ket.ThanhCong && !ket.ChuaCauHinh)
                 return KetQuaThaoTac.Loi($"Không báo được người giao sang HanoiCheck: {ket.ThongBao}");
+
+            if (ket.ThanhCong)
+            {
+                var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_GIAO", null, ct);
+                if (!ketTrangThai.ThanhCong)
+                    return KetQuaThaoTac.Loi($"Không đẩy được trạng thái \"Đang giao\" sang HanoiCheck: {ketTrangThai.ThongBao}");
+            }
         }
 
         don.MaNguoiGiao = maNhanSu;
+        don.TrangThai = TrangThaiDonHangBan.DangGiao;
         await _db.SaveChangesAsync(ct);
         return KetQuaThaoTac.Ok($"Bạn đã nhận giao đơn \"{don.MaDonHang}\".");
     }
@@ -569,7 +592,7 @@ public sealed class DonHangBanService : IDonHangBanService
             return KetQuaThaoTac.Loi("Đơn đã giao không huỷ được. Hàng bị trả lại thì dùng Kiểm kê / Điều chỉnh tồn.");
 
         var now = DateTime.UtcNow;
-        var traVeKho = don.TrangThai == TrangThaiDonHangBan.DangGiao;
+        var traVeKho = don.TrangThai is TrangThaiDonHangBan.DangGiao or TrangThaiDonHangBan.ChoGiaoHang;
         if (traVeKho)
         {
             // Đảo đúng các lô đã xuất (giữ lô + hạn dùng) để tồn và FEFO về như trước khi xuất.
