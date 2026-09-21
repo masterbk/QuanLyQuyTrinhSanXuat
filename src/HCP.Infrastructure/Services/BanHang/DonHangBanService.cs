@@ -33,12 +33,15 @@ public interface IDonHangBanService
 
     /// <summary>
     /// Trang kết quả lọc + phân trang NGAY Ở CSDL (không tải cả bảng vào bộ nhớ rồi mới cắt trang) - dùng cho
-    /// API danh sách (mobile), nơi mỗi lần chuyển tab/kéo thêm trang đều gọi lại. <paramref name="trangThai"/>
-    /// lọc đúng 1 trạng thái; <paramref name="choGiaoHang"/> true thu hẹp thêm về đúng "Chờ giao hàng";
-    /// <paramref name="maNguoiGiao"/> có giá trị thì chỉ lấy đơn của đúng người này (mọi trạng thái).
+    /// API danh sách (mobile), nơi mỗi lần chuyển tab/kéo thêm trang đều gọi lại. Sắp xếp theo Ngày hẹn giao
+    /// (mới nhất trước, đơn chưa có ngày hẹn xếp cuối). <paramref name="trangThai"/> lọc đúng 1 trạng thái;
+    /// <paramref name="choGiaoHang"/> true thu hẹp thêm về đúng "Chờ giao hàng"; <paramref name="maNguoiGiao"/>
+    /// có giá trị thì chỉ lấy đơn của đúng người này (mọi trạng thái); <paramref name="ngayGiaoTu"/>/
+    /// <paramref name="ngayGiaoDen"/> lọc theo khoảng Ngày hẹn giao (đơn chưa có ngày hẹn bị loại khi đang lọc).
     /// </summary>
     Task<(IReadOnlyList<DonHangBan> Trang, int TongSo)> LayTrangAsync(
-        TrangThaiDonHangBan? trangThai, bool choGiaoHang, string? maNguoiGiao, int trang, int soDong,
+        TrangThaiDonHangBan? trangThai, bool choGiaoHang, string? maNguoiGiao,
+        DateOnly? ngayGiaoTu, DateOnly? ngayGiaoDen, int trang, int soDong,
         CancellationToken ct = default);
 
     Task<KetQuaThaoTac> TaoAsync(DonHangBan don, CancellationToken ct = default);
@@ -107,14 +110,15 @@ public sealed class DonHangBanService : IDonHangBanService
 
     public async Task<IReadOnlyList<DonHangBan>> LayTatCaAsync(CancellationToken ct = default) =>
         await QueryDayDu().AsNoTracking()
-            .OrderByDescending(d => d.NgayDat).ThenByDescending(d => d.Id)
+            .OrderByDescending(d => d.NgayGiao).ThenByDescending(d => d.Id)
             .ToListAsync(ct);
 
     public Task<DonHangBan?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
 
     public async Task<(IReadOnlyList<DonHangBan> Trang, int TongSo)> LayTrangAsync(
-        TrangThaiDonHangBan? trangThai, bool choGiaoHang, string? maNguoiGiao, int trang, int soDong,
+        TrangThaiDonHangBan? trangThai, bool choGiaoHang, string? maNguoiGiao,
+        DateOnly? ngayGiaoTu, DateOnly? ngayGiaoDen, int trang, int soDong,
         CancellationToken ct = default)
     {
         var q = _db.DonHangBans.AsNoTracking().AsQueryable();
@@ -125,13 +129,15 @@ public sealed class DonHangBanService : IDonHangBanService
             var ma = maNguoiGiao.ToLower();
             q = q.Where(d => d.MaNguoiGiao != null && d.MaNguoiGiao.ToLower() == ma);
         }
+        if (ngayGiaoTu is { } tu) q = q.Where(d => d.NgayGiao != null && d.NgayGiao >= tu);
+        if (ngayGiaoDen is { } den) q = q.Where(d => d.NgayGiao != null && d.NgayGiao <= den);
 
         var tongSo = await q.CountAsync(ct);
         var (t, n) = (Math.Max(1, trang), Math.Clamp(soDong, 1, 100));
         // KHÔNG dùng QueryDayDu() (có AnhTongQuan) - danh sách không cần ảnh, đỡ tải thêm dữ liệu vô ích.
         // AsSplitQuery(): Dong->XuatLo là 1-nhiều-tới-nhiều, gộp 1 câu JOIN sẽ nhân dòng cả trang, tách câu
         // truy vấn cho rẻ hơn và đúng khi kết hợp Skip/Take.
-        var ds = await q.OrderByDescending(d => d.NgayDat).ThenByDescending(d => d.Id)
+        var ds = await q.OrderByDescending(d => d.NgayGiao).ThenByDescending(d => d.Id)
             .Skip((t - 1) * n).Take(n)
             .Include(d => d.Dong).ThenInclude(l => l.XuatLo)
             .AsSplitQuery()

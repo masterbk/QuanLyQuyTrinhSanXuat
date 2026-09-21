@@ -23,15 +23,30 @@
 {
     <MudProgressLinear Indeterminate="true" />
 }
-else if (_danhSach.Count == 0)
-{
-    <MudAlert Severity="Severity.Info">
-        Chưa có đơn hàng nào. Bấm <b>"Đồng bộ ngay"</b> để kéo về (cần đã cấu hình kết nối HanoiCheck).
-    </MudAlert>
-}
 else
 {
-    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+    @if (_danhSach.Count > 0)
+    {
+        <div class="d-flex flex-wrap gap-2 align-center mb-3">
+            <MudDatePicker @bind-Date="_locTuNgay" Label="Ngày giao từ ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
+                           Style="min-width:180px" />
+            <MudDatePicker @bind-Date="_locDenNgay" Label="đến ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
+                           Style="min-width:180px" />
+        </div>
+    }
+    @if (DanhSachLoc.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">
+            @(_danhSach.Count == 0
+                ? "Chưa có đơn hàng nào. Bấm \"Đồng bộ ngay\" để kéo về (cần đã cấu hình kết nối HanoiCheck)."
+                : "Không có đơn hàng nào khớp bộ lọc ngày giao.")
+        </MudAlert>
+    }
+    else
+    {
+    <MudTable Items="DanhSachLoc" Hover="true" Elevation="1" Dense="true">
         <HeaderContent>
             <MudTh Style="width:56px">STT</MudTh>
             <MudTh>Mã đơn</MudTh>
@@ -77,6 +92,7 @@ else
             </MudTd>
         </RowTemplate>
     </MudTable>
+    }
 }
 
 <MudDialog @bind-Visible="_hienChiTiet" Options="_dialogOptions">
@@ -187,6 +203,14 @@ else
     private List<HCP.Domain.Entities.Business.DonHangNhan> _danhSach = new();
     private bool _dangTai = true;
     private bool _dangDongBo;
+
+    private DateTime? _locTuNgay;
+    private DateTime? _locDenNgay;
+
+    private List<HCP.Domain.Entities.Business.DonHangNhan> DanhSachLoc => _danhSach
+        .Where(d => _locTuNgay is null || (d.NgayGiao is { } ng && ng >= DateOnly.FromDateTime(_locTuNgay.Value)))
+        .Where(d => _locDenNgay is null || (d.NgayGiao is { } ng && ng <= DateOnly.FromDateTime(_locDenNgay.Value)))
+        .ToList();
 
     private bool _hienChiTiet;
     private HCP.Domain.Entities.Business.DonHangNhan? _chon;

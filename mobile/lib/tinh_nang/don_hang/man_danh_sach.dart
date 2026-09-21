@@ -46,6 +46,7 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
   Widget build(BuildContext context) {
     final ds = ref.watch(danhSachDonProvider);
     final loc = ref.watch(locDonProvider);
+    final khoangNgay = ref.watch(locNgayDonProvider);
     final coQuyenNhapLieu = ref.watch(xacThucProvider).nguoiDung?.coQuyenNhapLieu ?? false;
 
     return Scaffold(
@@ -58,6 +59,15 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
                   dangChon: loc,
                   coQuyenNhapLieu: coQuyenNhapLieu,
                   khiChon: (v) => ref.read(locDonProvider.notifier).dat(v),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: IconButton(
+                  tooltip: 'Lọc theo ngày hẹn giao',
+                  icon: Icon(khoangNgay.tu != null ? Icons.event_available : Icons.date_range_outlined,
+                      color: khoangNgay.tu != null ? Theme.of(context).colorScheme.primary : null),
+                  onPressed: _chonKhoangNgay,
                 ),
               ),
               if (coQuyenNhapLieu)
@@ -77,6 +87,17 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
                 ),
             ],
           ),
+          if (khoangNgay.tu != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Chip(
+                  label: Text('Hẹn giao: ${_ngayVn.format(khoangNgay.tu!)} - ${_ngayVn.format(khoangNgay.den!)}'),
+                  onDeleted: () => ref.read(locNgayDonProvider.notifier).xoa(),
+                ),
+              ),
+            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => ref.read(danhSachDonProvider.notifier).taiLai(),
@@ -110,6 +131,23 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
         label: const Text('Quét QR đơn'),
       ),
     );
+  }
+
+  Future<void> _chonKhoangNgay() async {
+    final hienTai = ref.read(locNgayDonProvider);
+    final now = DateTime.now();
+    final ketQua = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 2),
+      initialDateRange: hienTai.tu != null && hienTai.den != null
+          ? DateTimeRange(start: hienTai.tu!, end: hienTai.den!)
+          : null,
+      helpText: 'Lọc theo ngày hẹn giao',
+    );
+    if (ketQua != null) {
+      ref.read(locNgayDonProvider.notifier).dat((tu: ketQua.start, den: ketQua.end));
+    }
   }
 }
 

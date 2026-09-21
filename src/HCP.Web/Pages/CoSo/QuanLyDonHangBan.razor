@@ -49,14 +49,20 @@ else
         </MudAlert>
     }
 
-    <div class="d-flex gap-2 align-center mb-3" style="max-width:320px">
+    <div class="d-flex flex-wrap gap-2 align-center mb-3">
         <MudSelect T="TrangThaiDonHangBan?" Value="_loc" ValueChanged="@(v => _loc = v)" Label="Lọc trạng thái"
-                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width:200px">
             @foreach (var t in Enum.GetValues<TrangThaiDonHangBan>())
             {
                 <MudSelectItem T="TrangThaiDonHangBan?" Value="@t">@TenTrangThai(t)</MudSelectItem>
             }
         </MudSelect>
+        <MudDatePicker @bind-Date="_locTuNgay" Label="Hẹn giao từ ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
+                       Style="min-width:180px" />
+        <MudDatePicker @bind-Date="_locDenNgay" Label="đến ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
+                       Style="min-width:180px" />
     </div>
 
     @if (DanhSachLoc.Count == 0)
@@ -465,6 +471,8 @@ else
     private Dictionary<string, string> _tenThanhPham = new();
 
     private TrangThaiDonHangBan? _loc;
+    private DateTime? _locTuNgay;
+    private DateTime? _locDenNgay;
     private bool _dangTai = true;
     private bool _dangXuLy;
 
@@ -493,7 +501,11 @@ else
     private readonly DialogOptions _dialogLon = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
     private readonly DialogOptions _dialogNho = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
 
-    private List<DonHangBan> DanhSachLoc => _loc is null ? _danhSach : _danhSach.Where(d => d.TrangThai == _loc).ToList();
+    private List<DonHangBan> DanhSachLoc => _danhSach
+        .Where(d => _loc is null || d.TrangThai == _loc)
+        .Where(d => _locTuNgay is null || (d.NgayGiao is { } ng && ng >= DateOnly.FromDateTime(_locTuNgay.Value)))
+        .Where(d => _locDenNgay is null || (d.NgayGiao is { } ng && ng <= DateOnly.FromDateTime(_locDenNgay.Value)))
+        .ToList();
 
     protected override async Task OnInitializedAsync() => await TaiAsync();
 

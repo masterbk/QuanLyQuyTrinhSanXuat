@@ -21,18 +21,23 @@ class KhoDonHang {
 
   /// [canGiao] = đơn đang "Chờ giao hàng" (chưa ai nhận, ai cũng nhận được); [cuaToi] = đơn của mình (đã
   /// nhận - đang giao hoặc đã giao xong), bất kể trạng thái; [trangThai] = lọc đúng 1 trạng thái (VD
-  /// "ChoXacNhan" cho quản lý/nhập liệu xác nhận đơn mới).
+  /// "ChoXacNhan" cho quản lý/nhập liệu xác nhận đơn mới); [tuNgay]/[denNgay] = lọc theo khoảng Ngày hẹn giao.
   Future<TrangDuLieu<DonHangBan>> danhSach(
-      {bool canGiao = true, bool cuaToi = false, String? trangThai, int trang = 1, int soDong = 20}) async {
+      {bool canGiao = true, bool cuaToi = false, String? trangThai, DateTime? tuNgay, DateTime? denNgay,
+      int trang = 1, int soDong = 20}) async {
     final j = await _api.get('/api/v1/don-hang-ban', thamSo: {
       'trangThai': ?trangThai,
       if (canGiao && trangThai == null) 'canGiao': true,
       if (cuaToi) 'cuaToi': true,
+      if (tuNgay != null) 'tuNgay': _ngayIso(tuNgay),
+      if (denNgay != null) 'denNgay': _ngayIso(denNgay),
       'trang': trang,
       'soDong': soDong,
     }) as Map<String, dynamic>;
     return TrangDuLieu.tuJson(j, DonHangBan.tuJson);
   }
+
+  static String _ngayIso(DateTime d) => d.toIso8601String().substring(0, 10);
 
   Future<DonHangBan> chiTiet(int id) async =>
       DonHangBan.tuJson(await _api.get('/api/v1/don-hang-ban/$id') as Map<String, dynamic>);
@@ -128,6 +133,19 @@ class LocDonNotifier extends Notifier<LocDon> {
   void dat(LocDon v) => state = v;
 }
 
+/// Khoảng lọc theo Ngày hẹn giao - cả hai null = không lọc theo ngày.
+typedef KhoangNgay = ({DateTime? tu, DateTime? den});
+
+final locNgayDonProvider = NotifierProvider<LocNgayDonNotifier, KhoangNgay>(LocNgayDonNotifier.new);
+
+class LocNgayDonNotifier extends Notifier<KhoangNgay> {
+  @override
+  KhoangNgay build() => (tu: null, den: null);
+
+  void dat(KhoangNgay v) => state = v;
+  void xoa() => state = (tu: null, den: null);
+}
+
 final danhSachDonProvider =
     AsyncNotifierProvider<DanhSachDonNotifier, List<DonHangBan>>(DanhSachDonNotifier.new);
 
@@ -142,6 +160,7 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
   @override
   Future<List<DonHangBan>> build() async {
     final loc = ref.watch(locDonProvider);
+    final khoangNgay = ref.watch(locNgayDonProvider);
     _trang = 1;
     final trang = await ref.read(khoDonProvider).danhSach(
           canGiao: loc == LocDon.canGiao,
@@ -151,6 +170,8 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
             LocDon.canXuatKho => 'DaXacNhan',
             _ => null,
           },
+          tuNgay: khoangNgay.tu,
+          denNgay: khoangNgay.den,
           soDong: _soDong,
         );
     _conTrangSau = trang.conTrangSau;
@@ -168,6 +189,7 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
     _dangTaiThem = true;
     try {
       final loc = ref.read(locDonProvider);
+      final khoangNgay = ref.read(locNgayDonProvider);
       final trang = await ref.read(khoDonProvider).danhSach(
             canGiao: loc == LocDon.canGiao,
             cuaToi: loc == LocDon.cuaToi,
@@ -176,6 +198,8 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
               LocDon.canXuatKho => 'DaXacNhan',
               _ => null,
             },
+            tuNgay: khoangNgay.tu,
+            denNgay: khoangNgay.den,
             trang: _trang + 1,
             soDong: _soDong,
           );

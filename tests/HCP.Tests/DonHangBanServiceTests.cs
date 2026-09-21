@@ -173,27 +173,63 @@ public class DonHangBanServiceTests
         var svc = Svc(db);
 
         // Lọc đúng 1 trạng thái + phân trang: 2 đơn ChoXacNhan, lấy trang 1 cỡ 1 -> đúng 1 bản ghi, tổng 2.
-        var (trang1, tong1) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, 1, 1);
+        var (trang1, tong1) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, null, null, 1, 1);
         Assert.Single(trang1);
         Assert.Equal(2, tong1);
-        Assert.Equal(id2, trang1[0].Id);   // mới nhất trước (OrderByDescending Id khi cùng NgayDat)
+        Assert.Equal(id2, trang1[0].Id);   // mới nhất trước (OrderByDescending Id khi cùng NgayGiao)
 
-        var (trang2, tong2) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, 2, 1);
+        var (trang2, tong2) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, null, null, 2, 1);
         Assert.Single(trang2);
         Assert.Equal(2, tong2);
         Assert.Equal(id1, trang2[0].Id);
 
         // choGiaoHang: không có đơn nào (id3 đã có người giao -> DangGiao, không phải ChoGiaoHang).
-        var (choGiao, tongChoGiao) = await svc.LayTrangAsync(null, true, null, 1, 20);
+        var (choGiao, tongChoGiao) = await svc.LayTrangAsync(null, true, null, null, null, 1, 20);
         Assert.Empty(choGiao);
         Assert.Equal(0, tongChoGiao);
 
         // maNguoiGiao: đúng đơn của NS01, không phân biệt hoa/thường.
-        var (cuaNs01, tongNs01) = await svc.LayTrangAsync(null, false, "ns01", 1, 20);
+        var (cuaNs01, tongNs01) = await svc.LayTrangAsync(null, false, "ns01", null, null, 1, 20);
         var donCuaNs01 = Assert.Single(cuaNs01);
         Assert.Equal(id3, donCuaNs01.Id);
         Assert.Equal(1, tongNs01);
         Assert.Single(donCuaNs01.Dong);   // Include(Dong) vẫn nạp đủ dù đã bỏ AnhTongQuan
+    }
+
+    [Fact]
+    public async Task Lay_Trang_Loc_Theo_Khoang_Ngay_Hen_Giao()
+    {
+        Seed();
+        var som = Don((1, 1000)); som.NgayGiao = new DateOnly(2026, 9, 13);
+        var giua = Don((1, 1000)); giua.NgayGiao = new DateOnly(2026, 9, 15);
+        var muon = Don((1, 1000)); muon.NgayGiao = new DateOnly(2026, 9, 20);
+        var chuaHen = Don((1, 1000));   // NgayGiao null - không có ngày hẹn
+        var idSom = await TaoAsync(som);
+        var idGiua = await TaoAsync(giua);
+        var idMuon = await TaoAsync(muon);
+        await TaoAsync(chuaHen);
+
+        using var db = MoDb();
+        var svc = Svc(db);
+
+        // Mặc định (không lọc): sắp theo Ngày hẹn giảm dần, đơn chưa có ngày hẹn xếp cuối.
+        var (tatCa, tongTatCa) = await svc.LayTrangAsync(null, false, null, null, null, 1, 20);
+        Assert.Equal(4, tongTatCa);
+        Assert.Equal(new[] { idMuon, idGiua, idSom }, tatCa.Take(3).Select(d => d.Id));
+        Assert.Null(tatCa.Last().NgayGiao);   // chưa có ngày hẹn ở cuối
+
+        // Lọc khoảng 14/9 - 18/9: chỉ đơn "giua" (13/9 và 20/9 nằm ngoài, chưa có ngày hẹn cũng bị loại).
+        var (khoang, tongKhoang) = await svc.LayTrangAsync(
+            null, false, null, new DateOnly(2026, 9, 14), new DateOnly(2026, 9, 18), 1, 20);
+        var donKhoang = Assert.Single(khoang);
+        Assert.Equal(idGiua, donKhoang.Id);
+        Assert.Equal(1, tongKhoang);
+
+        // Chỉ có "từ ngày": lấy từ 15/9 trở đi.
+        var (tuNgay, tongTuNgay) = await svc.LayTrangAsync(
+            null, false, null, new DateOnly(2026, 9, 15), null, 1, 20);
+        Assert.Equal(new[] { idMuon, idGiua }, tuNgay.Select(d => d.Id));
+        Assert.Equal(2, tongTuNgay);
     }
 
     [Fact]
