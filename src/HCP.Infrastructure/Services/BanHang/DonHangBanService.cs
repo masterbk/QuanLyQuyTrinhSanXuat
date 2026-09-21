@@ -37,11 +37,12 @@ public interface IDonHangBanService
     /// (mới nhất trước, đơn chưa có ngày hẹn xếp cuối). <paramref name="trangThai"/> lọc đúng 1 trạng thái;
     /// <paramref name="choGiaoHang"/> true thu hẹp thêm về đúng "Chờ giao hàng"; <paramref name="maNguoiGiao"/>
     /// có giá trị thì chỉ lấy đơn của đúng người này (mọi trạng thái); <paramref name="ngayGiaoTu"/>/
-    /// <paramref name="ngayGiaoDen"/> lọc theo khoảng Ngày hẹn giao (đơn chưa có ngày hẹn bị loại khi đang lọc).
+    /// <paramref name="ngayGiaoDen"/> lọc theo khoảng Ngày hẹn giao (đơn chưa có ngày hẹn bị loại khi đang lọc);
+    /// <paramref name="maKhachHang"/> có giá trị thì chỉ lấy đơn của đúng khách hàng đó.
     /// </summary>
     Task<(IReadOnlyList<DonHangBan> Trang, int TongSo)> LayTrangAsync(
         TrangThaiDonHangBan? trangThai, bool choGiaoHang, string? maNguoiGiao,
-        DateOnly? ngayGiaoTu, DateOnly? ngayGiaoDen, int trang, int soDong,
+        DateOnly? ngayGiaoTu, DateOnly? ngayGiaoDen, string? maKhachHang, int trang, int soDong,
         CancellationToken ct = default);
 
     Task<KetQuaThaoTac> TaoAsync(DonHangBan don, CancellationToken ct = default);
@@ -118,7 +119,7 @@ public sealed class DonHangBanService : IDonHangBanService
 
     public async Task<(IReadOnlyList<DonHangBan> Trang, int TongSo)> LayTrangAsync(
         TrangThaiDonHangBan? trangThai, bool choGiaoHang, string? maNguoiGiao,
-        DateOnly? ngayGiaoTu, DateOnly? ngayGiaoDen, int trang, int soDong,
+        DateOnly? ngayGiaoTu, DateOnly? ngayGiaoDen, string? maKhachHang, int trang, int soDong,
         CancellationToken ct = default)
     {
         var q = _db.DonHangBans.AsNoTracking().AsQueryable();
@@ -131,6 +132,7 @@ public sealed class DonHangBanService : IDonHangBanService
         }
         if (ngayGiaoTu is { } tu) q = q.Where(d => d.NgayGiao != null && d.NgayGiao >= tu);
         if (ngayGiaoDen is { } den) q = q.Where(d => d.NgayGiao != null && d.NgayGiao <= den);
+        if (!string.IsNullOrWhiteSpace(maKhachHang)) q = q.Where(d => d.MaKhachHang == maKhachHang);
 
         var tongSo = await q.CountAsync(ct);
         var (t, n) = (Math.Max(1, trang), Math.Clamp(soDong, 1, 100));

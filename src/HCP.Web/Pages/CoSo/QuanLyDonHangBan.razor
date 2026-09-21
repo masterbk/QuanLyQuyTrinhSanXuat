@@ -63,6 +63,13 @@ else
         <MudDatePicker @bind-Date="_locDenNgay" Label="đến ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
                        DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
                        Style="min-width:180px" />
+        <MudSelect T="string" Value="_locMaKhachHang" ValueChanged="@(v => _locMaKhachHang = v)" Label="Khách hàng"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width:200px">
+            @foreach (var kh in _khachHang)
+            {
+                <MudSelectItem T="string" Value="@kh.MaKhachHang">@kh.TenKhachHang (@kh.MaKhachHang)</MudSelectItem>
+            }
+        </MudSelect>
     </div>
 
     @if (DanhSachLoc.Count == 0)
@@ -473,6 +480,7 @@ else
     private TrangThaiDonHangBan? _loc;
     private DateTime? _locTuNgay;
     private DateTime? _locDenNgay;
+    private string? _locMaKhachHang;
     private bool _dangTai = true;
     private bool _dangXuLy;
 
@@ -505,6 +513,7 @@ else
         .Where(d => _loc is null || d.TrangThai == _loc)
         .Where(d => _locTuNgay is null || (d.NgayGiao is { } ng && ng >= DateOnly.FromDateTime(_locTuNgay.Value)))
         .Where(d => _locDenNgay is null || (d.NgayGiao is { } ng && ng <= DateOnly.FromDateTime(_locDenNgay.Value)))
+        .Where(d => _locMaKhachHang is null || d.MaKhachHang == _locMaKhachHang)
         .ToList();
 
     protected override async Task OnInitializedAsync() => await TaiAsync();

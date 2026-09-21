@@ -146,3 +146,23 @@ public sealed record DonHangBanDongRequest(string MaThanhPham, decimal SoLuong, 
 public sealed record HuyDonHangRequest(string? LyDo);
 
 public sealed record KhachHangDto(string MaKhachHang, string TenKhachHang, string? DiaChi);
+
+// ================== Kho nội bộ (nhập-xuất-tồn theo lô, KHÔNG đồng bộ HanoiCheck) ==================
+
+/// <summary>Một dòng tồn kho theo (sản phẩm, kho, lô).</summary>
+public sealed record TonKhoDto(string MaSanPham, string TenSanPham, string LoaiSanPham, string? DonViTinh,
+                               string MaKho, string TenKho, string MaLo, DateOnly? HanSuDung, decimal SoLuongTon);
+
+/// <summary>Một dòng lịch sử giao dịch kho (nhập/xuất/điều chỉnh) gần đây.</summary>
+public sealed record LichSuKhoDto(DateTime ThoiGianUtc, string Loai, string TenLoai, string MaSanPham,
+                                  string? TenSanPham, string MaKho, string MaLo, decimal SoLuong,
+                                  string? ChungTu, string? GhiChu);
+
+public sealed record NhapKhoApiRequest(string MaSanPham, string MaKho, string MaLo, decimal SoLuong,
+                                       DateOnly? HanSuDung, string? MaNccDauVao, string? GhiChu);
+
+/// <summary>Đặt tồn của một lô về đúng số đếm được thực tế (kiểm kê) - hệ thống tự tính chênh lệch.</summary>
+public sealed record DieuChinhTonApiRequest(string MaSanPham, string MaKho, string MaLo,
+                                            decimal SoLuongThucTe, string? LyDo);
+
+public sealed record NccDauVaoDto(string MaNccDauVao, string Ten);

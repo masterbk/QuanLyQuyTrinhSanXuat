@@ -14,6 +14,21 @@ import 'xac_nhan_giao.dart';
 
 final _ngayVn = DateFormat('dd/MM/yyyy');
 
+/// Tên khách hàng theo mã, dùng cho chip hiển thị bộ lọc - rơi về chính mã nếu danh mục chưa tải xong.
+String _tenKhachHang(WidgetRef ref, String ma) {
+  final ds = ref.read(khachHangProvider).value ?? const <KhachHang>[];
+  return ds.firstWhereOrNull((k) => k.maKhachHang == ma)?.tenKhachHang ?? ma;
+}
+
+extension _FirstWhereOrNull<T> on List<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (final e in this) {
+      if (test(e)) return e;
+    }
+    return null;
+  }
+}
+
 /// Danh sách đơn hàng cho nhân viên giao hàng: nhận đơn đã xuất kho và xác nhận đã giao.
 class ManDanhSachDon extends ConsumerStatefulWidget {
   const ManDanhSachDon({super.key});
@@ -47,6 +62,7 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
     final ds = ref.watch(danhSachDonProvider);
     final loc = ref.watch(locDonProvider);
     final khoangNgay = ref.watch(locNgayDonProvider);
+    final maKhachHangLoc = ref.watch(locKhachHangDonProvider);
     final coQuyenNhapLieu = ref.watch(xacThucProvider).nguoiDung?.coQuyenNhapLieu ?? false;
 
     return Scaffold(
@@ -68,6 +84,15 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
                   icon: Icon(khoangNgay.tu != null ? Icons.event_available : Icons.date_range_outlined,
                       color: khoangNgay.tu != null ? Theme.of(context).colorScheme.primary : null),
                   onPressed: _chonKhoangNgay,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: IconButton(
+                  tooltip: 'Lọc theo khách hàng',
+                  icon: Icon(maKhachHangLoc != null ? Icons.person_search : Icons.person_search_outlined,
+                      color: maKhachHangLoc != null ? Theme.of(context).colorScheme.primary : null),
+                  onPressed: _chonKhachHang,
                 ),
               ),
               if (coQuyenNhapLieu)
@@ -95,6 +120,17 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
                 child: Chip(
                   label: Text('Hẹn giao: ${_ngayVn.format(khoangNgay.tu!)} - ${_ngayVn.format(khoangNgay.den!)}'),
                   onDeleted: () => ref.read(locNgayDonProvider.notifier).xoa(),
+                ),
+              ),
+            ),
+          if (maKhachHangLoc != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Chip(
+                  label: Text('Khách hàng: ${_tenKhachHang(ref, maKhachHangLoc)}'),
+                  onDeleted: () => ref.read(locKhachHangDonProvider.notifier).dat(null),
                 ),
               ),
             ),
@@ -148,6 +184,86 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
     if (ketQua != null) {
       ref.read(locNgayDonProvider.notifier).dat((tu: ketQua.start, den: ketQua.end));
     }
+  }
+
+  Future<void> _chonKhachHang() async {
+    final ds = await ref.read(khachHangProvider.future);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => _HopChonKhachHang(danhSach: ds),
+    );
+  }
+}
+
+/// Hộp chọn khách hàng để lọc: có ô tìm nhanh theo tên/mã, mục đầu "Tất cả khách hàng" để bỏ lọc.
+class _HopChonKhachHang extends ConsumerStatefulWidget {
+  final List<KhachHang> danhSach;
+
+  const _HopChonKhachHang({required this.danhSach});
+
+  @override
+  ConsumerState<_HopChonKhachHang> createState() => _HopChonKhachHangState();
+}
+
+class _HopChonKhachHangState extends ConsumerState<_HopChonKhachHang> {
+  final _tuKhoa = TextEditingController();
+  String _loc = '';
+
+  @override
+  void dispose() {
+    _tuKhoa.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = _loc.trim().toLowerCase();
+    final ds = loc.isEmpty
+        ? widget.danhSach
+        : widget.danhSach
+            .where((k) => k.tenKhachHang.toLowerCase().contains(loc) || k.maKhachHang.toLowerCase().contains(loc))
+            .toList();
+
+    void chon(String? ma) {
+      ref.read(locKhachHangDonProvider.notifier).dat(ma);
+      Navigator.pop(context);
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Lọc theo khách hàng', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _tuKhoa,
+              autofocus: true,
+              decoration: const InputDecoration(
+                  labelText: 'Tìm theo tên hoặc mã', border: OutlineInputBorder(), prefixIcon: Icon(Icons.search)),
+              onChanged: (v) => setState(() => _loc = v),
+            ),
+            SizedBox(
+              height: 320,
+              child: ListView(
+                children: [
+                  ListTile(title: const Text('Tất cả khách hàng'), onTap: () => chon(null)),
+                  for (final kh in ds)
+                    ListTile(
+                      title: Text(kh.tenKhachHang),
+                      subtitle: Text(kh.maKhachHang),
+                      onTap: () => chon(kh.maKhachHang),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

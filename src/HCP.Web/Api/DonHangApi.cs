@@ -80,7 +80,7 @@ public static class DonHangApi
         ban.MapGet("", async (IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp,
                               IDanhMucService<Staff> ns, ClaimsPrincipal user, AppDbContext db,
                               string? trangThai, bool canGiao = false, bool cuaToi = false,
-                              DateOnly? tuNgay = null, DateOnly? denNgay = null,
+                              DateOnly? tuNgay = null, DateOnly? denNgay = null, string? maKhachHang = null,
                               int trang = 1, int soDong = 20) =>
         {
             TrangThaiDonHangBan? tt = !string.IsNullOrWhiteSpace(trangThai)
@@ -96,7 +96,7 @@ public static class DonHangApi
             }
 
             var (t, n) = LenhSanXuatApi.ChuanHoaTrang(trang, soDong);
-            var (trangDs, tongSo) = await svc.LayTrangAsync(tt, canGiao, maNguoiGiao, tuNgay, denNgay, t, n);
+            var (trangDs, tongSo) = await svc.LayTrangAsync(tt, canGiao, maNguoiGiao, tuNgay, denNgay, maKhachHang, t, n);
             var ten = await LayTenAsync(kh, sp, ns);
             return Results.Ok(new TrangDuLieu<DonHangBanDto>(
                 trangDs.Select(d => MapDonBan(d, ten)).ToList(), t, n, tongSo));

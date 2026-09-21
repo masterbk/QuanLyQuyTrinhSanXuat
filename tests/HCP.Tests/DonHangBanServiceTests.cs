@@ -173,23 +173,23 @@ public class DonHangBanServiceTests
         var svc = Svc(db);
 
         // Lọc đúng 1 trạng thái + phân trang: 2 đơn ChoXacNhan, lấy trang 1 cỡ 1 -> đúng 1 bản ghi, tổng 2.
-        var (trang1, tong1) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, null, null, 1, 1);
+        var (trang1, tong1) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, null, null, null, 1, 1);
         Assert.Single(trang1);
         Assert.Equal(2, tong1);
         Assert.Equal(id2, trang1[0].Id);   // mới nhất trước (OrderByDescending Id khi cùng NgayGiao)
 
-        var (trang2, tong2) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, null, null, 2, 1);
+        var (trang2, tong2) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, null, null, null, 2, 1);
         Assert.Single(trang2);
         Assert.Equal(2, tong2);
         Assert.Equal(id1, trang2[0].Id);
 
         // choGiaoHang: không có đơn nào (id3 đã có người giao -> DangGiao, không phải ChoGiaoHang).
-        var (choGiao, tongChoGiao) = await svc.LayTrangAsync(null, true, null, null, null, 1, 20);
+        var (choGiao, tongChoGiao) = await svc.LayTrangAsync(null, true, null, null, null, null, 1, 20);
         Assert.Empty(choGiao);
         Assert.Equal(0, tongChoGiao);
 
         // maNguoiGiao: đúng đơn của NS01, không phân biệt hoa/thường.
-        var (cuaNs01, tongNs01) = await svc.LayTrangAsync(null, false, "ns01", null, null, 1, 20);
+        var (cuaNs01, tongNs01) = await svc.LayTrangAsync(null, false, "ns01", null, null, null, 1, 20);
         var donCuaNs01 = Assert.Single(cuaNs01);
         Assert.Equal(id3, donCuaNs01.Id);
         Assert.Equal(1, tongNs01);
@@ -213,23 +213,49 @@ public class DonHangBanServiceTests
         var svc = Svc(db);
 
         // Mặc định (không lọc): sắp theo Ngày hẹn giảm dần, đơn chưa có ngày hẹn xếp cuối.
-        var (tatCa, tongTatCa) = await svc.LayTrangAsync(null, false, null, null, null, 1, 20);
+        var (tatCa, tongTatCa) = await svc.LayTrangAsync(null, false, null, null, null, null, 1, 20);
         Assert.Equal(4, tongTatCa);
         Assert.Equal(new[] { idMuon, idGiua, idSom }, tatCa.Take(3).Select(d => d.Id));
         Assert.Null(tatCa.Last().NgayGiao);   // chưa có ngày hẹn ở cuối
 
         // Lọc khoảng 14/9 - 18/9: chỉ đơn "giua" (13/9 và 20/9 nằm ngoài, chưa có ngày hẹn cũng bị loại).
         var (khoang, tongKhoang) = await svc.LayTrangAsync(
-            null, false, null, new DateOnly(2026, 9, 14), new DateOnly(2026, 9, 18), 1, 20);
+            null, false, null, new DateOnly(2026, 9, 14), new DateOnly(2026, 9, 18), null, 1, 20);
         var donKhoang = Assert.Single(khoang);
         Assert.Equal(idGiua, donKhoang.Id);
         Assert.Equal(1, tongKhoang);
 
         // Chỉ có "từ ngày": lấy từ 15/9 trở đi.
         var (tuNgay, tongTuNgay) = await svc.LayTrangAsync(
-            null, false, null, new DateOnly(2026, 9, 15), null, 1, 20);
+            null, false, null, new DateOnly(2026, 9, 15), null, null, 1, 20);
         Assert.Equal(new[] { idMuon, idGiua }, tuNgay.Select(d => d.Id));
         Assert.Equal(2, tongTuNgay);
+    }
+
+    [Fact]
+    public async Task Lay_Trang_Loc_Theo_Khach_Hang()
+    {
+        Seed();
+        using (var db = MoDb())
+        {
+            db.KhachHangs.Add(new KhachHang { MaKhachHang = "KH02", TenKhachHang = "Cửa hàng B" });
+            db.SaveChanges();
+        }
+        var idKh01 = await TaoAsync(Don((1, 1000)));
+        var donKh02 = Don((1, 1000)); donKh02.MaKhachHang = "KH02";
+        var idKh02 = await TaoAsync(donKh02);
+
+        using var db2 = MoDb();
+        var svc = Svc(db2);
+
+        var (ketQua, tongSo) = await svc.LayTrangAsync(null, false, null, null, null, "KH02", 1, 20);
+        var don = Assert.Single(ketQua);
+        Assert.Equal(idKh02, don.Id);
+        Assert.Equal(1, tongSo);
+
+        var (tatCa, tongTatCa) = await svc.LayTrangAsync(null, false, null, null, null, null, 1, 20);
+        Assert.Equal(2, tongTatCa);
+        Assert.Equal(new[] { idKh01, idKh02 }, tatCa.Select(d => d.Id).OrderBy(x => x));
     }
 
     [Fact]

@@ -21,7 +21,7 @@ class KhoDonGia implements KhoDonHang {
   @override
   Future<TrangDuLieu<DonHangBan>> danhSach(
       {bool canGiao = true, bool cuaToi = false, String? trangThai, DateTime? tuNgay, DateTime? denNgay,
-      int trang = 1, int soDong = 20}) async {
+      String? maKhachHang, int trang = 1, int soDong = 20}) async {
     var loc = duLieu;
     if (cuaToi) loc = loc.where((d) => (d.maNguoiGiao ?? '') == 'NS01').toList();
     if (trangThai != null) loc = loc.where((d) => d.trangThai == trangThai).toList();
