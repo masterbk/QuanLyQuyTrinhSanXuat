@@ -115,7 +115,7 @@ public static class DonHangApi
 
             var goc = DuongDanTraCuu.Goc(cauHinh, $"{req.Scheme}://{req.Host}{req.PathBase}");
             var noiDung = DuongDanTraCuu.NoiDungQr(qr, LoaiTraCuu.DonHang, goc);
-            var png = QrApi.TaoPng(noiDung, QrApi.ChuThich(qr, LoaiTraCuu.DonHang));
+            var png = QrApi.TaoPng(noiDung, QrApi.CacDongChu(qr, LoaiTraCuu.DonHang));
             return Results.Bytes(png, "image/png");
         });
 

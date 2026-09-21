@@ -76,7 +76,7 @@ public static class LenhSanXuatApi
 
             var goc = DuongDanTraCuu.Goc(cauHinh, $"{req.Scheme}://{req.Host}{req.PathBase}");
             var noiDung = DuongDanTraCuu.NoiDungQr(qr, LoaiTraCuu.LenhSanXuat, goc);
-            var png = QrApi.TaoPng(noiDung, QrApi.ChuThich(qr, LoaiTraCuu.LenhSanXuat));
+            var png = QrApi.TaoPng(noiDung, QrApi.CacDongChu(qr, LoaiTraCuu.LenhSanXuat));
             return Results.Bytes(png, "image/png");
         });
 

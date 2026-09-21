@@ -20,9 +20,11 @@ public enum LoaiTraCuu
 
 /// <summary>
 /// Nội dung mã QR: <see cref="LinkNgoai"/> (trang truy xuất HanoiCheck) nếu có, ngược lại trang tra cứu công khai của
-/// chính hệ thống theo <see cref="MaTraCuu"/>.
+/// chính hệ thống theo <see cref="MaTraCuu"/>. <see cref="DongChuThem"/>: các dòng chữ in thêm dưới dòng mã (hiện chỉ
+/// đơn hàng có - tên sản phẩm/số lượng từng dòng và địa chỉ giao).
 /// </summary>
-public record QrTraCuu(string Ma, string? LinkNgoai, string? MaTraCuu, string MoTa);
+public record QrTraCuu(string Ma, string? LinkNgoai, string? MaTraCuu, string MoTa,
+                       IReadOnlyList<string>? DongChuThem = null);
 
 public record TraCuuCoSo(string? Ten, string? DiaChi, string? DienThoai);
 
@@ -84,6 +86,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
         // theo mã nội bộ.
         var laHanoiCheck = don.Nguon == NguonDonHang.HanoiCheck && !string.IsNullOrWhiteSpace(don.MaDonHnC);
         var maHienThi = laHanoiCheck ? don.MaDonHnC! : don.MaDonHang;
+        var dongChuThem = await DongChuThemDonHangAsync(don, ct);
 
         // Đơn từ HanoiCheck: QR là trang truy xuất (traceability_url) HanoiCheck cấp cho đơn.
         if (laHanoiCheck)
@@ -94,7 +97,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
                 .Where(n => n.TenantId == tenantId && n.MaDonHang == maDonHnC)
                 .Select(n => n.LinkTruyXuat).FirstOrDefaultAsync(ct);
             if (LaLinkWeb(link))
-                return new QrTraCuu(maHienThi, link!.Trim(), null, "Trang truy xuất của đơn trên HanoiCheck.");
+                return new QrTraCuu(maHienThi, link!.Trim(), null, "Trang truy xuất của đơn trên HanoiCheck.", dongChuThem);
         }
 
         // Đơn nội bộ (hoặc đơn HanoiCheck chưa có link): trang tra cứu của hệ thống. Sinh luôn mã tra cứu cho các lô đã
@@ -111,7 +114,28 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
         return new QrTraCuu(maHienThi, null, don.MaTraCuu,
             don.Nguon == NguonDonHang.HanoiCheck
                 ? "Đơn HanoiCheck chưa có link truy xuất - dùng trang tra cứu của hệ thống."
-                : "Trang tra cứu đơn hàng trên hệ thống.");
+                : "Trang tra cứu đơn hàng trên hệ thống.",
+            dongChuThem);
+    }
+
+    /// <summary>Dòng "Tên sản phẩm × số lượng đơn vị tính" cho từng dòng hàng, rồi dòng địa chỉ giao (nếu có) -
+    /// in thêm dưới mã QR đơn hàng để nhân viên giao hàng nhìn tem là biết giao gì, giao đâu.</summary>
+    private async Task<List<string>> DongChuThemDonHangAsync(DonHangBan don, CancellationToken ct)
+    {
+        var maSp = don.Dong.Select(l => l.MaThanhPham).Distinct().ToList();
+        var sanPham = maSp.Count == 0
+            ? new Dictionary<string, Product>()
+            : await _db.Products.AsNoTracking().Where(p => maSp.Contains(p.MaSanPham)).ToDictionaryAsync(p => p.MaSanPham, ct);
+
+        var dong = don.Dong.OrderBy(l => l.Id).Select(l =>
+        {
+            sanPham.TryGetValue(l.MaThanhPham, out var sp);
+            var dvt = sp?.DonViTinh;
+            return $"{sp?.TenSanPham ?? l.MaThanhPham} × {l.SoLuong.ToString("#,0.###")}{(string.IsNullOrWhiteSpace(dvt) ? "" : " " + dvt)}";
+        }).ToList();
+
+        if (!string.IsNullOrWhiteSpace(don.DiaChiGiao)) dong.Add($"Giao: {don.DiaChiGiao.Trim()}");
+        return dong;
     }
 
     public async Task<QrTraCuu?> LayQrLoAsync(int id, CancellationToken ct = default)

@@ -35,7 +35,7 @@ public static class QrApi
         if (qr is null) return Results.NotFound();
 
         var noiDung = DuongDanTraCuu.NoiDungQr(qr, loai, DuongDanTraCuu.Goc(cauHinh, $"{req.Scheme}://{req.Host}{req.PathBase}"));
-        var png = TaoPng(noiDung, ChuThich(qr, loai));
+        var png = TaoPng(noiDung, CacDongChu(qr, loai));
         if (tai != true) return Results.File(png, "image/png");
 
         var tenFile = string.Concat(qr.Ma.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
@@ -51,25 +51,50 @@ public static class QrApi
         _ => $"Lệnh sản xuất {qr.Ma}"
     };
 
+    /// <summary>Dòng mã (in đậm) rồi tới các dòng thêm của <see cref="QrTraCuu.DongChuThem"/> nếu có
+    /// (đơn hàng: tên sản phẩm/số lượng từng dòng + địa chỉ giao).</summary>
+    internal static IReadOnlyList<string> CacDongChu(QrTraCuu qr, LoaiTraCuu loai)
+    {
+        var dong = new List<string> { ChuThich(qr, loai) };
+        if (qr.DongChuThem is { Count: > 0 }) dong.AddRange(qr.DongChuThem);
+        return dong;
+    }
+
     /// <summary>PNG đen trắng, mức sửa lỗi M (chịu được tem hơi bẩn/nhàu), 20 px mỗi ô - đủ nét để in tem.
-    /// Có <paramref name="chuThich"/> thì in thêm dòng chữ đó ngay dưới mã QR, trong viền trắng.
+    /// Có <paramref name="cacDongChu"/> thì in thêm các dòng đó dưới mã QR, trong viền trắng - dòng đầu in đậm
+    /// cỡ lớn (mã đơn/lô/lệnh), các dòng sau cỡ nhỏ hơn và tự ngắt dòng nếu dài hơn bề rộng mã QR.
     /// Dùng System.Drawing.Common (MIT, có sẵn với .NET) - chỉ chạy trên Windows, khớp môi trường IIS
     /// đang triển khai (project đã khai TargetFramework net8.0-windows); KHÔNG dùng
     /// SixLabors.ImageSharp.Drawing vì gói đó đòi mua bản quyền thương mại (Six Labors Split License)
     /// tuỳ doanh thu công ty.</summary>
-    public static byte[] TaoPng(string noiDung, string? chuThich = null)
+    public static byte[] TaoPng(string noiDung, IReadOnlyList<string>? cacDongChu = null)
     {
         using var boTao = new QRCodeGenerator();
         using var duLieu = boTao.CreateQrCode(noiDung, QRCodeGenerator.ECCLevel.M);
         var qrPng = new PngByteQRCode(duLieu).GetGraphic(20);
-        if (string.IsNullOrWhiteSpace(chuThich)) return qrPng;
+        var dongGoc = (cacDongChu ?? Array.Empty<string>()).Where(d => !string.IsNullOrWhiteSpace(d)).ToList();
+        if (dongGoc.Count == 0) return qrPng;
 
         using var msQr = new MemoryStream(qrPng);
         using var qrAnh = Image.FromStream(msQr);
-        const int le = 24;      // viền trắng quanh mã QR
-        const int caoChu = 56;  // chỗ cho dòng chữ dưới mã QR
+        const int le = 24;           // viền trắng quanh mã QR
+        const int caoDongDau = 32;   // chiều cao dòng đầu (mã, in đậm)
+        const int caoDongSau = 24;   // chiều cao mỗi dòng còn lại (cỡ nhỏ hơn, có thể ngắt dòng)
         var rong = qrAnh.Width + le * 2;
-        var cao = qrAnh.Height + le * 2 + caoChu;
+
+        using var fontDam = new Font("Arial", 20, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var fontThuong = new Font("Arial", 15, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var brush = new SolidBrush(Color.FromArgb(0x1a, 0x2b, 0x4c));
+        using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+
+        using var doDoTam = new Bitmap(1, 1);
+        using var gTam = Graphics.FromImage(doDoTam);
+        var cacDongVe = new List<(string Chu, Font Font, int Cao)> { (dongGoc[0], fontDam, caoDongDau) };
+        foreach (var dong in dongGoc.Skip(1))
+            foreach (var phan in NgatDong(gTam, dong, fontThuong, qrAnh.Width - 8))
+                cacDongVe.Add((phan, fontThuong, caoDongSau));
+
+        var cao = qrAnh.Height + le * 2 + cacDongVe.Sum(d => d.Cao);
 
         using var ghep = new Bitmap(rong, cao);
         using (var g = Graphics.FromImage(ghep))
@@ -77,15 +102,39 @@ public static class QrApi
             g.Clear(Color.White);
             g.DrawImage(qrAnh, le, le, qrAnh.Width, qrAnh.Height);
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-            using var font = new Font("Arial", 20, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var brush = new SolidBrush(Color.FromArgb(0x1a, 0x2b, 0x4c));
-            using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString(chuThich, font, brush, new RectangleF(0, qrAnh.Height + le, rong, caoChu), format);
+
+            var y = qrAnh.Height + le;
+            foreach (var (chu, font, caoDong) in cacDongVe)
+            {
+                g.DrawString(chu, font, brush, new RectangleF(0, y, rong, caoDong), format);
+                y += caoDong;
+            }
         }
 
         using var msRa = new MemoryStream();
         ghep.Save(msRa, ImageFormat.Png);
         return msRa.ToArray();
+    }
+
+    /// <summary>Ngắt <paramref name="text"/> thành nhiều dòng theo từ để mỗi dòng vừa <paramref name="rongToiDa"/>
+    /// khi vẽ bằng <paramref name="font"/> (đo bằng <paramref name="g"/>).</summary>
+    private static List<string> NgatDong(Graphics g, string text, Font font, float rongToiDa)
+    {
+        var ketQua = new List<string>();
+        var dong = "";
+        foreach (var tu in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var thu = dong.Length == 0 ? tu : $"{dong} {tu}";
+            if (dong.Length == 0 || g.MeasureString(thu, font).Width <= rongToiDa)
+                dong = thu;
+            else
+            {
+                ketQua.Add(dong);
+                dong = tu;
+            }
+        }
+        if (dong.Length > 0) ketQua.Add(dong);
+        return ketQua.Count == 0 ? new List<string> { text } : ketQua;
     }
 }
 

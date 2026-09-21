@@ -37,6 +37,7 @@ public class TraCuuCongKhaiServiceTests
         {
             MaDonHang = ma, MaKhachHang = "KH-0001", MaKho = "K-01", NgayDat = new DateOnly(2026, 9, 14),
             Nguon = nguon, MaDonHnC = maHnC, TrangThai = TrangThaiDonHangBan.DangGiao,
+            DiaChiGiao = "Số 1 phố Huế, Hà Nội",
             Dong =
             {
                 new DonHangBanDong
@@ -64,11 +65,13 @@ public class TraCuuCongKhaiServiceTests
         var qrHnC = await svc.LayQrDonHangAsync(hnc);
         Assert.Equal(LinkHnC, qrHnC!.LinkNgoai);
         Assert.Null(qrHnC.MaTraCuu);
+        Assert.Equal(["Bánh mì × 10 cái", "Giao: Số 1 phố Huế, Hà Nội"], qrHnC.DongChuThem);
 
         var qrNoiBo = await svc.LayQrDonHangAsync(noiBo);
         Assert.Null(qrNoiBo!.LinkNgoai);
         Assert.Matches("^[0-9a-f]{32}$", qrNoiBo.MaTraCuu);
         Assert.Equal(qrNoiBo.MaTraCuu, (await svc.LayQrDonHangAsync(noiBo))!.MaTraCuu);   // mở lại: giữ nguyên mã
+        Assert.Equal(["Bánh mì × 10 cái", "Giao: Số 1 phố Huế, Hà Nội"], qrNoiBo.DongChuThem);
 
         // Đơn HanoiCheck chưa có link truy xuất thì dùng trang của hệ thống.
         Assert.NotNull((await svc.LayQrDonHangAsync(hncChuaLink))!.MaTraCuu);
