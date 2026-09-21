@@ -492,6 +492,11 @@ public sealed class DonHangBanService : IDonHangBanService
         don.TrangThai = TrangThaiDonHangBan.DaGiao;
         don.ThoiGianGiaoUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
+
+        if (_db.TenantInfo?.Id is { } coSoId)
+            await _push.GuiTheoQuyenAsync(coSoId, AppRoles.QuyenNhapLieu.Split(','), "Đơn đã giao xong",
+                $"Đơn {don.MaDonHang} đã giao xong.", DuLieuThongBao(don.Id), ct);
+
         return KetQuaThaoTac.Ok($"Đơn \"{don.MaDonHang}\" đã giao ({anh.Count} ảnh).");
     }
 

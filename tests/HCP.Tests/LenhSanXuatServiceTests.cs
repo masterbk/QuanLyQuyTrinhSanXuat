@@ -1,3 +1,4 @@
+using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Entities.Infrastructure;
 using HCP.Domain.Enums;
@@ -5,6 +6,7 @@ using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.Kho;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,11 +30,12 @@ public class LenhSanXuatServiceTests
         return new AppDbContext(accessor, options);
     }
 
-    private static LenhSanXuatService Svc(AppDbContext db)
+    private static LenhSanXuatService Svc(AppDbContext db, IPushNotificationService? push = null)
     {
         var accessor = new TestMultiTenantContextAccessor();
         accessor.SetTenant(CoSo);
-        return new LenhSanXuatService(db, new SyncOutboxWriter(db, accessor), new MaTuSinhService(db));
+        return new LenhSanXuatService(db, new SyncOutboxWriter(db, accessor), new MaTuSinhService(db),
+                                      push ?? new FakePushNotificationService());
     }
 
     /// <summary>
@@ -853,5 +856,35 @@ public class LenhSanXuatServiceTests
 
         var baAnh = await AnhAsync(id, soAnh: 3);
         using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, baAnh)).ThanhCong);
+    }
+
+    [Fact]
+    public async Task Gui_Thong_Bao_Day_Luc_Tao_Va_Hoan_Thanh_Cho_Nhan_Vien_San_Xuat()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 1m, new DateOnly(2026, 6, 1));
+        var push = new FakePushNotificationService();
+
+        var lenh = Lenh(5);
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db, push).TaoAsync(lenh);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        var id = lenh.Id;
+        var taoMoi = Assert.Single(push.DaGui);
+        Assert.Equal("Lệnh sản xuất mới", taoMoi.TieuDe);
+        Assert.Equal(AppRoles.QuyenSanXuat.Split(','), taoMoi.VaiTro);   // gồm cả TenantAdmin (quản lý cơ sở)
+        Assert.Equal(id.ToString(), taoMoi.DuLieu?["lenhSanXuatId"]);
+
+        var anh = await AnhAsync(id);
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db, push).ThucHienAsync(id, anh);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        Assert.Equal(2, push.DaGui.Count);
+        Assert.Equal("Lệnh sản xuất hoàn thành", push.DaGui[1].TieuDe);
+        Assert.Equal(AppRoles.QuyenSanXuat.Split(','), push.DaGui[1].VaiTro);
     }
 }

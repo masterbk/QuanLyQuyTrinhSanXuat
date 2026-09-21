@@ -1,10 +1,12 @@
 using HCP.Domain;
+using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.DanhMuc;
 using HCP.Infrastructure.Services.MaTuSinh;
+using HCP.Infrastructure.Services.ThongBao;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,13 +18,20 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
     private readonly AppDbContext _db;
     private readonly ISyncOutboxWriter _outbox;
     private readonly IMaTuSinhService _maTuSinh;
+    private readonly IPushNotificationService _push;
 
-    public LenhSanXuatService(AppDbContext db, ISyncOutboxWriter outbox, IMaTuSinhService maTuSinh)
+    public LenhSanXuatService(AppDbContext db, ISyncOutboxWriter outbox, IMaTuSinhService maTuSinh,
+                              IPushNotificationService push)
     {
         _db = db;
         _outbox = outbox;
         _maTuSinh = maTuSinh;
+        _push = push;
     }
+
+    /// <summary>Dữ liệu kèm thông báo đẩy - app dùng để mở đúng màn chi tiết lệnh khi bấm vào.</summary>
+    private static Dictionary<string, string> DuLieuThongBao(int lenhId) =>
+        new() { ["loaiThongBao"] = "lenh_san_xuat", ["lenhSanXuatId"] = lenhId.ToString() };
 
     public async Task<IReadOnlyList<LenhSanXuat>> LayTatCaAsync(CancellationToken ct = default) =>
         await _db.LenhSanXuats.AsNoTracking()
@@ -113,6 +122,11 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         lenh.TrangThai = TrangThaiLenhSX.MoiTao;
         _db.LenhSanXuats.Add(lenh);
         await _db.SaveChangesAsync(ct);
+
+        if (_db.TenantInfo?.Id is { } tenantId)
+            await _push.GuiTheoQuyenAsync(tenantId, AppRoles.QuyenSanXuat.Split(','), "Lệnh sản xuất mới",
+                $"Lệnh {lenh.MaLenh}: {lenh.SanPham.Count} sản phẩm.", DuLieuThongBao(lenh.Id), ct);
+
         return KetQuaThaoTac.Ok($"Đã tạo lệnh sản xuất \"{lenh.MaLenh}\" với {lenh.SanPham.Count} sản phẩm. "
                                 + "Bấm \"Hoàn thành\" để trừ nguyên liệu.");
     }
@@ -397,6 +411,10 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
 
         foreach (var b in batches)
             await _outbox.GuiAsync(b, ct);
+
+        if (_db.TenantInfo?.Id is { } tenantId)
+            await _push.GuiTheoQuyenAsync(tenantId, AppRoles.QuyenSanXuat.Split(','), "Lệnh sản xuất hoàn thành",
+                $"Lệnh {lenh.MaLenh} đã hoàn thành.", DuLieuThongBao(lenh.Id), ct);
 
         var thongBao = $"Đã sản xuất {lenh.SanPham.Count} sản phẩm "
                        + $"({string.Join(", ", lenh.SanPham.Select(s => $"{s.MaThanhPham} {s.SoLuong:0.###}"))}), "

@@ -23,8 +23,8 @@ class ThongBaoDay {
 
   static const _kenh = AndroidNotificationChannel(
     'don_hang',
-    'Đơn hàng',
-    description: 'Thông báo đơn hàng mới và đổi trạng thái',
+    'Đơn hàng & lệnh sản xuất',
+    description: 'Thông báo đơn hàng và lệnh sản xuất mới/đổi trạng thái',
     importance: Importance.max,
   );
 

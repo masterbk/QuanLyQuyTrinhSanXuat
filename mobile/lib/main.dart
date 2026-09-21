@@ -8,6 +8,7 @@ import 'loi/dieu_huong.dart';
 import 'loi/thong_bao_day.dart';
 import 'man_chinh.dart';
 import 'tinh_nang/don_hang/man_chi_tiet.dart';
+import 'tinh_nang/lenh_san_xuat/man_chi_tiet.dart';
 import 'tinh_nang/xac_thuc/man_dang_nhap.dart';
 import 'tinh_nang/xac_thuc/xac_thuc.dart';
 
@@ -65,13 +66,21 @@ class _CongVaoState extends ConsumerState<CongVao> {
       if (mounted) setState(() => _dangKhoiPhuc = false);
     });
 
-    // Bấm vào thông báo đơn hàng -> mở đúng màn chi tiết, nếu đã đăng nhập. Đây là nơi DUY NHẤT
-    // biết cả hạ tầng thông báo (ThongBaoDay) và màn hình nghiệp vụ (ManChiTietDon).
+    // Bấm vào thông báo (đơn hàng hoặc lệnh sản xuất) -> mở đúng màn chi tiết, nếu đã đăng nhập. Đây là
+    // nơi DUY NHẤT biết cả hạ tầng thông báo (ThongBaoDay) và màn hình nghiệp vụ (ManChiTietDon/Lenh).
     _thongBaoSub = ThongBaoDay.onMoTuThongBao.listen((duLieu) {
+      if (!ref.read(xacThucProvider).daDangNhap) return;
       final donHangId = int.tryParse(duLieu['donHangId'] ?? '');
-      if (donHangId == null || !ref.read(xacThucProvider).daDangNhap) return;
-      navigatorKeyToanCuc.currentState
-          ?.push(MaterialPageRoute(builder: (_) => ManChiTietDon(id: donHangId)));
+      if (donHangId != null) {
+        navigatorKeyToanCuc.currentState
+            ?.push(MaterialPageRoute(builder: (_) => ManChiTietDon(id: donHangId)));
+        return;
+      }
+      final lenhSanXuatId = int.tryParse(duLieu['lenhSanXuatId'] ?? '');
+      if (lenhSanXuatId != null) {
+        navigatorKeyToanCuc.currentState
+            ?.push(MaterialPageRoute(builder: (_) => ManChiTietLenh(id: lenhSanXuatId)));
+      }
     });
   }
 

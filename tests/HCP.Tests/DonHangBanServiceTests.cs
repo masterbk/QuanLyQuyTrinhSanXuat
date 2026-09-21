@@ -307,11 +307,16 @@ public class DonHangBanServiceTests
 
         using (var db = MoDb()) Assert.True((await SvcPush(db).XacNhanAsync(id)).ThanhCong);
         using (var db = MoDb()) Assert.True((await SvcPush(db).XuatKhoAsync(id, null, null)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await SvcPush(db).NhanDonAsync(id, "NS01")).ThanhCong);
+        using (var db = MoDb()) Assert.True((await SvcPush(db).HoanTatGiaoAsync(id, AnhGiaoMau)).ThanhCong);
 
-        Assert.Equal(3, push.DaGui.Count);
-        // Tạo mới + xác nhận -> báo quản lý/nhập liệu; xuất kho -> báo nhân viên giao hàng.
-        Assert.All(push.DaGui.Take(2), g => Assert.Equal(AppRoles.QuyenNhapLieu.Split(','), g.VaiTro));
+        Assert.Equal(4, push.DaGui.Count);
+        // Tạo mới + xác nhận -> báo quản lý/nhập liệu; xuất kho (chưa chọn người giao) -> báo nhân viên giao
+        // hàng; đã giao xong -> báo lại quản lý/nhập liệu.
+        Assert.Equal(AppRoles.QuyenNhapLieu.Split(','), push.DaGui[0].VaiTro);
+        Assert.Equal(AppRoles.QuyenNhapLieu.Split(','), push.DaGui[1].VaiTro);
         Assert.Equal(AppRoles.QuyenGiaoHang.Split(','), push.DaGui[2].VaiTro);
+        Assert.Equal(AppRoles.QuyenNhapLieu.Split(','), push.DaGui[3].VaiTro);
         Assert.All(push.DaGui, g => Assert.Equal(CoSo, g.TenantId));
         Assert.All(push.DaGui, g => Assert.Equal(id.ToString(), g.DuLieu?["donHangId"]));
     }
