@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'tinh_nang/don_hang/man_danh_sach.dart';
+import 'tinh_nang/kho_noi_bo/man_danh_sach.dart';
 import 'tinh_nang/lenh_san_xuat/man_danh_sach.dart';
 import 'tinh_nang/xac_thuc/xac_thuc.dart';
 
-/// Khung chính sau khi đăng nhập: Lệnh sản xuất và Đơn hàng, chỉ hiện mục người dùng có quyền.
+/// Khung chính sau khi đăng nhập: Lệnh sản xuất, Kho, Đơn hàng - chỉ hiện mục người dùng có quyền.
 class ManChinh extends ConsumerStatefulWidget {
   const ManChinh({super.key});
 
@@ -15,6 +16,7 @@ class ManChinh extends ConsumerStatefulWidget {
 
 /// Vai trò được dùng từng mục (khớp AppRoles phía máy chủ; người nhiều vai trò thấy gộp).
 const _quyenLenhSanXuat = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
+const _quyenKhoNoiBo = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenDonHang = {'TenantAdmin', 'TenantStaff', 'TenantGiaoHang'};
 
 class _ManChinhState extends ConsumerState<ManChinh> {
@@ -31,6 +33,13 @@ class _ManChinhState extends ConsumerState<ManChinh> {
           man: const ManDanhSachLenh(),
           nut: const NavigationDestination(icon: Icon(Icons.factory_outlined),
                                            selectedIcon: Icon(Icons.factory), label: 'Lệnh sản xuất'),
+        ),
+      if (vaiTro.any(_quyenKhoNoiBo.contains))
+        (
+          ten: 'Kho',
+          man: const ManKhoNoiBo(),
+          nut: const NavigationDestination(icon: Icon(Icons.inventory_2_outlined),
+                                           selectedIcon: Icon(Icons.inventory_2), label: 'Kho'),
         ),
       if (vaiTro.any(_quyenDonHang.contains))
         (

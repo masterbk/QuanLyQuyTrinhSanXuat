@@ -293,6 +293,7 @@ app.MapAuthApi();
 app.MapLenhSanXuatApi();
 app.MapDonHangApi();
 app.MapQrApi();
+app.MapKhoNoiBoApi();
 
 app.MapRazorPages();
 app.MapBlazorHub();
