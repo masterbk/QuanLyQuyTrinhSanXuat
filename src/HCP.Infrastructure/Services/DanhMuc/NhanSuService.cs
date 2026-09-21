@@ -120,10 +120,44 @@ public class NhanSuService : IDanhMucService<Staff>
         var ns = await _db.Staff.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (ns is null) return KetQuaThaoTac.Loi("Không tìm thấy nhân sự cần xoá.");
 
+        var loi = await KiemTraDangThamChieuAsync(ns.MaNhanSu, ct);
+        if (loi is not null) return KetQuaThaoTac.Loi(loi);
+
         _db.Staff.Remove(ns);
         await _db.SaveChangesAsync(ct);
 
         return KetQuaThaoTac.Ok($"Đã xoá nhân sự \"{ns.HoTen}\".");
+    }
+
+    /// <summary>
+    /// Chặn xoá nhân sự đang được tham chiếu bằng mã (không phải khoá ngoại nên CSDL không tự chặn) - giữ
+    /// toàn vẹn lịch sử người giao/người thực hiện, giống cách KhachHangService chặn xoá khi đã có đơn hàng.
+    /// Các trường "...Csv" lưu nhiều mã cách nhau bằng dấu phẩy: lọc thô bằng Contains ở CSDL rồi tách chuỗi
+    /// so khớp đúng token trong bộ nhớ, tránh khớp nhầm (VD "NS1" khớp nhầm "NS10").
+    /// </summary>
+    private async Task<string?> KiemTraDangThamChieuAsync(string maNhanSu, CancellationToken ct)
+    {
+        if (await _db.DonHangBans.AnyAsync(d => d.MaNguoiGiao == maNhanSu, ct))
+            return "Không xoá được: nhân sự đang là người giao của đơn hàng bán.";
+        if (await _db.DonHangNhans.AnyAsync(d => d.MaNguoiGiao == maNhanSu, ct))
+            return "Không xoá được: nhân sự đang là người giao của đơn hàng từ trường.";
+        if (await _db.LenhSanXuatThamGias.AnyAsync(t => t.MaNhanSu == maNhanSu, ct))
+            return "Không xoá được: nhân sự đã tham gia lệnh sản xuất.";
+        if (await CoTrongCsvAsync(_db.LenhSanXuatKhaus.Select(k => k.NguoiThucHienCsv), maNhanSu, ct))
+            return "Không xoá được: nhân sự đang là người thực hiện một khâu của lệnh sản xuất.";
+        if (await CoTrongCsvAsync(_db.BatchSteps.Select(s => s.NguoiThucHienCsv), maNhanSu, ct))
+            return "Không xoá được: nhân sự đang là người thực hiện một bước của lô sản xuất.";
+        if (await CoTrongCsvAsync(_db.DishSteps.Select(s => s.NguoiThucHienCsv), maNhanSu, ct))
+            return "Không xoá được: nhân sự đang là người thực hiện một bước chế biến món ăn.";
+        return null;
+    }
+
+    private static async Task<bool> CoTrongCsvAsync(IQueryable<string?> cotCsv, string maNhanSu, CancellationToken ct)
+    {
+        var ungVien = await cotCsv.Where(c => c != null && c.Contains(maNhanSu)).ToListAsync(ct);
+        return ungVien.Any(c => (c ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains(maNhanSu, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>

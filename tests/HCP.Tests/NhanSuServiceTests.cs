@@ -91,6 +91,87 @@ public class NhanSuServiceTests
         Assert.Equal(0, await db.Staff.CountAsync());
     }
 
+    [Fact]
+    public async Task Xoa_Duoc_Nhan_Su_Khong_Bi_Tham_Chieu_O_Dau()
+    {
+        int id;
+        using (var db = MoDb())
+        {
+            var svc = new NhanSuService(db, new CapturingOutbox(), new PrefixProtector());
+            var ns = new Staff { MaNhanSu = "NV-TRONG", HoTen = "Không liên quan", TrangThai = true };
+            Assert.True((await svc.ThemAsync(ns)).ThanhCong);
+            id = ns.Id;
+        }
+        using var db2 = MoDb();
+        var kq = await new NhanSuService(db2, new CapturingOutbox(), new PrefixProtector()).XoaAsync(id);
+        Assert.True(kq.ThanhCong, kq.ThongBao);
+        Assert.Equal(0, await db2.Staff.CountAsync());
+    }
+
+    /// <summary>
+    /// Mã nhân sự không phải khoá ngoại (CSDL không tự chặn) nên phải tự kiểm tra ở service - đơn hàng bán/
+    /// từ trường đã gán người giao, đã tham gia lệnh, hoặc đang là người thực hiện một khâu/bước (lệnh sản
+    /// xuất, lô sản xuất, món ăn) đều phải chặn xoá để không để lại mã treo trong dữ liệu nghiệp vụ.
+    /// </summary>
+    [Theory]
+    [InlineData("NS-DHB")]
+    [InlineData("NS-DHN")]
+    [InlineData("NS-TG")]
+    [InlineData("NS-KHAU")]
+    [InlineData("NS-LO")]
+    [InlineData("NS-MON")]
+    public async Task Khong_Xoa_Duoc_Nhan_Su_Dang_Duoc_Tham_Chieu(string ma)
+    {
+        int id;
+        using (var db = MoDb())
+        {
+            var svc = new NhanSuService(db, new CapturingOutbox(), new PrefixProtector());
+            var ns = new Staff { MaNhanSu = ma, HoTen = "Người " + ma, TrangThai = true };
+            Assert.True((await svc.ThemAsync(ns)).ThanhCong);
+            id = ns.Id;
+        }
+
+        using (var db = MoDb())
+        {
+            db.DonHangBans.Add(new DonHangBan
+            {
+                MaDonHang = "DH-NS10", MaKhachHang = "KH", MaKho = "KHO", NgayDat = new DateOnly(2026, 9, 1),
+                MaNguoiGiao = "NS-DHB"
+            });
+            db.DonHangNhans.Add(new DonHangNhan { MaDonHang = "HNC-NS10", MaNguoiGiao = "NS-DHN" });
+            db.LenhSanXuats.Add(new LenhSanXuat
+            {
+                MaLenh = "LSX-NS10", MaKho = "KHO", NgaySanXuat = new DateOnly(2026, 9, 1),
+                ThamGia = { new LenhSanXuatThamGia { MaNhanSu = "NS-TG", HoTen = "x", ThoiGianUtc = DateTime.UtcNow } },
+                SanPham =
+                {
+                    new LenhSanXuatSanPham
+                    {
+                        MaThanhPham = "SP1", SoLuong = 1, MaLoThanhPham = "LO1", MaQuyTrinh = "QT1",
+                        Khau = { new LenhSanXuatKhau { MaKhau = "K1", ThuTu = 1, MaCoSo = "CS1", NguoiThucHienCsv = "NS-KHAU" } }
+                    }
+                }
+            });
+            db.Batches.Add(new Batch
+            {
+                MaSanPham = "SP1", MaLo = "LO-NS10", TenLo = "Lô", NgayNhap = new DateOnly(2026, 9, 1),
+                DanhSachKhau = { new BatchStep { MaKhau = "K1", ThuTu = 1, NguoiThucHienCsv = "NS-LO" } }
+            });
+            db.Dishes.Add(new Dish
+            {
+                MaMonAn = "MON-NS10", TenMonAn = "Món",
+                DanhSachKhau = { new DishStep { MaKhau = "K1", ThuTu = 1, NguoiThucHienCsv = "NS-MON" } }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var dbXoa = MoDb();
+        var kq = await new NhanSuService(dbXoa, new CapturingOutbox(), new PrefixProtector()).XoaAsync(id);
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("Không xoá được", kq.ThongBao);
+        Assert.Equal(1, await dbXoa.Staff.CountAsync(s => s.MaNhanSu == ma));
+    }
+
     // --- Test doubles ---
 
     /// <summary>Bộ bảo vệ giả có thể đảo ngược: đủ để phân biệt "đã mã hoá" với plaintext.</summary>
