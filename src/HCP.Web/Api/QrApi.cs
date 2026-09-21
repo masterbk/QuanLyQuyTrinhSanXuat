@@ -78,12 +78,12 @@ public static class QrApi
         using var msQr = new MemoryStream(qrPng);
         using var qrAnh = Image.FromStream(msQr);
         const int le = 24;           // viền trắng quanh mã QR
-        const int caoDongDau = 32;   // chiều cao dòng đầu (mã, in đậm)
-        const int caoDongSau = 24;   // chiều cao mỗi dòng còn lại (cỡ nhỏ hơn, có thể ngắt dòng)
+        const int caoDongDau = 36;   // chiều cao dòng đầu (mã, in đậm)
+        const int caoDongSau = 32;   // chiều cao mỗi dòng còn lại (có thể ngắt dòng)
         var rong = qrAnh.Width + le * 2;
 
-        using var fontDam = new Font("Arial", 20, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var fontThuong = new Font("Arial", 15, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var fontDam = new Font("Arial", 22, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var fontThuong = new Font("Arial", 20, FontStyle.Regular, GraphicsUnit.Pixel);
         using var brush = new SolidBrush(Color.FromArgb(0x1a, 0x2b, 0x4c));
         using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
