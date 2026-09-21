@@ -106,7 +106,7 @@ Widget _app(KhoDonGia kho, {bool nhapLieu = false}) => ProviderScope(
     );
 
 void main() {
-  testWidgets('Đơn chưa ai nhận thì có nút Nhận đơn; đơn của người khác thì không', (t) async {
+  testWidgets('Đơn chưa ai nhận thì có nút Nhận giao hàng; đơn của người khác thì không', (t) async {
     final kho = KhoDonGia([
       _don(id: 1, ma: 'DH-001', trangThai: 'ChoGiaoHang'),   // chưa ai nhận
       _don(id: 2, ma: 'DH-002', nguoiGiao: 'NS09'),          // đã có người nhận, đang giao
@@ -115,23 +115,49 @@ void main() {
     await t.pumpAndSettle();
 
     expect(find.text('DH-001'), findsOneWidget);
-    expect(find.text('Nhận đơn'), findsOneWidget);                 // chỉ đơn chưa ai nhận
+    expect(find.text('Nhận giao hàng'), findsOneWidget);            // chỉ đơn chưa ai nhận
     expect(find.text('Người giao: Người giao NS09'), findsOneWidget);
-    // "Đã giao" chỉ hiện với đơn CHÍNH MÌNH đã nhận - đơn chưa ai nhận hoặc của người khác đều không có.
-    expect(find.text('Đã giao'), findsNothing);
+    // "Hoàn thành giao hàng" chỉ hiện với đơn CHÍNH MÌNH đã nhận - đơn chưa ai nhận hoặc của người khác đều không có.
+    expect(find.text('Hoàn thành giao hàng'), findsNothing);
 
-    await t.tap(find.text('Nhận đơn'));
+    await t.tap(find.text('Nhận giao hàng'));
     await t.pumpAndSettle();
     expect(kho.daNhan, 1);
   });
 
-  testWidgets('Đơn mình đã nhận: hiện "Bạn nhận" và nút xác nhận đã giao', (t) async {
+  testWidgets('Đơn mình đã nhận: hiện "Bạn nhận" và nút hoàn thành giao hàng', (t) async {
     await t.pumpWidget(_app(KhoDonGia([_don(id: 3, ma: 'DH-003', nguoiGiao: 'NS01')])));
     await t.pumpAndSettle();
 
     expect(find.text('Bạn nhận'), findsOneWidget);
-    expect(find.text('Nhận đơn'), findsNothing);
-    expect(find.text('Đã giao'), findsOneWidget);
+    expect(find.text('Nhận giao hàng'), findsNothing);
+    expect(find.text('Hoàn thành giao hàng'), findsOneWidget);
+  });
+
+  testWidgets('Bộ lọc: shipper thuần chỉ thấy Chờ giao hàng + Của tôi', (t) async {
+    await t.pumpWidget(_app(KhoDonGia([_don(id: 1)])));
+    await t.pumpAndSettle();
+    expect(find.text('Chờ giao hàng'), findsOneWidget);
+    expect(find.text('Của tôi'), findsOneWidget);
+    expect(find.text('Chờ xác nhận'), findsNothing);
+    expect(find.text('Cần xuất kho'), findsNothing);
+    expect(find.text('Tất cả'), findsNothing);
+  });
+
+  testWidgets('Bộ lọc: quản lý/nhập liệu thấy thêm Chờ xác nhận, Cần xuất kho, Tất cả', (t) async {
+    // Phóng to khung hình để cả 5 chip bộ lọc hiện đủ, khỏi phải cuộn ngang.
+    t.view.physicalSize = const Size(2000, 800);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.resetPhysicalSize);
+    addTearDown(t.view.resetDevicePixelRatio);
+
+    await t.pumpWidget(_app(KhoDonGia([_don(id: 1)]), nhapLieu: true));
+    await t.pumpAndSettle();
+    expect(find.text('Chờ giao hàng'), findsOneWidget);
+    expect(find.text('Của tôi'), findsOneWidget);
+    expect(find.text('Chờ xác nhận'), findsOneWidget);
+    expect(find.text('Cần xuất kho'), findsOneWidget);
+    expect(find.text('Tất cả'), findsOneWidget);
   });
 
   testWidgets('Nút Tạo đơn KHÔNG hiện với shipper thuần', (t) async {

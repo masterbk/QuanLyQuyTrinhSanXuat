@@ -73,7 +73,8 @@ public static class DonHangApi
             .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenGiaoHang })
             .WithTags("Đơn hàng bán");
 
-        // canGiao: việc của nhân viên giao hàng (đơn đang giao); cuaToi: đơn mình đã nhận.
+        // canGiao: đơn "Chờ giao hàng" (chưa ai nhận, ai cũng nhận được); cuaToi: đơn của mình (đã nhận),
+        // bất kể trạng thái - đang giao hoặc đã giao xong.
         ban.MapGet("", async (IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp,
                               IDanhMucService<Staff> ns, ClaimsPrincipal user, AppDbContext db,
                               string? trangThai, bool canGiao = false, bool cuaToi = false,
@@ -82,7 +83,7 @@ public static class DonHangApi
             IEnumerable<DonHangBan> ds = await svc.LayTatCaAsync();
             if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiDonHangBan>(trangThai, true, out var tt))
                 ds = ds.Where(d => d.TrangThai == tt);
-            if (canGiao) ds = ds.Where(d => d.TrangThai is TrangThaiDonHangBan.ChoGiaoHang or TrangThaiDonHangBan.DangGiao);
+            if (canGiao) ds = ds.Where(d => d.TrangThai == TrangThaiDonHangBan.ChoGiaoHang);
             if (cuaToi)
             {
                 var maToi = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);

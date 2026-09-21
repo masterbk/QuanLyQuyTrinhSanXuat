@@ -113,7 +113,7 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
   }
 }
 
-/// Thẻ một đơn: thông tin giao + nút Nhận đơn / Xác nhận đã giao.
+/// Thẻ một đơn: thông tin giao + nút Nhận giao hàng / Hoàn thành giao hàng.
 class TheDonHang extends ConsumerWidget {
   final DonHangBan don;
 
@@ -224,14 +224,14 @@ class TheDonHang extends ConsumerWidget {
                   FilledButton.tonalIcon(
                     onPressed: () => chay(() => ref.read(khoDonProvider).nhanDon(don.id)),
                     icon: const Icon(Icons.local_shipping_outlined, size: 18),
-                    label: const Text('Nhận đơn'),
+                    label: const Text('Nhận giao hàng'),
                   ),
                 if (nhanDuoc && giaoDuoc) const SizedBox(width: 8),
                 if (giaoDuoc)
                   FilledButton.icon(
                     onPressed: xacNhanGiao,
                     icon: const Icon(Icons.done_all, size: 18),
-                    label: const Text('Đã giao'),
+                    label: const Text('Hoàn thành giao hàng'),
                   ),
               ],
             ),
@@ -275,7 +275,7 @@ class _BoLoc extends StatelessWidget {
   const _BoLoc({required this.dangChon, required this.coQuyenNhapLieu, required this.khiChon});
 
   static const _mucCoBan = <({LocDon ma, String ten})>[
-    (ma: LocDon.canGiao, ten: 'Cần giao'),
+    (ma: LocDon.canGiao, ten: 'Chờ giao hàng'),
     (ma: LocDon.cuaToi, ten: 'Của tôi'),
   ];
   static const _mucQuanLy = <({LocDon ma, String ten})>[
@@ -286,7 +286,9 @@ class _BoLoc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muc = [..._mucCoBan, if (coQuyenNhapLieu) ..._mucQuanLy, _mucTatCa];
+    // Shipper thuần chỉ thấy "Chờ giao hàng" + "Của tôi" - không phải việc của họ xem đơn chưa xuất kho
+    // hay toàn bộ đơn của cơ sở.
+    final muc = [..._mucCoBan, if (coQuyenNhapLieu) ..._mucQuanLy, if (coQuyenNhapLieu) _mucTatCa];
     return SizedBox(
       height: 50,
       child: ListView.separated(
@@ -338,7 +340,8 @@ class _Rong extends StatelessWidget {
               LocDon.cuaToi => 'Bạn chưa nhận đơn nào',
               LocDon.choXacNhan => 'Không có đơn chờ xác nhận',
               LocDon.canXuatKho => 'Không có đơn cần xuất kho',
-              _ => 'Không có đơn cần giao',
+              LocDon.canGiao => 'Không có đơn chờ giao hàng',
+              _ => 'Không có đơn',
             },
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium,

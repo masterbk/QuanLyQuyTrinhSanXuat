@@ -78,7 +78,7 @@ class _ManXacNhanGiaoState extends ConsumerState<ManXacNhanGiao> {
   Widget build(BuildContext context) => PopScope(
         canPop: !_dangGui,
         child: Scaffold(
-          appBar: AppBar(title: Text('Đã giao ${widget.don.maDonHang}')),
+          appBar: AppBar(title: Text('Hoàn thành giao hàng ${widget.don.maDonHang}')),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
@@ -138,7 +138,7 @@ class _ManXacNhanGiaoState extends ConsumerState<ManXacNhanGiao> {
                 onPressed: _dangGui || _anh.isEmpty ? null : _gui,
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                 icon: const Icon(Icons.done_all),
-                label: Text(_dangGui ? 'Đang gửi...' : 'Xác nhận đã giao'),
+                label: Text(_dangGui ? 'Đang gửi...' : 'Hoàn thành giao hàng'),
               ),
             ),
           ),

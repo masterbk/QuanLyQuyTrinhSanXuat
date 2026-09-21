@@ -19,8 +19,9 @@ class KhoDonHang {
 
   KhoDonHang(this._api);
 
-  /// [canGiao] = việc của shipper (chờ nhận giao hoặc đang giao); [cuaToi] = đơn mình đã nhận;
-  /// [trangThai] = lọc đúng 1 trạng thái (VD "ChoXacNhan" cho quản lý/nhập liệu xác nhận đơn mới).
+  /// [canGiao] = đơn đang "Chờ giao hàng" (chưa ai nhận, ai cũng nhận được); [cuaToi] = đơn của mình (đã
+  /// nhận - đang giao hoặc đã giao xong), bất kể trạng thái; [trangThai] = lọc đúng 1 trạng thái (VD
+  /// "ChoXacNhan" cho quản lý/nhập liệu xác nhận đơn mới).
   Future<TrangDuLieu<DonHangBan>> danhSach(
       {bool canGiao = true, bool cuaToi = false, String? trangThai, int trang = 1, int soDong = 20}) async {
     final j = await _api.get('/api/v1/don-hang-ban', thamSo: {
@@ -114,8 +115,8 @@ class KhoDonHang {
 
 final khoDonProvider = Provider<KhoDonHang>((ref) => KhoDonHang(ref.watch(apiProvider)));
 
-/// Bộ lọc danh sách đơn: "Cần giao" (mặc định), "Của tôi", "Chờ xác nhận"/"Cần xuất kho"
-/// (quản lý/nhập liệu), "Tất cả".
+/// Bộ lọc danh sách đơn: "Chờ giao hàng" (mặc định) + "Của tôi" - nhân viên giao hàng thuần chỉ thấy 2
+/// mục này; quản lý/nhập liệu có thêm "Chờ xác nhận"/"Cần xuất kho"/"Tất cả".
 enum LocDon { canGiao, cuaToi, choXacNhan, canXuatKho, tatCa }
 
 final locDonProvider = NotifierProvider<LocDonNotifier, LocDon>(LocDonNotifier.new);
@@ -143,7 +144,7 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
     final loc = ref.watch(locDonProvider);
     _trang = 1;
     final trang = await ref.read(khoDonProvider).danhSach(
-          canGiao: loc == LocDon.canGiao || loc == LocDon.cuaToi,
+          canGiao: loc == LocDon.canGiao,
           cuaToi: loc == LocDon.cuaToi,
           trangThai: switch (loc) {
             LocDon.choXacNhan => 'ChoXacNhan',
@@ -168,7 +169,7 @@ class DanhSachDonNotifier extends AsyncNotifier<List<DonHangBan>> {
     try {
       final loc = ref.read(locDonProvider);
       final trang = await ref.read(khoDonProvider).danhSach(
-            canGiao: loc == LocDon.canGiao || loc == LocDon.cuaToi,
+            canGiao: loc == LocDon.canGiao,
             cuaToi: loc == LocDon.cuaToi,
             trangThai: switch (loc) {
               LocDon.choXacNhan => 'ChoXacNhan',
