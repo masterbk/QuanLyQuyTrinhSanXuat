@@ -137,18 +137,20 @@ public class NhanSuService : IDanhMucService<Staff>
     /// </summary>
     private async Task<string?> KiemTraDangThamChieuAsync(string maNhanSu, CancellationToken ct)
     {
+        const string goiY = " Cho nhân sự này \"nghỉ việc\" thay vì xoá để giữ đúng dữ liệu đã có.";
+
         if (await _db.DonHangBans.AnyAsync(d => d.MaNguoiGiao == maNhanSu, ct))
-            return "Không xoá được: nhân sự đang là người giao của đơn hàng bán.";
+            return "Không xoá được: nhân sự đang là người giao của đơn hàng bán." + goiY;
         if (await _db.DonHangNhans.AnyAsync(d => d.MaNguoiGiao == maNhanSu, ct))
-            return "Không xoá được: nhân sự đang là người giao của đơn hàng từ trường.";
+            return "Không xoá được: nhân sự đang là người giao của đơn hàng từ trường." + goiY;
         if (await _db.LenhSanXuatThamGias.AnyAsync(t => t.MaNhanSu == maNhanSu, ct))
-            return "Không xoá được: nhân sự đã tham gia lệnh sản xuất.";
+            return "Không xoá được: nhân sự đã tham gia lệnh sản xuất." + goiY;
         if (await CoTrongCsvAsync(_db.LenhSanXuatKhaus.Select(k => k.NguoiThucHienCsv), maNhanSu, ct))
-            return "Không xoá được: nhân sự đang là người thực hiện một khâu của lệnh sản xuất.";
+            return "Không xoá được: nhân sự đang là người thực hiện một khâu của lệnh sản xuất." + goiY;
         if (await CoTrongCsvAsync(_db.BatchSteps.Select(s => s.NguoiThucHienCsv), maNhanSu, ct))
-            return "Không xoá được: nhân sự đang là người thực hiện một bước của lô sản xuất.";
+            return "Không xoá được: nhân sự đang là người thực hiện một bước của lô sản xuất." + goiY;
         if (await CoTrongCsvAsync(_db.DishSteps.Select(s => s.NguoiThucHienCsv), maNhanSu, ct))
-            return "Không xoá được: nhân sự đang là người thực hiện một bước chế biến món ăn.";
+            return "Không xoá được: nhân sự đang là người thực hiện một bước chế biến món ăn." + goiY;
         return null;
     }
 

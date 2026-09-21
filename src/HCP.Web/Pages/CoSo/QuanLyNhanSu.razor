@@ -115,6 +115,11 @@ else
             <MudTd>
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                OnClick="@(() => MoForm(context))" />
+                <MudTooltip Text="@(context.TrangThai ? "Cho nghỉ việc" : "Cho làm việc lại")">
+                    <MudIconButton Icon="@(context.TrangThai ? Icons.Material.Filled.PersonOff : Icons.Material.Filled.PersonAddAlt)"
+                                   Size="Size.Small" Color="@(context.TrangThai ? Color.Warning : Color.Success)"
+                                   OnClick="@(() => XacNhanDoiTrangThaiAsync(context))" />
+                </MudTooltip>
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
                                OnClick="@(() => XacNhanXoaAsync(context))" />
             </MudTd>
@@ -471,6 +476,47 @@ else
             _hienForm = false;
             await TaiDanhSachAsync();
         }
+    }
+
+    /// <summary>
+    /// Bật/tắt nhanh trạng thái làm việc mà không phải mở form sửa đầy đủ - dùng khi cần loại nhân sự
+    /// khỏi hệ thống (không tham gia/hoàn thành lệnh, không nhận đơn giao mới) nhưng không xoá được vì
+    /// đã có dữ liệu tham chiếu. Đồng bộ lại luôn tài khoản đăng nhập (nếu có) giống lúc lưu form đầy đủ,
+    /// vì trạng thái khoá tài khoản chỉ được tính lại khi TaiKhoanService.LuuAsync chạy.
+    /// </summary>
+    private async Task XacNhanDoiTrangThaiAsync(Staff ns)
+    {
+        var sangNghi = ns.TrangThai;   // đang làm -> sắp chuyển nghỉ
+        var dongY = await DialogService.ShowMessageBox(
+            sangNghi ? "Cho nghỉ việc" : "Cho làm việc lại",
+            sangNghi
+                ? $"Đánh dấu \"{ns.HoTen}\" ({ns.MaNhanSu}) nghỉ việc? Tài khoản đăng nhập (nếu có) sẽ bị khoá, "
+                  + "không tham gia/hoàn thành được lệnh sản xuất hay nhận đơn giao hàng mới - dữ liệu đã có vẫn được giữ nguyên."
+                : $"Cho \"{ns.HoTen}\" ({ns.MaNhanSu}) làm việc lại? Tài khoản đăng nhập (nếu có) sẽ được mở khoá.",
+            yesText: sangNghi ? "Cho nghỉ" : "Cho làm lại", cancelText: "Huỷ");
+        if (dongY != true) return;
+
+        var hienTai = await NhanSuService.LayTheoIdAsync(ns.Id);
+        if (hienTai is null) return;
+        hienTai.TrangThai = !hienTai.TrangThai;
+
+        var ketQua = await NhanSuService.CapNhatAsync(hienTai);
+        if (!ketQua.ThanhCong)
+        {
+            Snackbar.Add(ketQua.ThongBao, Severity.Error);
+            return;
+        }
+
+        if (_taiKhoan.TryGetValue(ns.Id, out var tk))
+        {
+            await TaiKhoanService.LuuAsync(hienTai, new YeuCauTaiKhoan
+            {
+                CoTaiKhoan = true, Email = tk.Email, VaiTro = tk.VaiTro.ToList(), DangHoatDong = tk.DangHoatDong
+            });
+        }
+
+        Snackbar.Add(ketQua.ThongBao, Severity.Success);
+        await TaiDanhSachAsync();
     }
 
     private async Task XacNhanXoaAsync(Staff ns)
