@@ -58,11 +58,17 @@ public interface ILenhSanXuatService
     /// Hoàn thành lệnh: trừ nguyên liệu (FEFO) + nhập thành phẩm cho mọi dòng. Chỉ chạy khi còn
     /// "Mới tạo". MỖI dòng sản phẩm bắt buộc kèm ít nhất 1 ảnh lô. Nếu có sửa lại người thực hiện
     /// hoặc cơ sở của khâu thì truyền qua <paramref name="khauSuaLai"/>.
+    /// <paramref name="coQuyenNhapLieu"/> = true (quản trị cơ sở/nhân viên nhập liệu) thì luôn hoàn thành
+    /// được; false thì bắt buộc <paramref name="maNguoiThucHien"/> phải có mặt trong danh sách người thực
+    /// hiện của ÍT NHẤT một khâu của lệnh - dùng cho nhân viên sản xuất chỉ được hoàn thành lệnh mình
+    /// tham gia.
     /// </summary>
     Task<KetQuaThaoTac> ThucHienAsync(
         int id,
         IReadOnlyList<AnhTheoSanPham> anhTheoSanPham,
         IReadOnlyList<LenhSanXuatKhau>? khauSuaLai = null,
+        bool coQuyenNhapLieu = true,
+        string? maNguoiThucHien = null,
         CancellationToken ct = default);
 
     /// <summary>Xoá lệnh (chỉ xoá được lệnh chưa thực hiện).</summary>

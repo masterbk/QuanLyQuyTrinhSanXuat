@@ -196,7 +196,16 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
               ),
             ),
           ),
-          data: (l) => ListView(
+          data: (l) {
+            final nd = ref.watch(xacThucProvider).nguoiDung;
+            final coQuyenNhapLieu = nd?.coQuyenNhapLieu ?? false;
+            final maToi = (nd?.maNhanSu ?? '').toLowerCase();
+            // Quản trị/nhân viên nhập liệu hoàn thành được mọi lệnh; nhân viên sản xuất chỉ hoàn thành
+            // được lệnh mình có tham gia ít nhất một khâu.
+            final hoanThanhDuoc = coQuyenNhapLieu || (maToi.isNotEmpty && l.sanPham.any(
+                (s) => s.khau.any((k) => k.nguoiThucHien.any((m) => m.toLowerCase() == maToi))));
+
+            return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
               _TheTrangThai(lenh: l),
@@ -251,12 +260,13 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                FilledButton.icon(
-                  onPressed: () => _hoanThanh(l),
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('Hoàn thành (kèm ảnh)'),
-                ),
+                if (hoanThanhDuoc)
+                  FilledButton.icon(
+                    onPressed: () => _hoanThanh(l),
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Hoàn thành (kèm ảnh)'),
+                  ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () => _xoa(l),
@@ -265,7 +275,7 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
                   label: const Text('Xoá lệnh'),
                 ),
               ],
-              if (l.hoanThanh)
+              if (l.hoanThanh && coQuyenNhapLieu)
                 OutlinedButton.icon(
                   onPressed: () => _huy(l),
                   style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
@@ -273,7 +283,8 @@ class _ManChiTietLenhState extends ConsumerState<ManChiTietLenh> {
                   label: const Text('Huỷ lệnh (trả lại kho)'),
                 ),
             ],
-          ),
+          );
+          },
         ),
       ),
     );

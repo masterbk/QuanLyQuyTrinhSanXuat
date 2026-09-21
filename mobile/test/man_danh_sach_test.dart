@@ -123,11 +123,19 @@ void main() {
   });
 
   testWidgets('Chưa có lệnh nào thì hiện lời nhắc, không hiện danh sách trống trơn', (t) async {
-    await t.pumpWidget(_app(KhoGia()));
+    // Cần quyền nhập liệu mới thấy nút "Tạo lệnh" (nhân viên sản xuất/không có quyền thì không).
+    await t.pumpWidget(_app(KhoGia(), nguoiDung: NguoiDung(id: 'u1', email: '', vaiTro: ['TenantStaff'])));
     await t.pumpAndSettle();
 
     expect(find.text('Chưa có lệnh sản xuất nào'), findsOneWidget);
     expect(find.text('Tạo lệnh'), findsOneWidget);      // vẫn còn nút tạo
+  });
+
+  testWidgets('Không có quyền nhập liệu thì KHÔNG thấy nút Tạo lệnh', (t) async {
+    await t.pumpWidget(_app(KhoGia()));
+    await t.pumpAndSettle();
+
+    expect(find.text('Tạo lệnh'), findsNothing);
   });
 
   testWidgets('Bấm bộ lọc thì gọi lại danh sách theo đúng trạng thái', (t) async {

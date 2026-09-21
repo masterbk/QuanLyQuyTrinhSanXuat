@@ -278,6 +278,8 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         int id,
         IReadOnlyList<AnhTheoSanPham> anhTheoSanPham,
         IReadOnlyList<LenhSanXuatKhau>? khauSuaLai = null,
+        bool coQuyenNhapLieu = true,
+        string? maNguoiThucHien = null,
         CancellationToken ct = default)
     {
         var lenh = await QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
@@ -287,6 +289,16 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         if (lenh.TrangThai == TrangThaiLenhSX.DaHuy)
             return KetQuaThaoTac.Loi("Lệnh này đã huỷ, không hoàn thành lại được. Hãy tạo lệnh mới.");
         if (lenh.SanPham.Count == 0) return KetQuaThaoTac.Loi("Lệnh không có sản phẩm nào.");
+
+        // Không có quyền nhập liệu (quản trị/nhân viên nhập liệu) thì phải là người thực hiện của ÍT NHẤT
+        // một khâu của CHÍNH lệnh này mới hoàn thành được.
+        if (!coQuyenNhapLieu)
+        {
+            var laNguoiThucHien = maNguoiThucHien is not null && lenh.SanPham.Any(s => s.Khau.Any(
+                k => k.NguoiThucHien.Contains(maNguoiThucHien, StringComparer.OrdinalIgnoreCase)));
+            if (!laNguoiThucHien)
+                return KetQuaThaoTac.Loi("Bạn không phải người thực hiện khâu nào của lệnh này nên không hoàn thành được.");
+        }
 
         // Ảnh: MỖI dòng sản phẩm phải có ảnh của chính lô đó. Kiểm TRƯỚC khi động vào kho.
         var anhTheoDong = (anhTheoSanPham ?? Array.Empty<AnhTheoSanPham>())

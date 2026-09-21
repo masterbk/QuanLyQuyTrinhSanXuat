@@ -112,7 +112,7 @@ public static class LenhSanXuatApi
             return kq.ThanhCong
                 ? Results.Created($"/api/v1/lenh-san-xuat/{lenh.Id}", new KetQuaDto(true, kq.ThongBao))
                 : Results.BadRequest(new LoiDto(kq.ThongBao));
-        });
+        }).RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenNhapLieu });
 
         nhom.MapPut("/{id:int}", async (int id, LenhSanXuatLuuRequest req, ILenhSanXuatService svc) =>
         {
@@ -135,7 +135,7 @@ public static class LenhSanXuatApi
         //   - trường "khau" (tuỳ chọn): JSON mảng KhauSuaLaiRequest nếu người làm thực tế khác kế hoạch.
         nhom.MapPost("/{id:int}/hoan-thanh", async (int id, HttpRequest http,
                                                     ILenhSanXuatService svc, ILuuTruAnhService luuAnh,
-                                                    CancellationToken ct) =>
+                                                    ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>
         {
             if (!http.HasFormContentType)
                 return Results.BadRequest(new LoiDto("Cần gửi dạng multipart/form-data kèm ảnh lô thành phẩm."));
@@ -200,8 +200,13 @@ public static class LenhSanXuatApi
                 }
             }
 
+            // Quản trị/nhân viên nhập liệu luôn hoàn thành được; nhân viên sản xuất thuần chỉ hoàn thành
+            // được lệnh mình có tham gia (kiểm tra ở service, cần đúng mã nhân sự đang đăng nhập).
+            var coQuyenNhapLieu = user.IsInRole(AppRoles.TenantAdmin) || user.IsInRole(AppRoles.TenantStaff);
+            var maNguoiThucHien = coQuyenNhapLieu ? null : await MaNhanSuHienTaiAsync(user, db);
+
             var anhTheoSanPham = theoDong.Select(x => new AnhTheoSanPham(x.Key, x.Value)).ToList();
-            var kq = await svc.ThucHienAsync(id, anhTheoSanPham, khauSuaLai, ct);
+            var kq = await svc.ThucHienAsync(id, anhTheoSanPham, khauSuaLai, coQuyenNhapLieu, maNguoiThucHien, ct);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         }).DisableAntiforgery();
@@ -211,7 +216,7 @@ public static class LenhSanXuatApi
             var kq = await svc.HuyAsync(id, req.LyDo);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
-        });
+        }).RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenNhapLieu });
 
         // POST (không phải GET) vì nhu cầu tính trên NHIỀU dòng sản phẩm một lúc.
         nhom.MapPost("/nguyen-lieu-can", async (NguyenLieuCanRequest req, ILenhSanXuatService svc) =>

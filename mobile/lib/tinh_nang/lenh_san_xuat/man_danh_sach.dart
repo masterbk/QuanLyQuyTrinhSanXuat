@@ -44,7 +44,9 @@ class _ManDanhSachLenhState extends ConsumerState<ManDanhSachLenh> {
     final ds = ref.watch(danhSachLenhProvider);
     final loc = ref.watch(locTrangThaiProvider);
     final cuaToi = ref.watch(locCuaToiProvider);
-    final thamGiaDuoc = ref.watch(xacThucProvider).nguoiDung?.coTheThamGiaLenh ?? false;
+    final nguoiDung = ref.watch(xacThucProvider).nguoiDung;
+    final thamGiaDuoc = nguoiDung?.coTheThamGiaLenh ?? false;
+    final taoDuoc = nguoiDung?.coQuyenNhapLieu ?? false;
 
     return Scaffold(
       body: Column(
@@ -79,28 +81,40 @@ class _ManDanhSachLenhState extends ConsumerState<ManDanhSachLenh> {
           ),
         ],
       ),
-      floatingActionButton: thamGiaDuoc
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                FloatingActionButton.small(
-                    heroTag: 'tao-lenh', tooltip: 'Tạo lệnh', onPressed: _taoLenh, child: const Icon(Icons.add)),
-                const SizedBox(height: 12),
-                FloatingActionButton.extended(
-                  heroTag: 'quet-ma-lenh',
-                  onPressed: _quetMaLenh,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Quét mã lệnh'),
-                ),
-              ],
-            )
-          : FloatingActionButton.extended(
-              onPressed: _taoLenh,
-              icon: const Icon(Icons.add),
-              label: const Text('Tạo lệnh'),
-            ),
+      floatingActionButton: _fab(taoDuoc, thamGiaDuoc),
     );
+  }
+
+  /// Tạo lệnh: chỉ quản trị cơ sở/nhân viên nhập liệu. Quét mã lệnh (tham gia khâu): chỉ nhân viên sản
+  /// xuất. Một người có thể có cả hai vai trò nên cả hai nút đều hiện được đồng thời.
+  Widget? _fab(bool taoDuoc, bool thamGiaDuoc) {
+    if (taoDuoc && thamGiaDuoc) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+              heroTag: 'tao-lenh', tooltip: 'Tạo lệnh', onPressed: _taoLenh, child: const Icon(Icons.add)),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'quet-ma-lenh',
+            onPressed: _quetMaLenh,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Quét mã lệnh'),
+          ),
+        ],
+      );
+    }
+    if (taoDuoc) {
+      return FloatingActionButton.extended(
+          heroTag: 'tao-lenh', onPressed: _taoLenh, icon: const Icon(Icons.add), label: const Text('Tạo lệnh'));
+    }
+    if (thamGiaDuoc) {
+      return FloatingActionButton.extended(
+          heroTag: 'quet-ma-lenh', onPressed: _quetMaLenh,
+          icon: const Icon(Icons.qr_code_scanner), label: const Text('Quét mã lệnh'));
+    }
+    return null;
   }
 
   Future<void> _taoLenh() async {

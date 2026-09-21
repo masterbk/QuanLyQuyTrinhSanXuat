@@ -177,6 +177,39 @@ public class LenhSanXuatServiceTests
         Assert.Equal(TrangThaiLenhSX.MoiTao, (await db.LenhSanXuats.SingleAsync()).TrangThai);
     }
 
+    /// <summary>Không có quyền nhập liệu (quản trị/nhân viên nhập liệu) thì chỉ người có mặt trong danh sách
+    /// người thực hiện của ÍT NHẤT một khâu của CHÍNH lệnh đó mới hoàn thành được.</summary>
+    [Fact]
+    public async Task Khong_Co_Quyen_Nhap_Lieu_Thi_Phai_La_Nguoi_Thuc_Hien_Cua_Lenh_Moi_Hoan_Thanh_Duoc()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 5m, new DateOnly(2026, 6, 1));
+        var id = await TaoAsync(Lenh(10));   // 2 khâu đều gán sẵn NS01 (mặc định của Khau())
+        var anh = await AnhAsync(id);
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).ThucHienAsync(id, anh, coQuyenNhapLieu: false, maNguoiThucHien: "NS02");
+            Assert.False(kq.ThanhCong);
+            Assert.Contains("không phải người thực hiện", kq.ThongBao);
+        }
+        using (var db = MoDb())
+        {
+            // Tài khoản không gắn hồ sơ nhân sự (mã null) cũng bị chặn như nhau.
+            var kq = await Svc(db).ThucHienAsync(id, anh, coQuyenNhapLieu: false, maNguoiThucHien: null);
+            Assert.False(kq.ThanhCong);
+        }
+        using (var db = MoDb())
+            Assert.Equal(TrangThaiLenhSX.MoiTao, (await db.LenhSanXuats.SingleAsync()).TrangThai);
+
+        using (var db = MoDb())
+        {
+            // NS01 có tham gia (không phân biệt hoa/thường) -> hoàn thành được dù không có quyền nhập liệu.
+            var kq = await Svc(db).ThucHienAsync(id, anh, coQuyenNhapLieu: false, maNguoiThucHien: "ns01");
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+    }
+
     [Fact]
     public async Task Khong_Thuc_Hien_Hai_Lan()
     {

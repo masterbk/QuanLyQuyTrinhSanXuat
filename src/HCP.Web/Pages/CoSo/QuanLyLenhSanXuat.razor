@@ -1,9 +1,12 @@
 @page "/app/lenh-san-xuat"
+@using System.Security.Claims
 @using HCP.Domain.Constants
 @using HCP.Domain.Entities.Business
 @using HCP.Domain.Enums
+@using HCP.Infrastructure.Persistence
 @using HCP.Infrastructure.Services.DanhMuc
 @using HCP.Infrastructure.Services.Kho
+@using HCP.Web.Api
 @using HCP.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
@@ -19,6 +22,7 @@
 @inject ILuuTruAnhService LuuTruAnh
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AppDbContext Db
 
 <PageTitle>Lệnh sản xuất</PageTitle>
 
@@ -30,10 +34,12 @@
             khi lập lệnh: nhân viên sản xuất quét mã QR của lệnh trên ứng dụng để tham gia các khâu. Hoàn thành thì tự trừ nguyên liệu (lô hết hạn trước xuất trước) và nhập thành phẩm vào kho.
         </MudText>
     </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-               OnClick="MoForm" Disabled="@(_thanhPham.Count == 0 || _kho.Count == 0 || _quyTrinh.Count == 0)">
-        Tạo lệnh
-    </MudButton>
+    <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="quyen">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="MoForm" Disabled="@(_thanhPham.Count == 0 || _kho.Count == 0 || _quyTrinh.Count == 0)">
+            Tạo lệnh
+        </MudButton>
+    </AuthorizeView>
 </div>
 
 @if (_dangTai)
@@ -116,9 +122,12 @@ else
                 <MudTd>
                     @if (context.TrangThai == TrangThaiLenhSX.MoiTao)
                     {
-                        <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
-                                   StartIcon="@Icons.Material.Filled.CheckCircle" Disabled="_dangXuLy"
-                                   OnClick="@(() => MoHoanThanhAsync(context))">Hoàn thành</MudButton>
+                        @if (HoanThanhDuoc(context))
+                        {
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                       StartIcon="@Icons.Material.Filled.CheckCircle" Disabled="_dangXuLy"
+                                       OnClick="@(() => MoHoanThanhAsync(context))">Hoàn thành</MudButton>
+                        }
                         <NutQrTraCuu Loai="LoaiTraCuu.LenhSanXuat" Id="@context.Id" Ma="@context.MaLenh" />
                         <MudTooltip Text="Sửa lệnh">
                             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
@@ -438,6 +447,16 @@ else
     private LenhSanXuat? _lenhHoanThanh;
     private List<DongHoanThanh> _hoanThanh = new();
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private bool _coQuyenNhapLieu;
+    private string? _maNhanSuHienTai;
+
+    /// <summary>Quản trị/nhân viên nhập liệu hoàn thành được mọi lệnh; nhân viên sản xuất chỉ hoàn thành
+    /// được lệnh mình có tham gia ít nhất một khâu.</summary>
+    private bool HoanThanhDuoc(LenhSanXuat lenh) => _coQuyenNhapLieu
+        || (_maNhanSuHienTai is not null && lenh.SanPham.Any(s => s.Khau.Any(
+                k => k.NguoiThucHien.Contains(_maNhanSuHienTai, StringComparer.OrdinalIgnoreCase))));
+
     private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
     private readonly DialogOptions _dialogNhoOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
 
@@ -467,7 +486,16 @@ else
         </MudItem>
     </MudGrid>;
 
-    protected override async Task OnInitializedAsync() => await TaiAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _coQuyenNhapLieu = user.IsInRole(AppRoles.TenantAdmin) || user.IsInRole(AppRoles.TenantStaff);
+            _maNhanSuHienTai = _coQuyenNhapLieu ? null : await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, Db);
+        }
+        await TaiAsync();
+    }
 
     private async Task TaiAsync()
     {
@@ -666,7 +694,8 @@ else
         var kq = await LenhService.ThucHienAsync(
             _lenhHoanThanh.Id,
             _hoanThanh.Select(d => new AnhTheoSanPham(d.SanPham.Id, d.Anh.ToList())).ToList(),
-            _hoanThanh.SelectMany(d => d.Khau).ToList());
+            _hoanThanh.SelectMany(d => d.Khau).ToList(),
+            _coQuyenNhapLieu, _maNhanSuHienTai);
         _dangXuLy = false;
         Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
         if (kq.ThanhCong) { _hienHoanThanh = false; await TaiAsync(); }
