@@ -74,29 +74,31 @@ public static class DonHangApi
             .WithTags("Đơn hàng bán");
 
         // canGiao: đơn "Chờ giao hàng" (chưa ai nhận, ai cũng nhận được); cuaToi: đơn của mình (đã nhận),
-        // bất kể trạng thái - đang giao hoặc đã giao xong.
+        // bất kể trạng thái - đang giao hoặc đã giao xong. Lọc + phân trang ở CSDL (IDonHangBanService.LayTrangAsync)
+        // - KHÔNG tải cả bảng đơn hàng vào bộ nhớ rồi mới cắt trang, vì API này bị app gọi lại liên tục (đổi
+        // tab, kéo thêm trang, pull-to-refresh).
         ban.MapGet("", async (IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp,
                               IDanhMucService<Staff> ns, ClaimsPrincipal user, AppDbContext db,
                               string? trangThai, bool canGiao = false, bool cuaToi = false,
                               int trang = 1, int soDong = 20) =>
         {
-            IEnumerable<DonHangBan> ds = await svc.LayTatCaAsync();
-            if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiDonHangBan>(trangThai, true, out var tt))
-                ds = ds.Where(d => d.TrangThai == tt);
-            if (canGiao) ds = ds.Where(d => d.TrangThai == TrangThaiDonHangBan.ChoGiaoHang);
+            TrangThaiDonHangBan? tt = !string.IsNullOrWhiteSpace(trangThai)
+                                       && Enum.TryParse<TrangThaiDonHangBan>(trangThai, true, out var parsed)
+                ? parsed : null;
+
+            string? maNguoiGiao = null;
             if (cuaToi)
             {
-                var maToi = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
-                ds = maToi is null
-                    ? Enumerable.Empty<DonHangBan>()
-                    : ds.Where(d => string.Equals(d.MaNguoiGiao, maToi, StringComparison.OrdinalIgnoreCase));
+                maNguoiGiao = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
+                if (maNguoiGiao is null)
+                    return Results.Ok(new TrangDuLieu<DonHangBanDto>(Array.Empty<DonHangBanDto>(), 1, soDong, 0));
             }
 
-            var tatCa = ds.ToList();
-            var ten = await LayTenAsync(kh, sp, ns);
             var (t, n) = LenhSanXuatApi.ChuanHoaTrang(trang, soDong);
+            var (trangDs, tongSo) = await svc.LayTrangAsync(tt, canGiao, maNguoiGiao, t, n);
+            var ten = await LayTenAsync(kh, sp, ns);
             return Results.Ok(new TrangDuLieu<DonHangBanDto>(
-                tatCa.Skip((t - 1) * n).Take(n).Select(d => MapDonBan(d, ten)).ToList(), t, n, tatCa.Count));
+                trangDs.Select(d => MapDonBan(d, ten)).ToList(), t, n, tongSo));
         });
 
         ban.MapGet("/{id:int}", async (int id, IDonHangBanService svc, IKhachHangService kh,

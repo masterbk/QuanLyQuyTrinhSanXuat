@@ -160,6 +160,43 @@ public class DonHangBanServiceTests
     }
 
     [Fact]
+    public async Task Lay_Trang_Loc_Va_Phan_Trang_O_Csdl_Khong_Tai_Ca_Bang()
+    {
+        Seed();
+        var id1 = await TaoAsync(Don((1, 1000)));   // ChoXacNhan
+        var id2 = await TaoAsync(Don((1, 1000)));   // ChoXacNhan
+        var id3 = await TaoAsync(Don((1, 1000)));
+        Assert.True((await ChayAsync(s => s.XacNhanAsync(id3))).ThanhCong);
+        Assert.True((await ChayAsync(s => s.XuatKhoAsync(id3, null, "NS01"))).ThanhCong);   // DangGiao, người giao NS01
+
+        using var db = MoDb();
+        var svc = Svc(db);
+
+        // Lọc đúng 1 trạng thái + phân trang: 2 đơn ChoXacNhan, lấy trang 1 cỡ 1 -> đúng 1 bản ghi, tổng 2.
+        var (trang1, tong1) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, 1, 1);
+        Assert.Single(trang1);
+        Assert.Equal(2, tong1);
+        Assert.Equal(id2, trang1[0].Id);   // mới nhất trước (OrderByDescending Id khi cùng NgayDat)
+
+        var (trang2, tong2) = await svc.LayTrangAsync(TrangThaiDonHangBan.ChoXacNhan, false, null, 2, 1);
+        Assert.Single(trang2);
+        Assert.Equal(2, tong2);
+        Assert.Equal(id1, trang2[0].Id);
+
+        // choGiaoHang: không có đơn nào (id3 đã có người giao -> DangGiao, không phải ChoGiaoHang).
+        var (choGiao, tongChoGiao) = await svc.LayTrangAsync(null, true, null, 1, 20);
+        Assert.Empty(choGiao);
+        Assert.Equal(0, tongChoGiao);
+
+        // maNguoiGiao: đúng đơn của NS01, không phân biệt hoa/thường.
+        var (cuaNs01, tongNs01) = await svc.LayTrangAsync(null, false, "ns01", 1, 20);
+        var donCuaNs01 = Assert.Single(cuaNs01);
+        Assert.Equal(id3, donCuaNs01.Id);
+        Assert.Equal(1, tongNs01);
+        Assert.Single(donCuaNs01.Dong);   // Include(Dong) vẫn nạp đủ dù đã bỏ AnhTongQuan
+    }
+
+    [Fact]
     public async Task Goi_Y_Xuat_Kho_FEFO_Cong_Don_Cac_Dong_Cung_Thanh_Pham()
     {
         Seed();
