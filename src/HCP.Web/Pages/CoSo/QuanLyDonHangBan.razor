@@ -585,9 +585,13 @@ else
         _hienForm = true;
     }
 
-    /// <summary>Sửa trên BẢN SAO để bấm Đóng không làm đổi dòng trong bảng.</summary>
-    private void MoSua(DonHangBan d)
+    /// <summary>Tải lại bản mới nhất từ CSDL rồi sửa trên BẢN SAO (bấm Đóng không làm đổi dòng trong bảng).
+    /// Không dùng thẳng dòng đang hiển thị - đơn HanoiCheck có thể vừa bị job nền đồng bộ đổi SL/ngày giao.</summary>
+    private async Task MoSua(DonHangBan dong)
     {
+        var d = await DonHangService.LayTheoIdAsync(dong.Id);
+        if (d is null) { Snackbar.Add("Không tìm thấy đơn hàng.", Severity.Error); return; }
+
         _input = new DonHangBan
         {
             Id = d.Id, MaDonHang = d.MaDonHang, MaKhachHang = d.MaKhachHang, MaKho = d.MaKho,
