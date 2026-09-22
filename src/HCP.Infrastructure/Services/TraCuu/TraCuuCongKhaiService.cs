@@ -20,8 +20,9 @@ public enum LoaiTraCuu
 
 /// <summary>
 /// Nội dung mã QR: <see cref="LinkNgoai"/> (trang truy xuất HanoiCheck) nếu có, ngược lại trang tra cứu công khai của
-/// chính hệ thống theo <see cref="MaTraCuu"/>. <see cref="DongChuThem"/>: các dòng chữ in thêm dưới dòng mã (hiện chỉ
-/// đơn hàng có - tên sản phẩm/số lượng từng dòng và địa chỉ giao).
+/// chính hệ thống theo <see cref="MaTraCuu"/>. <see cref="DongChuThem"/>: các dòng chữ in thêm dưới dòng mã - đơn
+/// hàng: tên sản phẩm/số lượng từng dòng, ngày hẹn giao (nếu có), địa chỉ giao; lệnh sản xuất: ngày sản xuất, tên
+/// sản phẩm/số lượng/mã lô từng dòng.
 /// </summary>
 public record QrTraCuu(string Ma, string? LinkNgoai, string? MaTraCuu, string MoTa,
                        IReadOnlyList<string>? DongChuThem = null);
@@ -118,8 +119,9 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             dongChuThem);
     }
 
-    /// <summary>Dòng "Tên sản phẩm × số lượng đơn vị tính" cho từng dòng hàng, rồi dòng địa chỉ giao (nếu có) -
-    /// in thêm dưới mã QR đơn hàng để nhân viên giao hàng nhìn tem là biết giao gì, giao đâu.</summary>
+    /// <summary>Dòng "Tên sản phẩm × số lượng đơn vị tính" cho từng dòng hàng, rồi dòng ngày hẹn giao (nếu có)
+    /// và địa chỉ giao (nếu có) - in thêm dưới mã QR đơn hàng để nhân viên giao hàng nhìn tem là biết giao gì,
+    /// giao khi nào, giao đâu.</summary>
     private async Task<List<string>> DongChuThemDonHangAsync(DonHangBan don, CancellationToken ct)
     {
         var maSp = don.Dong.Select(l => l.MaThanhPham).Distinct().ToList();
@@ -134,6 +136,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             return $"{sp?.TenSanPham ?? l.MaThanhPham} × {l.SoLuong.ToString("#,0.###")}{(string.IsNullOrWhiteSpace(dvt) ? "" : " " + dvt)}";
         }).ToList();
 
+        if (don.NgayGiao is { } ngayGiao) dong.Add($"Hẹn giao: {ngayGiao:dd/MM/yyyy}");
         if (!string.IsNullOrWhiteSpace(don.DiaChiGiao)) dong.Add($"Giao: {don.DiaChiGiao.Trim()}");
         return dong;
     }
@@ -152,11 +155,35 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
 
     public async Task<QrTraCuu?> LayQrLenhSanXuatAsync(int id, CancellationToken ct = default)
     {
-        var lenh = await _db.LenhSanXuats.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, ct);
-        return lenh is null
-            ? null
-            : new QrTraCuu(lenh.MaLenh, TienToQrLenhSanXuat + lenh.MaLenh, null,
-                "Nhân viên sản xuất mở ứng dụng, bấm \"Quét mã lệnh\" để tham gia các khâu của lệnh.");
+        var lenh = await _db.LenhSanXuats.AsNoTracking().Include(l => l.SanPham)
+            .FirstOrDefaultAsync(l => l.Id == id, ct);
+        if (lenh is null) return null;
+
+        var dongChuThem = await DongChuThemLenhSanXuatAsync(lenh, ct);
+        return new QrTraCuu(lenh.MaLenh, TienToQrLenhSanXuat + lenh.MaLenh, null,
+            "Nhân viên sản xuất mở ứng dụng, bấm \"Quét mã lệnh\" để tham gia các khâu của lệnh.", dongChuThem);
+    }
+
+    /// <summary>Dòng ngày sản xuất rồi "Tên sản phẩm × số lượng đơn vị tính - Lô mã lô" cho từng dòng thành
+    /// phẩm - in thêm dưới mã QR lệnh sản xuất để nhân viên nhìn tem là biết lệnh làm gì, làm lô nào.</summary>
+    private async Task<List<string>> DongChuThemLenhSanXuatAsync(LenhSanXuat lenh, CancellationToken ct)
+    {
+        var dong = new List<string> { $"Ngày SX: {lenh.NgaySanXuat:dd/MM/yyyy}" };
+
+        var maSp = lenh.SanPham.Select(s => s.MaThanhPham).Distinct().ToList();
+        var sanPham = maSp.Count == 0
+            ? new Dictionary<string, Product>()
+            : await _db.Products.AsNoTracking().Where(p => maSp.Contains(p.MaSanPham)).ToDictionaryAsync(p => p.MaSanPham, ct);
+
+        dong.AddRange(lenh.SanPham.OrderBy(s => s.Id).Select(s =>
+        {
+            sanPham.TryGetValue(s.MaThanhPham, out var sp);
+            var dvt = sp?.DonViTinh;
+            var ten = $"{sp?.TenSanPham ?? s.MaThanhPham} × {s.SoLuong.ToString("#,0.###")}{(string.IsNullOrWhiteSpace(dvt) ? "" : " " + dvt)}";
+            return string.IsNullOrWhiteSpace(s.MaLoThanhPham) ? ten : $"{ten} - Lô {s.MaLoThanhPham}";
+        }));
+
+        return dong;
     }
 
     public async Task<TraCuuDonHang?> TraCuuDonHangAsync(string maTraCuu, CancellationToken ct = default)

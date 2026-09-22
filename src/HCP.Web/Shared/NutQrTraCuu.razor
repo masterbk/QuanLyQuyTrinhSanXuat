@@ -42,6 +42,11 @@
             <MudButton Href="@_noiDung" Target="_blank" Disabled="@(_qr is null)"
                        StartIcon="@Icons.Material.Filled.OpenInNew">Mở trang</MudButton>
         }
+        @* Target="_blank": mở tab mới trỏ trang HTML tự bật hộp thoại in của trình duyệt. *@
+        <MudButton Href="@($"{_anh}&in=true")" Target="_blank" Disabled="@(_qr is null)"
+                   Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print">
+            In
+        </MudButton>
         @* Thuộc tính download: trình duyệt tải file, Blazor không chặn link để điều hướng nội bộ. *@
         <MudButton Href="@($"{_anh}&tai=true")" Target="_blank" Disabled="@(_qr is null)"
                    Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"

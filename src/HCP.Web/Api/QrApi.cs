@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
+using System.Net;
 using HCP.Infrastructure.Services.TraCuu;
 using QRCoder;
 
@@ -9,7 +10,8 @@ namespace HCP.Web.Api;
 /// <summary>
 /// Ảnh mã QR (PNG) của đơn hàng bán và lô sản xuất - dùng cookie đăng nhập web của cơ sở.
 ///   GET /app/qr/don-hang/{id}[?tai=true]   (tai=true: tải file về)
-///   GET /app/qr/lo/{id}[?tai=true]
+///   GET /app/qr/don-hang/{id}[?in=true]    (in=true: trang HTML tự bật hộp thoại in của trình duyệt)
+///   GET /app/qr/lo/{id}[?tai=true|in=true]
 /// </summary>
 public static class QrApi
 {
@@ -17,29 +19,50 @@ public static class QrApi
     {
         var qr = app.MapGroup("/app/qr").RequireAuthorization("NguoiDungCoSo");
 
-        qr.MapGet("/don-hang/{id:int}", async (int id, bool? tai, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
+        qr.MapGet("/don-hang/{id:int}", async (int id, bool? tai, bool? @in, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
                                                HttpRequest req, CancellationToken ct) =>
-            TraAnh(await svc.LayQrDonHangAsync(id, ct), LoaiTraCuu.DonHang, tai, cauHinh, req));
+            TraAnh(await svc.LayQrDonHangAsync(id, ct), LoaiTraCuu.DonHang, tai, @in, cauHinh, req));
 
-        qr.MapGet("/lo/{id:int}", async (int id, bool? tai, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
+        qr.MapGet("/lo/{id:int}", async (int id, bool? tai, bool? @in, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
                                          HttpRequest req, CancellationToken ct) =>
-            TraAnh(await svc.LayQrLoAsync(id, ct), LoaiTraCuu.Lo, tai, cauHinh, req));
+            TraAnh(await svc.LayQrLoAsync(id, ct), LoaiTraCuu.Lo, tai, @in, cauHinh, req));
 
-        qr.MapGet("/lenh-san-xuat/{id:int}", async (int id, bool? tai, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
+        qr.MapGet("/lenh-san-xuat/{id:int}", async (int id, bool? tai, bool? @in, ITraCuuCongKhaiService svc, IConfiguration cauHinh,
                                                     HttpRequest req, CancellationToken ct) =>
-            TraAnh(await svc.LayQrLenhSanXuatAsync(id, ct), LoaiTraCuu.LenhSanXuat, tai, cauHinh, req));
+            TraAnh(await svc.LayQrLenhSanXuatAsync(id, ct), LoaiTraCuu.LenhSanXuat, tai, @in, cauHinh, req));
     }
 
-    private static IResult TraAnh(QrTraCuu? qr, LoaiTraCuu loai, bool? tai, IConfiguration cauHinh, HttpRequest req)
+    private static IResult TraAnh(QrTraCuu? qr, LoaiTraCuu loai, bool? tai, bool? @in, IConfiguration cauHinh, HttpRequest req)
     {
         if (qr is null) return Results.NotFound();
 
         var noiDung = DuongDanTraCuu.NoiDungQr(qr, loai, DuongDanTraCuu.Goc(cauHinh, $"{req.Scheme}://{req.Host}{req.PathBase}"));
         var png = TaoPng(noiDung, CacDongChu(qr, loai));
+        if (@in == true) return Results.Content(TrangIn(qr, png), "text/html");
         if (tai != true) return Results.File(png, "image/png");
 
         var tenFile = string.Concat(qr.Ma.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
         return Results.File(png, "image/png", $"QR-{tenFile}.png");
+    }
+
+    /// <summary>Trang in: ảnh QR nhúng thẳng base64 (khỏi gọi lại API, khỏi lo cookie/CORS trong tab mới),
+    /// tự gọi window.print() khi ảnh vẽ xong. Người dùng huỷ/đóng hộp thoại in thì tự đóng lại tab đó.</summary>
+    private static string TrangIn(QrTraCuu qr, byte[] png)
+    {
+        var base64 = Convert.ToBase64String(png);
+        var tieuDe = WebUtility.HtmlEncode($"In mã QR {qr.Ma}");
+        return $$"""
+            <!doctype html>
+            <html lang="vi"><head><meta charset="utf-8" /><title>{{tieuDe}}</title>
+            <style>
+                body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
+                img { max-width: 92vw; max-height: 92vh; }
+            </style></head>
+            <body>
+                <img src="data:image/png;base64,{{base64}}" alt="{{tieuDe}}"
+                     onload="window.print()" onafterprint="window.close()" />
+            </body></html>
+            """;
     }
 
     /// <summary>Dòng chữ in dưới ảnh QR - đơn hàng từ HanoiCheck thì qr.Ma đã là mã trên HanoiCheck
@@ -78,12 +101,13 @@ public static class QrApi
         using var msQr = new MemoryStream(qrPng);
         using var qrAnh = Image.FromStream(msQr);
         const int le = 24;           // viền trắng quanh mã QR
-        const int caoDongDau = 36;   // chiều cao dòng đầu (mã, in đậm)
-        const int caoDongSau = 32;   // chiều cao mỗi dòng còn lại (có thể ngắt dòng)
+        const int caoDongDau = 54;   // chiều cao dòng đầu (mã, in đậm)
+        const int caoDongSau = 48;   // chiều cao mỗi dòng còn lại (có thể ngắt dòng)
         var rong = qrAnh.Width + le * 2;
 
-        using var fontDam = new Font("Arial", 22, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var fontThuong = new Font("Arial", 20, FontStyle.Regular, GraphicsUnit.Pixel);
+        // Cỡ chữ đã tăng thêm ~1.5 lần (33/30, trước là 22/20) theo yêu cầu - tem dán xa vẫn đọc được.
+        using var fontDam = new Font("Arial", 33, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var fontThuong = new Font("Arial", 30, FontStyle.Regular, GraphicsUnit.Pixel);
         using var brush = new SolidBrush(Color.FromArgb(0x1a, 0x2b, 0x4c));
         using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 

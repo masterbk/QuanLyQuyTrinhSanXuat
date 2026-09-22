@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../loi/api.dart';
@@ -21,6 +23,7 @@ class ManXemQr extends StatefulWidget {
 class _ManXemQrState extends State<ManXemQr> {
   late Future<Uint8List> _anh;
   bool _dangChiaSe = false;
+  bool _dangIn = false;
 
   @override
   void initState() {
@@ -43,6 +46,22 @@ class _ManXemQrState extends State<ManXemQr> {
       }
     } finally {
       if (mounted) setState(() => _dangChiaSe = false);
+    }
+  }
+
+  /// Đặt ảnh QR (đã kèm chữ) vào 1 trang PDF căn giữa rồi mở hộp thoại in của hệ điều hành - cho
+  /// chọn máy in mạng/AirPrint hoặc lưu PDF, không cần cài thêm app ngoài.
+  Future<void> _in(Uint8List bytes) async {
+    setState(() => _dangIn = true);
+    final anh = pw.MemoryImage(bytes);
+    final taiLieu = pw.Document();
+    taiLieu.addPage(pw.Page(build: (context) => pw.Center(child: pw.Image(anh))));
+    try {
+      await Printing.layoutPdf(onLayout: (_) => taiLieu.save(), name: widget.tenFile);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không in được: $e')));
+    } finally {
+      if (mounted) setState(() => _dangIn = false);
     }
   }
 
@@ -89,13 +108,30 @@ class _ManXemQrState extends State<ManXemQr> {
             padding: const EdgeInsets.all(12),
             child: FutureBuilder<Uint8List>(
               future: _anh,
-              builder: (context, snap) => FilledButton.icon(
-                onPressed: (!snap.hasData || _dangChiaSe) ? null : () => _chiaSe(snap.data!),
-                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                icon: _dangChiaSe
-                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.ios_share_outlined),
-                label: const Text('Lưu / Chia sẻ'),
+              builder: (context, snap) => Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: (!snap.hasData || _dangIn) ? null : () => _in(snap.data!),
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                      icon: _dangIn
+                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.print_outlined),
+                      label: const Text('In'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: (!snap.hasData || _dangChiaSe) ? null : () => _chiaSe(snap.data!),
+                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                      icon: _dangChiaSe
+                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.ios_share_outlined),
+                      label: const Text('Lưu / Chia sẻ'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
