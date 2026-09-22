@@ -5,6 +5,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Thư viện thuần (không phải Sdk.Web) nhưng DataProtectionSecretProtector.cs dùng
+         Microsoft.AspNetCore.DataProtection - khai rõ FrameworkReference thay vì trông cậy vào
+         hiệu ứng phụ của một gói NuGet nào đó tình cờ kéo theo (từng bị vậy qua Serilog.AspNetCore
+         không dùng đến, gỡ gói là mất luôn, phải khai tường minh ở đây). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Finbuckle.MultiTenant" Version="8.1.0" />
     <PackageReference Include="Finbuckle.MultiTenant.EntityFrameworkCore" Version="8.1.0" />
     <PackageReference Include="FirebaseAdmin" Version="3.6.0" />
@@ -17,7 +25,6 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
     <PackageReference Include="Polly" Version="8.5.0" />
-    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
   </ItemGroup>
 
