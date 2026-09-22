@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'tinh_nang/danh_muc/man_danh_sach.dart';
 import 'tinh_nang/don_hang/man_danh_sach.dart';
 import 'tinh_nang/kho_noi_bo/man_danh_sach.dart';
 import 'tinh_nang/lenh_san_xuat/man_danh_sach.dart';
 import 'tinh_nang/xac_thuc/xac_thuc.dart';
 
-/// Khung chính sau khi đăng nhập: Lệnh sản xuất, Kho, Đơn hàng - chỉ hiện mục người dùng có quyền.
+/// Khung chính sau khi đăng nhập: Lệnh sản xuất, Kho, Đơn hàng, Danh mục - chỉ hiện mục người dùng có quyền.
 class ManChinh extends ConsumerStatefulWidget {
   const ManChinh({super.key});
 
@@ -18,6 +19,7 @@ class ManChinh extends ConsumerStatefulWidget {
 const _quyenLenhSanXuat = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenKhoNoiBo = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenDonHang = {'TenantAdmin', 'TenantStaff', 'TenantGiaoHang'};
+const _quyenDanhMuc = {'TenantAdmin', 'TenantStaff'};
 
 class _ManChinhState extends ConsumerState<ManChinh> {
   int _tab = 0;
@@ -47,6 +49,13 @@ class _ManChinhState extends ConsumerState<ManChinh> {
           man: const ManDanhSachDon(),
           nut: const NavigationDestination(icon: Icon(Icons.receipt_long_outlined),
                                            selectedIcon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
+        ),
+      if (vaiTro.any(_quyenDanhMuc.contains))
+        (
+          ten: 'Danh mục',
+          man: const ManDanhMuc(),
+          nut: const NavigationDestination(icon: Icon(Icons.category_outlined),
+                                           selectedIcon: Icon(Icons.category), label: 'Danh mục'),
         ),
     ];
     final tab = muc.isEmpty ? 0 : _tab.clamp(0, muc.length - 1);

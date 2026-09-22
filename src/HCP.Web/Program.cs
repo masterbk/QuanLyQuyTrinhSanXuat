@@ -294,6 +294,7 @@ app.MapLenhSanXuatApi();
 app.MapDonHangApi();
 app.MapQrApi();
 app.MapKhoNoiBoApi();
+app.MapQuanLyDanhMucApi();
 
 app.MapRazorPages();
 app.MapBlazorHub();

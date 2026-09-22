@@ -166,3 +166,39 @@ public sealed record DieuChinhTonApiRequest(string MaSanPham, string MaKho, stri
                                             decimal SoLuongThucTe, string? LyDo);
 
 public sealed record NccDauVaoDto(string MaNccDauVao, string Ten);
+
+// ================== Quản lý danh mục (Thực phẩm/SKU, Định mức, Khâu sản xuất, Quy trình) ==================
+
+/// <summary>Thực phẩm/SKU đầy đủ cho màn quản lý - khác ThanhPhamDto (rút gọn, chỉ để chọn dòng hàng).</summary>
+public sealed record SanPhamQuanLyDto(
+    int Id, bool DongBoHnC, string MaSanPham, string TenSanPham, string LoaiSanPham,
+    string? DonViTinh, decimal? TonToiThieu, string MaLoaiSp, string? MaThucPhamChuan,
+    string? Gtin, string? QuocGia, string? MoTa, string? MaQuyTrinh);
+
+/// <summary>LoaiSanPham: "ThanhPham" | "NguyenLieu".</summary>
+public sealed record SanPhamLuuRequest(
+    bool DongBoHnC, string MaSanPham, string TenSanPham, string LoaiSanPham,
+    string? DonViTinh, decimal? TonToiThieu, string? MaLoaiSp, string? MaThucPhamChuan,
+    string? Gtin, string? QuocGia, string? MoTa, string? MaQuyTrinh);
+
+public sealed record DinhMucDongDto(string MaNguyenLieu, string? TenNguyenLieu, decimal SoLuong, decimal HaoHutPhanTram);
+
+public sealed record DinhMucDongRequest(string MaNguyenLieu, decimal SoLuong, decimal HaoHutPhanTram);
+
+/// <summary>Thay thế toàn bộ định mức hiện có của thành phẩm.</summary>
+public sealed record DinhMucLuuRequest(IReadOnlyList<DinhMucDongRequest>? Dong);
+
+public sealed record KhauQuanLyDto(int Id, bool DongBoHnC, string MaKhau, string TenKhau, string? GhiChu);
+
+/// <summary>MaKhau bị bỏ qua: mã do hệ thống cấp.</summary>
+public sealed record KhauLuuRequest(bool DongBoHnC, string TenKhau, string? GhiChu);
+
+public sealed record QuyTrinhQuanLyDto(
+    int Id, bool DongBoHnC, string MaQuyTrinh, string TenQuyTrinh, int? MaDanhMucThucPham,
+    IReadOnlyList<KhauDto> DanhSachKhau);
+
+public sealed record QuyTrinhKhauRequest(string MaKhau, int ThuTu);
+
+public sealed record QuyTrinhLuuRequest(
+    bool DongBoHnC, string MaQuyTrinh, string TenQuyTrinh, int? MaDanhMucThucPham,
+    IReadOnlyList<QuyTrinhKhauRequest>? DanhSachKhau);
