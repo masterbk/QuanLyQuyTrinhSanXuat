@@ -28,8 +28,32 @@ using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// --- Ghi log ra file thay vì Windows Event Viewer ---
+// Mặc định ASP.NET Core tự thêm provider EventLog trên Windows - khó tra cứu liên tục, không xem
+// được từ xa, dễ lẫn với log của app khác trên cùng máy. Chuyển hẳn sang ghi file, xoay vòng theo
+// ngày, ở thư mục CỐ ĐỊNH ngoài vùng deploy (giống DataProtectionKeys) để không mất log khi deploy
+// lại. Đặt Logging:FilePath trong cấu hình để đổi chỗ khác nếu cần.
+var logFilePath = builder.Configuration["Logging:FilePath"];
+if (string.IsNullOrWhiteSpace(logFilePath))
+{
+    logFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "HanoiCheckPlatform", "Logs", "log-.txt");
+}
+Directory.CreateDirectory(Path.GetDirectoryName(logFilePath)!);
+
+builder.Logging.ClearProviders();
+builder.Host.UseSerilog((ctx, cfg) => cfg
+    // Vẫn đọc đúng cấu hình "Logging":{"LogLevel":{...}} sẵn có trong appsettings - không phải sửa
+    // gì thêm, chỉ đổi nơi log được GHI ra (file thay vì Event Log).
+    .ReadFrom.Configuration(ctx.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.File(logFilePath, rollingInterval: RollingInterval.Day, retainedFileCountLimit: 30,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext}{NewLine}{Message:lj}{NewLine}{Exception}"));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 

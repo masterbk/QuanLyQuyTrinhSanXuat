@@ -34,16 +34,34 @@ public sealed class PushNotificationService : IPushNotificationService
         try
         {
             var vaiTroIds = await _db.Roles.Where(r => vaiTro.Contains(r.Name!)).Select(r => r.Id).ToListAsync(ct);
-            if (vaiTroIds.Count == 0) return;
+            if (vaiTroIds.Count == 0)
+            {
+                _logger.LogWarning("Bỏ qua gửi thông báo đẩy: không tìm thấy vai trò {VaiTro} trong hệ thống.",
+                    string.Join(",", vaiTro));
+                return;
+            }
 
             var userIds = await _db.UserRoles.Where(ur => vaiTroIds.Contains(ur.RoleId))
                 .Join(_db.Users.Where(u => u.TenantId == tenantId), ur => ur.UserId, u => u.Id, (ur, u) => u.Id)
                 .Distinct().ToListAsync(ct);
-            if (userIds.Count == 0) return;
+            if (userIds.Count == 0)
+            {
+                _logger.LogInformation(
+                    "Bỏ qua gửi thông báo đẩy: cơ sở {TenantId} chưa có tài khoản nào giữ vai trò {VaiTro}.",
+                    tenantId, string.Join(",", vaiTro));
+                return;
+            }
 
             var tokens = await _db.PushDeviceTokens.Where(t => userIds.Contains(t.UserId))
                 .Select(t => t.Token).Distinct().ToListAsync(ct);
-            if (tokens.Count == 0) return;
+            if (tokens.Count == 0)
+            {
+                _logger.LogInformation(
+                    "Bỏ qua gửi thông báo đẩy: {SoNguoi} tài khoản đúng vai trò nhưng chưa ai đăng ký thiết bị "
+                    + "nhận thông báo (chưa đăng nhập app mobile bản có push, hoặc từ chối quyền thông báo).",
+                    userIds.Count);
+                return;
+            }
 
             var hetHan = new List<string>();
             for (var i = 0; i < tokens.Count; i += SoTokenMoiLo)
@@ -62,6 +80,17 @@ public sealed class PushNotificationService : IPushNotificationService
                 };
 
                 var ket = await FirebaseMessaging.DefaultInstance.SendEachForMulticastAsync(message, ct);
+                if (ket.FailureCount > 0)
+                {
+                    // Log MỘT lần cho cả lô kèm lý do lỗi đầu tiên - đủ để phát hiện các kiểu lỗi thầm lặng
+                    // hay gặp: google-services.json trên app khác project với service account trên máy chủ
+                    // (mọi token đều lỗi InvalidArgument/SenderIdMismatch, bị xoá khỏi PushDeviceTokens mà
+                    // không ai biết vì sao).
+                    var lyDoDau = ket.Responses.FirstOrDefault(r => !r.IsSuccess)?.Exception?.Message;
+                    _logger.LogWarning(
+                        "Gửi thông báo đẩy: {SoLoi}/{SoTong} token trong lô thất bại. Lý do (mẫu đầu): {LyDo}",
+                        ket.FailureCount, lo.Count, lyDoDau);
+                }
                 for (var j = 0; j < ket.Responses.Count; j++)
                 {
                     var phanHoi = ket.Responses[j];

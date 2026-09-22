@@ -16,6 +16,8 @@
     </PackageReference>
     <PackageReference Include="MudBlazor" Version="7.15.0" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
   </ItemGroup>
 
