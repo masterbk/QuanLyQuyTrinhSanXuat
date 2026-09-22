@@ -106,8 +106,12 @@ public sealed class DonHangBanService : IDonHangBanService
     private static Dictionary<string, string> DuLieuThongBao(int donId) =>
         new() { ["loaiThongBao"] = "don_hang", ["donHangId"] = donId.ToString() };
 
+    // AsSplitQuery(): Dong->XuatLo (lồng nhau) + AnhTongQuan là 3 collection cùng lúc - gộp 1 câu JOIN sẽ
+    // nhân dòng theo tích số dòng hàng × lô xuất × ảnh, đơn nào nhiều dòng/ảnh là phình rất to, tách câu
+    // truy vấn cho rẻ hơn hẳn (khớp cảnh báo MultipleCollectionInclude của EF Core).
     private IQueryable<DonHangBan> QueryDayDu() =>
-        _db.DonHangBans.Include(d => d.Dong).ThenInclude(l => l.XuatLo).Include(d => d.AnhTongQuan);
+        _db.DonHangBans.Include(d => d.Dong).ThenInclude(l => l.XuatLo).Include(d => d.AnhTongQuan)
+            .AsSplitQuery();
 
     public async Task<IReadOnlyList<DonHangBan>> LayTatCaAsync(CancellationToken ct = default) =>
         await QueryDayDu().AsNoTracking()

@@ -23,10 +23,13 @@ public class MonAnService : IDanhMucService<Dish>
         _outbox = outbox;
     }
 
+    // AsSplitQuery(): 3 collection cùng lúc - gộp 1 câu JOIN sẽ nhân dòng theo tích số, tách câu truy
+    // vấn cho rẻ hơn (khớp cảnh báo MultipleCollectionInclude của EF Core).
     private IQueryable<Dish> QueryDayDu() => _db.Dishes
         .Include(d => d.DanhSachNguyenLieu)
         .Include(d => d.DanhSachKhau)
-        .Include(d => d.DanhSachFile);
+        .Include(d => d.DanhSachFile)
+        .AsSplitQuery();
 
     public async Task<IReadOnlyList<Dish>> LayTatCaAsync(CancellationToken ct = default) =>
         await QueryDayDu().AsNoTracking().OrderBy(d => d.MaMonAn).ToListAsync(ct);

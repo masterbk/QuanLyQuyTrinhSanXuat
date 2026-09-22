@@ -33,10 +33,13 @@ public class LoSanXuatService : IDanhMucService<Batch>
         _maTuSinh = maTuSinh;
     }
 
+    // AsSplitQuery(): 3 collection cùng lúc - gộp 1 câu JOIN sẽ nhân dòng theo tích số, tách câu truy
+    // vấn cho rẻ hơn (khớp cảnh báo MultipleCollectionInclude của EF Core).
     private IQueryable<Batch> QueryDayDu() => _db.Batches
         .Include(b => b.DanhSachKho)
         .Include(b => b.DanhSachKhau)
-        .Include(b => b.DanhSachFile);
+        .Include(b => b.DanhSachFile)
+        .AsSplitQuery();
 
     public async Task<IReadOnlyList<Batch>> LayTatCaAsync(CancellationToken ct = default) =>
         await QueryDayDu().AsNoTracking().OrderByDescending(b => b.NgayNhap).ThenBy(b => b.MaLo).ToListAsync(ct);

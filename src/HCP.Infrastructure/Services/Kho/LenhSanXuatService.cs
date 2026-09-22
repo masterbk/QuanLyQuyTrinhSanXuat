@@ -37,18 +37,22 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         await _db.LenhSanXuats.AsNoTracking()
             .Include(l => l.SanPham).ThenInclude(s => s.Khau)
             .Include(l => l.ThamGia)
+            .AsSplitQuery()
             .OrderByDescending(l => l.NgaySanXuat).ThenByDescending(l => l.Id)
             .ToListAsync(ct);
 
     public Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
 
+    // AsSplitQuery(): SanPham->Khau/TieuHao/Anh + ThamGia là nhiều collection cùng lúc - gộp 1 câu JOIN
+    // sẽ nhân dòng theo tích số, tách câu truy vấn cho rẻ hơn (khớp cảnh báo MultipleCollectionInclude).
     private IQueryable<LenhSanXuat> QueryDayDu() =>
         _db.LenhSanXuats
             .Include(l => l.SanPham).ThenInclude(s => s.Khau)
             .Include(l => l.SanPham).ThenInclude(s => s.TieuHao)
             .Include(l => l.SanPham).ThenInclude(s => s.Anh)
-            .Include(l => l.ThamGia);
+            .Include(l => l.ThamGia)
+            .AsSplitQuery();
 
     // ==================== Xem trước nguyên liệu ====================
 
