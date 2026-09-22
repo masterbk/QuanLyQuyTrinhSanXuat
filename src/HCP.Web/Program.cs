@@ -121,9 +121,22 @@ else if (!Path.IsPathRooted(keysPath))
 }
 Directory.CreateDirectory(keysPath);
 
-builder.Services.AddDataProtection()
+var dataProtectionBuilder = builder.Services.AddDataProtection()
     .SetApplicationName("HanoiCheckPlatform")
     .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+
+// Mặc định .NET tự mã hoá file khoá bằng DPAPI theo tài khoản Windows (CurrentUser) đang chạy
+// app pool. Nếu app pool không bật "Load User Profile" (mặc định IIS hay để tắt) hoặc app pool
+// bị xoá/tạo lại (identity ảo IIS APPPOOL\<tên> đổi SID dù giữ nguyên tên), lần chạy sau KHÔNG
+// giải mã lại được chính file khoá cũ -> .NET coi như chưa có khoá và tự sinh khoá mới, secret cũ
+// mất vĩnh viễn dù thư mục ProgramData vẫn còn nguyên. Ép dùng phạm vi LOCAL MACHINE thay vì
+// CurrentUser để bất kỳ tài khoản nào trên đúng máy này cũng giải mã được, không phụ thuộc
+// identity/app pool nào cả - đây là nguyên nhân của lỗi "Key ... was not found in the key ring"
+// lặp lại sau mỗi lần deploy dù chỉ deploy source.
+if (OperatingSystem.IsWindows())
+{
+    dataProtectionBuilder.ProtectKeysWithDpapi(protectToLocalMachine: true);
+}
 
 builder.Services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
 builder.Services.AddScoped<ICoSoService, CoSoService>();
