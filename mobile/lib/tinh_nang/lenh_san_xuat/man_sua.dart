@@ -417,13 +417,6 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _OChonNgay(
-                nhan: 'Hạn dùng',
-                ngay: d.hanSuDung,
-                choXoa: true,
-                khiChon: (v) => setState(() => d.hanSuDung = v),
-              ),
               if (d.khau.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Row(
@@ -436,6 +429,8 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
                       TextButton(onPressed: () => _chepKhauDau(d), child: const Text('Chép khâu đầu xuống')),
                   ],
                 ),
+                if (d.khau.length > 1)
+                  OGanNguoiMoiKhau(khau: d.khau, khiDoi: () => setState(() {})),
                 for (final k in d.khau) OKhau(batBuocNguoi: false, key: ObjectKey(k), khau: k, khiDoi: () => setState(() {})),
               ],
             ],
@@ -464,10 +459,9 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
 class _OChonNgay extends StatelessWidget {
   final String nhan;
   final DateTime? ngay;
-  final bool choXoa;
   final ValueChanged<DateTime?> khiChon;
 
-  const _OChonNgay({required this.nhan, required this.ngay, required this.khiChon, this.choXoa = false});
+  const _OChonNgay({required this.nhan, required this.ngay, required this.khiChon});
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -484,9 +478,7 @@ class _OChonNgay extends StatelessWidget {
           decoration: InputDecoration(
             labelText: nhan,
             border: const OutlineInputBorder(),
-            suffixIcon: choXoa && ngay != null
-                ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => khiChon(null))
-                : const Icon(Icons.calendar_today, size: 18),
+            suffixIcon: const Icon(Icons.calendar_today, size: 18),
           ),
           child: Text(ngay == null ? '—' : _ngayVn.format(ngay!)),
         ),

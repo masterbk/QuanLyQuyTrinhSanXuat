@@ -200,13 +200,30 @@ public static class LenhSanXuatApi
                 }
             }
 
+            // Hạn dùng lô (nhập ở bước Hoàn thành). Trường "han_su_dung": JSON mảng {id, hanSuDung}.
+            IReadOnlyDictionary<int, DateOnly?>? hanSuDung = null;
+            var hsdJson = form["han_su_dung"].ToString();
+            if (!string.IsNullOrWhiteSpace(hsdJson))
+            {
+                try
+                {
+                    hanSuDung = (JsonSerializer.Deserialize<List<HanDungSanPhamRequest>>(hsdJson, JsonForm) ?? new())
+                        .GroupBy(h => h.Id).ToDictionary(g => g.Key, g => g.First().HanSuDung);
+                }
+                catch (JsonException)
+                {
+                    return Results.BadRequest(new LoiDto("Trường \"han_su_dung\" không phải JSON hợp lệ."));
+                }
+            }
+
             // Quản trị/nhân viên nhập liệu luôn hoàn thành được; nhân viên sản xuất thuần chỉ hoàn thành
             // được lệnh mình có tham gia (kiểm tra ở service, cần đúng mã nhân sự đang đăng nhập).
             var coQuyenNhapLieu = user.IsInRole(AppRoles.TenantAdmin) || user.IsInRole(AppRoles.TenantStaff);
             var maNguoiThucHien = coQuyenNhapLieu ? null : await MaNhanSuHienTaiAsync(user, db);
 
             var anhTheoSanPham = theoDong.Select(x => new AnhTheoSanPham(x.Key, x.Value)).ToList();
-            var kq = await svc.ThucHienAsync(id, anhTheoSanPham, khauSuaLai, coQuyenNhapLieu, maNguoiThucHien, ct);
+            var kq = await svc.ThucHienAsync(id, anhTheoSanPham, khauSuaLai, coQuyenNhapLieu, maNguoiThucHien,
+                                             hanSuDung, ct);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         }).DisableAntiforgery();

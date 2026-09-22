@@ -1,0 +1,354 @@
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Services.Kho
+@inject ILenhSanXuatService LenhService
+@inject IDinhMucService DinhMucService
+@inject IDanhMucService<Product> ThucPhamService
+@inject IDanhMucService<Warehouse> KhoDanhMucService
+@inject IDanhMucService<ProductionProcess> QuyTrinhService
+@inject IDanhMucService<ProductionStep> KhauService
+@inject IDanhMucService<Facility> CoSoService
+@inject IDanhMucService<Staff> NhanSuService
+@inject ISnackbar Snackbar
+
+@* Dialog tạo lệnh sản xuất - dùng chung cho màn Lệnh sản xuất và "Tạo lệnh theo đơn hàng" ở màn Đơn hàng bán.
+   Có thể nhận sẵn Sản phẩm + số lượng tổng (SoLuongTheoThanhPham) để điền trước. *@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Tạo lệnh sản xuất</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_dangTai)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_thanhPham.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">
+                Chưa có thành phẩm nào có định mức. Khai <MudLink Href="/app/dinh-muc">Định mức</MudLink> trước khi lập lệnh.
+            </MudAlert>
+        }
+        else if (_quyTrinh.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">
+                Chưa có quy trình sản xuất nào có khâu. Khai Quy trình sản xuất trước khi lập lệnh.
+            </MudAlert>
+        }
+        else
+        {
+            @if (_boQua.Count > 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    Không đưa vào lệnh @(_boQua.Count) sản phẩm chưa phải thành phẩm có định mức:
+                    @string.Join(", ", _boQua). Khai định mức nếu cần sản xuất các mặt hàng này.
+                </MudAlert>
+            }
+
+            <MudForm @ref="_form" Model="_input">
+                <MudGrid>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField T="string" Value="@("(tự sinh khi lưu)")" Label="Mã lệnh" Variant="Variant.Outlined"
+                                      ReadOnly="true" HelperText="Tự sinh LSX-yyyyMMdd-001 theo ngày sản xuất." />
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <MudSelect T="string" @bind-Value="_input.MaKho" Label="Kho" Variant="Variant.Outlined"
+                                   Required="true" RequiredError="Chọn kho">
+                            @foreach (var k in _kho)
+                            {
+                                <MudSelectItem T="string" Value="@k.MaKho">@k.TenKho (@k.MaKho)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <MudDatePicker @bind-Date="_ngaySanXuat" Label="Ngày sản xuất" Variant="Variant.Outlined"
+                                       DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_input.GhiChu" Label="Ghi chú" Variant="Variant.Outlined" MaxLength="1000" />
+                    </MudItem>
+                    <ChiKhiBatHnC>
+                        <MudItem xs="12">
+                            <MudCheckBox @bind-Value="_input.TaoLoDongBo" Color="Color.Primary" Dense="true"
+                                         Label="Khi hoàn thành, tạo Lô sản xuất cho từng sản phẩm và đồng bộ HanoiCheck" />
+                        </MudItem>
+                    </ChiKhiBatHnC>
+                </MudGrid>
+            </MudForm>
+
+            <div class="d-flex justify-space-between align-center mt-4 mb-2">
+                <MudText Typo="Typo.h6">Sản phẩm (@_input.SanPham.Count)</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="ThemSanPham">Thêm sản phẩm</MudButton>
+            </div>
+
+            @foreach (var sp in _input.SanPham)
+            {
+                var stt = _input.SanPham.IndexOf(sp) + 1;
+                <MudPaper Outlined="true" Class="pa-3 mb-3">
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.subtitle1"><b>Sản phẩm @stt</b></MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       Disabled="@(_input.SanPham.Count <= 1)"
+                                       OnClick="@(() => _input.SanPham.Remove(sp))" />
+                    </div>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="string" Value="sp.MaThanhPham" ValueChanged="@(v => DoiThanhPham(sp, v))"
+                                       Label="Thành phẩm" Variant="Variant.Outlined" Required="true" RequiredError="Chọn thành phẩm">
+                                @foreach (var tp in _thanhPham)
+                                {
+                                    <MudSelectItem T="string" Value="@tp.MaSanPham">@tp.TenSanPham (@tp.MaSanPham)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="string" Value="sp.MaQuyTrinh" ValueChanged="@(v => DoiQuyTrinh(sp, v))"
+                                       Label="Quy trình sản xuất" Variant="Variant.Outlined" Required="true"
+                                       RequiredError="Chọn quy trình"
+                                       HelperText="Mặc định theo khai báo của thành phẩm, đổi được.">
+                                @foreach (var qt in _quyTrinh)
+                                {
+                                    <MudSelectItem T="string" Value="@qt.MaQuyTrinh">@qt.TenQuyTrinh (@qt.MaQuyTrinh)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="6" sm="3">
+                            <MudNumericField @bind-Value="sp.SoLuong" Label="Số lượng" Variant="Variant.Outlined"
+                                             Min="0m" Format="0.###" Culture="@System.Globalization.CultureInfo.InvariantCulture" />
+                        </MudItem>
+                    </MudGrid>
+
+                    @if (sp.Khau.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-3">Khâu sản xuất (@sp.Khau.Count)</MudText>
+                        @if (sp.Khau.Count > 1)
+                        {
+                            <MudSelect T="string" MultiSelection="true" Label="Gán người cho TẤT CẢ khâu" Variant="Variant.Outlined"
+                                       Margin="Margin.Dense" Class="mt-2" SelectedValues="NguoiChungMoiKhau(sp)"
+                                       SelectedValuesChanged="@(v => GanNguoiMoiKhau(sp, v))"
+                                       HelperText="Chọn ở đây để áp cùng người cho mọi khâu; vẫn sửa lại từng khâu bên dưới nếu cần.">
+                                @foreach (var ns in _nhanSu)
+                                {
+                                    <MudSelectItem T="string" Value="@ns.MaNhanSu">@ns.MaNhanSu — @ns.HoTen</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        @foreach (var k in sp.Khau)
+                        {
+                            @KhauEditor(k)
+                        }
+                    }
+                </MudPaper>
+            }
+
+            <div class="d-flex justify-space-between align-center mt-3 mb-1">
+                <MudText Typo="Typo.subtitle2">Nguyên liệu cần (cộng dồn mọi sản phẩm)</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Calculate"
+                           OnClick="TinhNguyenLieuAsync">Tính nguyên liệu</MudButton>
+            </div>
+            @if (_preview.Count > 0)
+            {
+                <MudTable Items="_preview" Dense="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Nguyên liệu</MudTh>
+                        <MudTh Style="text-align:right">Cần</MudTh>
+                        <MudTh Style="text-align:right">Tồn</MudTh>
+                        <MudTh>Đủ?</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.TenNguyenLieu</MudTd>
+                        <MudTd Style="text-align:right">@context.Can.ToString("0.###") @context.DonViTinh</MudTd>
+                        <MudTd Style="text-align:right">@context.Ton.ToString("0.###")</MudTd>
+                        <MudTd>
+                            @if (context.Du)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success">Đủ</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error">Thiếu</MudChip>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Dong">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_dangLuu || _dangTai)" OnClick="LuuAsync">
+            Tạo lệnh
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Sản phẩm điền sẵn: mã thành phẩm → tổng số lượng (vd cộng dồn từ nhiều đơn hàng). Null = form trống.</summary>
+    [Parameter] public IReadOnlyDictionary<string, decimal>? SoLuongTheoThanhPham { get; set; }
+
+    private List<Product> _thanhPham = new();          // chỉ thành phẩm CÓ định mức
+    private List<Warehouse> _kho = new();
+    private List<ProductionProcess> _quyTrinh = new(); // chỉ quy trình có ít nhất 1 khâu
+    private List<Facility> _coSo = new();
+    private List<Staff> _nhanSu = new();
+    private Dictionary<string, string> _tenKhau = new();
+    private List<NguyenLieuCanDto> _preview = new();
+    private readonly List<string> _boQua = new();      // sản phẩm điền sẵn nhưng không phải thành phẩm có định mức
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private MudForm? _form;
+    private LenhSanXuat _input = new();
+    private DateTime? _ngaySanXuat;
+
+    /// <summary>Ô nhập cơ sở + người thực hiện cho một khâu.</summary>
+    private RenderFragment KhauEditor(LenhSanXuatKhau k) => @<MudGrid Spacing="2" Class="mt-1 align-center">
+        <MudItem xs="12" sm="3">
+            <MudText Typo="Typo.body2"><b>@k.ThuTu.</b> @(_tenKhau.GetValueOrDefault(k.MaKhau) ?? k.MaKhau)</MudText>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudSelect T="string" @bind-Value="k.MaCoSo" Label="Cơ sở thực hiện" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" Required="true" RequiredError="Chọn cơ sở">
+                @foreach (var c in _coSo)
+                {
+                    <MudSelectItem T="string" Value="@c.MaCoSo">@c.TenCoSo</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="string" MultiSelection="true" Label="Người thực hiện" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" SelectedValues="k.NguoiThucHien"
+                       SelectedValuesChanged="@(v => k.NguoiThucHienCsv = string.Join(",", v ?? Array.Empty<string>()))">
+                @foreach (var ns in _nhanSu)
+                {
+                    <MudSelectItem T="string" Value="@ns.MaNhanSu">@ns.MaNhanSu — @ns.HoTen</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    </MudGrid>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _kho = (await KhoDanhMucService.LayTatCaAsync()).ToList();
+        _quyTrinh = (await QuyTrinhService.LayTatCaAsync()).Where(q => q.DanhSachKhau.Count > 0).ToList();
+        _coSo = (await CoSoService.LayTatCaAsync()).ToList();
+        _nhanSu = (await NhanSuService.LayTatCaAsync()).Where(n => n.TrangThai).ToList();
+        _tenKhau = (await KhauService.LayTatCaAsync()).GroupBy(k => k.MaKhau)
+            .ToDictionary(g => g.Key, g => g.First().TenKhau);
+
+        var tatCaSp = await ThucPhamService.LayTatCaAsync();
+        _thanhPham = new List<Product>();
+        foreach (var p in tatCaSp.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham))
+        {
+            var dm = await DinhMucService.LayTheoThanhPhamAsync(p.Id);
+            if (dm.Count > 0) _thanhPham.Add(p);   // chỉ thành phẩm đã có định mức
+        }
+
+        // Mặc định tick sẵn "tạo Lô + đồng bộ HanoiCheck" khi lập lệnh mới (ô chỉ hiện khi cơ sở đã bật HnC).
+        _input = new LenhSanXuat { MaKho = _kho.Count == 1 ? _kho[0].MaKho : "", TaoLoDongBo = true };
+        _ngaySanXuat = GioVietNam.Nay.Date;
+        DienSanPhamDatTruoc();
+        if (_input.SanPham.Count == 0) ThemSanPham();
+        _dangTai = false;
+    }
+
+    /// <summary>Đưa các sản phẩm điền sẵn vào lệnh; mặt hàng không phải thành phẩm có định mức thì ghi vào _boQua.</summary>
+    private void DienSanPhamDatTruoc()
+    {
+        if (SoLuongTheoThanhPham is null) return;
+        foreach (var (ma, soLuong) in SoLuongTheoThanhPham)
+        {
+            var tp = _thanhPham.FirstOrDefault(p => p.MaSanPham == ma);
+            if (tp is null) { _boQua.Add(ma); continue; }
+            var sp = new LenhSanXuatSanPham { MaThanhPham = ma, SoLuong = soLuong };
+            _input.SanPham.Add(sp);
+            DoiThanhPham(sp, ma);   // gán quy trình + khâu mặc định
+        }
+    }
+
+    private void ThemSanPham() => _input.SanPham.Add(new LenhSanXuatSanPham { SoLuong = 1 });
+
+    private void DoiThanhPham(LenhSanXuatSanPham sp, string ma)
+    {
+        sp.MaThanhPham = ma;
+        var macDinh = _thanhPham.FirstOrDefault(p => p.MaSanPham == ma)?.MaQuyTrinh;
+        if (!string.IsNullOrWhiteSpace(macDinh) && _quyTrinh.Any(q => q.MaQuyTrinh == macDinh))
+            DoiQuyTrinh(sp, macDinh);
+    }
+
+    /// <summary>Dựng lại danh sách khâu theo quy trình; khâu trùng mã giữ nguyên thông tin đã nhập.</summary>
+    private void DoiQuyTrinh(LenhSanXuatSanPham sp, string ma)
+    {
+        sp.MaQuyTrinh = ma;
+        var qt = _quyTrinh.FirstOrDefault(q => q.MaQuyTrinh == ma);
+        if (qt is null) { sp.Khau = new(); return; }
+
+        var cu = sp.Khau.GroupBy(k => k.MaKhau).ToDictionary(g => g.Key, g => g.First());
+        var coSoMacDinh = _coSo.Count == 1 ? _coSo[0].MaCoSo : "";
+        sp.Khau = qt.DanhSachKhau.OrderBy(k => k.ThuTu).Select(k =>
+        {
+            var daNhap = cu.GetValueOrDefault(k.MaKhau);
+            return new LenhSanXuatKhau
+            {
+                MaKhau = k.MaKhau,
+                ThuTu = k.ThuTu,
+                MaCoSo = daNhap?.MaCoSo ?? coSoMacDinh,
+                NguoiThucHienCsv = daNhap?.NguoiThucHienCsv ?? "",
+                GhiChu = daNhap?.GhiChu
+            };
+        }).ToList();
+    }
+
+    /// <summary>Người đang được gán CHUNG cho mọi khâu (mọi khâu cùng danh sách người) - để hiển thị ở ô gán nhanh;
+    /// nếu các khâu khác nhau thì trả rỗng.</summary>
+    private static IReadOnlyCollection<string> NguoiChungMoiKhau(LenhSanXuatSanPham sp)
+    {
+        if (sp.Khau.Count == 0) return Array.Empty<string>();
+        var dau = sp.Khau[0].NguoiThucHien.OrderBy(x => x).ToList();
+        return sp.Khau.All(k => k.NguoiThucHien.OrderBy(x => x).SequenceEqual(dau))
+            ? dau : Array.Empty<string>();
+    }
+
+    /// <summary>Gán cùng một danh sách người thực hiện cho TẤT CẢ khâu của sản phẩm (chọn 1 lần thay vì từng khâu).</summary>
+    private static void GanNguoiMoiKhau(LenhSanXuatSanPham sp, IEnumerable<string>? nguoi)
+    {
+        var csv = string.Join(",", nguoi ?? Array.Empty<string>());
+        foreach (var k in sp.Khau) k.NguoiThucHienCsv = csv;
+    }
+
+    private async Task TinhNguyenLieuAsync()
+    {
+        var dong = _input.SanPham
+            .Where(s => !string.IsNullOrWhiteSpace(s.MaThanhPham) && s.SoLuong > 0)
+            .Select(s => (s.MaThanhPham, s.SoLuong)).ToList();
+        if (dong.Count == 0 || string.IsNullOrWhiteSpace(_input.MaKho))
+        {
+            Snackbar.Add("Chọn kho và ít nhất một thành phẩm có số lượng trước.", Severity.Info);
+            return;
+        }
+        _preview = (await LenhService.TinhNguyenLieuCanAsync(dong, _input.MaKho)).ToList();
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+        _input.NgaySanXuat = _ngaySanXuat is { } d ? DateOnly.FromDateTime(d) : GioVietNam.HomNay;
+
+        _dangLuu = true;
+        var kq = await LenhService.TaoAsync(_input);
+        _dangLuu = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Dong() => MudDialog.Cancel();
+}

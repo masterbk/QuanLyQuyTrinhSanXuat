@@ -41,7 +41,8 @@ class KhoGia implements KhoLenhSanXuat {
   @override
   Future<String> huy(int id, String lyDo) async => 'Đã huỷ';
   @override
-  Future<String> hoanThanh(int id, Map<int, List<AnhDaChon>> anh, List<Map<String, dynamic>> khau) async =>
+  Future<String> hoanThanh(int id, Map<int, List<AnhDaChon>> anh, List<Map<String, dynamic>> khau,
+          {Map<int, DateTime>? hanSuDung}) async =>
       'Đã hoàn thành';
   @override
   Future<List<NguyenLieuCan>> nguyenLieuCan(

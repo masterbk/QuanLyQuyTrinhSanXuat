@@ -63,7 +63,9 @@ class KhoLenhSanXuat {
 
   /// Hoàn thành lệnh. [anh]: ảnh theo Id dòng sản phẩm (mỗi dòng bắt buộc ≥ 1 ảnh), gửi trong
   /// trường "anh_{id}". [khau]: người thực hiện / cơ sở sửa lại lúc hoàn thành (nếu có).
-  Future<String> hoanThanh(int id, Map<int, List<AnhDaChon>> anh, List<Map<String, dynamic>> khau) async {
+  /// [hanSuDung]: hạn dùng lô theo Id dòng sản phẩm, nhập ở bước hoàn thành.
+  Future<String> hoanThanh(int id, Map<int, List<AnhDaChon>> anh, List<Map<String, dynamic>> khau,
+      {Map<int, DateTime>? hanSuDung}) async {
     final form = FormData();
     anh.forEach((idSanPham, ds) {
       for (final a in ds) {
@@ -71,6 +73,12 @@ class KhoLenhSanXuat {
       }
     });
     if (khau.isNotEmpty) form.fields.add(MapEntry('khau', jsonEncode(khau)));
+    if (hanSuDung != null && hanSuDung.isNotEmpty) {
+      final ds = hanSuDung.entries
+          .map((e) => {'id': e.key, 'hanSuDung': e.value.toIso8601String().split('T').first})
+          .toList();
+      form.fields.add(MapEntry('han_su_dung', jsonEncode(ds)));
+    }
     final j = await _api.postFile('/api/v1/lenh-san-xuat/$id/hoan-thanh', form) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã hoàn thành lệnh.';
   }

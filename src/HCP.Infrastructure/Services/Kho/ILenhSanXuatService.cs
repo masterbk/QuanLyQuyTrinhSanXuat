@@ -69,6 +69,7 @@ public interface ILenhSanXuatService
         IReadOnlyList<LenhSanXuatKhau>? khauSuaLai = null,
         bool coQuyenNhapLieu = true,
         string? maNguoiThucHien = null,
+        IReadOnlyDictionary<int, DateOnly?>? hanSuDungTheoSanPham = null,
         CancellationToken ct = default);
 
     /// <summary>Xoá lệnh (chỉ xoá được lệnh chưa thực hiện).</summary>

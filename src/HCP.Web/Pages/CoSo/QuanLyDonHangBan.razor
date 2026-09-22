@@ -72,6 +72,23 @@ else
         </MudSelect>
     </div>
 
+    @if (_coQuyenNhapLieu)
+    {
+        <div class="d-flex flex-wrap align-center gap-2 mb-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Factory"
+                       Disabled="@(_chon.Count == 0)" OnClick="MoTaoLenhAsync">
+                Tạo lệnh sản xuất theo đơn hàng (@_chon.Count)
+            </MudButton>
+            @if (_chon.Count > 0)
+            {
+                <MudButton Variant="Variant.Text" OnClick="@(() => _chon.Clear())">Bỏ chọn</MudButton>
+            }
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Tick các đơn chưa xuất kho rồi gộp sản phẩm + số lượng thành một lệnh sản xuất.
+            </MudText>
+        </div>
+    }
+
     @if (DanhSachLoc.Count == 0)
     {
         <MudAlert Severity="Severity.Info">Chưa có đơn hàng nào.</MudAlert>
@@ -80,6 +97,10 @@ else
     {
         <MudTable Items="DanhSachLoc" Hover="true" Dense="true" Elevation="1">
             <HeaderContent>
+                @if (_coQuyenNhapLieu)
+                {
+                    <MudTh Style="width:1%"></MudTh>
+                }
                 <MudTh>Mã đơn</MudTh>
                 <MudTh>Khách hàng</MudTh>
                 <MudTh>Ngày đặt / giao</MudTh>
@@ -88,6 +109,16 @@ else
                 <MudTh Style="width:1%"></MudTh>
             </HeaderContent>
             <RowTemplate>
+                @if (_coQuyenNhapLieu)
+                {
+                    <MudTd>
+                        @if (CoTheTaoLenh(context))
+                        {
+                            <MudCheckBox T="bool" Value="_chon.Contains(context.Id)" Dense="true"
+                                         ValueChanged="@(v => ChonDon(context.Id, v))" />
+                        }
+                    </MudTd>
+                }
                 <MudTd DataLabel="Mã đơn">
                     <b>@context.MaDonHang</b>
                     @if (context.Nguon == NguonDonHang.HanoiCheck)
@@ -210,14 +241,21 @@ else
                 </MudTd>
             </RowTemplate>
             <ChildRowContent>
-                @if (context.Dong.Any(l => l.XuatLo.Count > 0))
+                @if (context.Dong.Count > 0)
                 {
                     <MudTr>
-                        <td colspan="6" class="px-4 pb-2">
+                        <td colspan="@(_coQuyenNhapLieu ? 7 : 6)" class="px-4 pb-2">
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                Lô đã xuất:
-                                @string.Join("; ", context.Dong.SelectMany(l => l.XuatLo.Select(x => $"{TenThanhPham(l.MaThanhPham)} lô {x.MaLo} × {x.SoLuong:0.###}")))
+                                Sản phẩm:
+                                @string.Join("; ", context.Dong.Select(l => $"{TenThanhPham(l.MaThanhPham)} × {l.SoLuong:0.###}{DonViThanhPham(l.MaThanhPham)}"))
                             </MudText>
+                            @if (context.Dong.Any(l => l.XuatLo.Count > 0))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                                    Lô đã xuất:
+                                    @string.Join("; ", context.Dong.SelectMany(l => l.XuatLo.Select(x => $"{TenThanhPham(l.MaThanhPham)} lô {x.MaLo} × {x.SoLuong:0.###}")))
+                                </MudText>
+                            }
                         </td>
                     </MudTr>
                 }
@@ -300,7 +338,8 @@ else
                         }
                     </MudSelect>
                 </MudTd>
-                <MudTd><MudNumericField @bind-Value="context.SoLuong" Variant="Variant.Outlined" Min="0m" Margin="Margin.Dense" /></MudTd>
+                <MudTd><MudNumericField @bind-Value="context.SoLuong" Variant="Variant.Outlined" Min="0m" Margin="Margin.Dense"
+                                        Format="0.###" Culture="@System.Globalization.CultureInfo.InvariantCulture" /></MudTd>
                 <MudTd><MudNumericField @bind-Value="context.DonGia" Variant="Variant.Outlined" Min="0m" Margin="Margin.Dense" /></MudTd>
                 <MudTd Style="text-align:right">@context.ThanhTien.ToString("#,0")</MudTd>
                 <MudTd>
@@ -383,7 +422,8 @@ else
                                     <td>@lo.MaLo</td>
                                     <td>@(lo.HanSuDung?.ToString("dd/MM/yyyy") ?? "—")</td>
                                     <td style="text-align:right">@lo.Ton.ToString("0.###")</td>
-                                    <td><MudNumericField @bind-Value="lo.SoLuong" Min="0m" Max="lo.Ton" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                                    <td><MudNumericField @bind-Value="lo.SoLuong" Min="0m" Max="lo.Ton" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                         Format="0.###" Culture="@System.Globalization.CultureInfo.InvariantCulture" /></td>
                                 </tr>
                             }
                         </tbody>
@@ -476,6 +516,7 @@ else
     private List<Staff> _nguoiGiao = new();
     private Dictionary<string, string> _tenKhach = new();
     private Dictionary<string, string> _tenThanhPham = new();
+    private Dictionary<string, string?> _donViThanhPham = new();
 
     private TrangThaiDonHangBan? _loc;
     private DateTime? _locTuNgay;
@@ -483,6 +524,11 @@ else
     private string? _locMaKhachHang;
     private bool _dangTai = true;
     private bool _dangXuLy;
+
+    // Chọn đơn để gộp thành lệnh sản xuất (chỉ nhân viên nhập liệu).
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private bool _coQuyenNhapLieu;
+    private readonly HashSet<int> _chon = new();
 
     private bool _hienForm;
     private DonHangBan _input = new();
@@ -516,7 +562,51 @@ else
         .Where(d => _locMaKhachHang is null || d.MaKhachHang == _locMaKhachHang)
         .ToList();
 
-    protected override async Task OnInitializedAsync() => await TaiAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _coQuyenNhapLieu = user.IsInRole(AppRoles.TenantAdmin) || user.IsInRole(AppRoles.TenantStaff);
+        }
+        await TaiAsync();
+    }
+
+    /// <summary>Đơn có thể gộp vào lệnh sản xuất: chưa xuất kho (chưa gán lô) và chưa huỷ.</summary>
+    private static bool CoTheTaoLenh(DonHangBan d) =>
+        d.TrangThai != TrangThaiDonHangBan.DaHuy && d.Dong.All(l => l.XuatLo.Count == 0);
+
+    private void ChonDon(int id, bool chon)
+    {
+        if (chon) _chon.Add(id); else _chon.Remove(id);
+    }
+
+    /// <summary>Gộp sản phẩm + số lượng của các đơn đã chọn rồi mở dialog tạo lệnh sản xuất điền sẵn.</summary>
+    private async Task MoTaoLenhAsync()
+    {
+        var dsChon = _danhSach.Where(d => _chon.Contains(d.Id) && CoTheTaoLenh(d)).ToList();
+        var tong = dsChon.SelectMany(d => d.Dong)
+            .Where(l => !string.IsNullOrWhiteSpace(l.MaThanhPham) && l.SoLuong > 0)
+            .GroupBy(l => l.MaThanhPham)
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.SoLuong));
+        if (tong.Count == 0)
+        {
+            Snackbar.Add("Các đơn đã chọn không có sản phẩm nào để sản xuất.", Severity.Info);
+            return;
+        }
+
+        var thamSo = new DialogParameters<TaoLenhSanXuatDialog>
+        {
+            { x => x.SoLuongTheoThanhPham, tong }
+        };
+        var dialog = await DialogService.ShowAsync<TaoLenhSanXuatDialog>("Tạo lệnh sản xuất", thamSo, _dialogLon);
+        var kq = await dialog.Result;
+        if (kq is { Canceled: false })
+        {
+            _chon.Clear();
+            await TaiAsync();
+        }
+    }
 
     private async Task TaiAsync()
     {
@@ -531,11 +621,16 @@ else
         _nguoiGiao = nhanSu.Any(n => n.LaNguoiGiaoHang) ? nhanSu.Where(n => n.LaNguoiGiaoHang).ToList() : nhanSu;
         _tenKhach = _khachHang.GroupBy(k => k.MaKhachHang).ToDictionary(g => g.Key, g => g.First().TenKhachHang);
         _tenThanhPham = sp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
+        _donViThanhPham = sp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().DonViTinh);
         _dangTai = false;
     }
 
     private string TenKhach(string ma) => _tenKhach.GetValueOrDefault(ma) ?? ma;
     private string TenThanhPham(string ma) => _tenThanhPham.GetValueOrDefault(ma) ?? ma;
+
+    /// <summary>Đơn vị tính của thành phẩm, có khoảng trắng đầu để ghép sau số lượng (rỗng nếu không khai).</summary>
+    private string DonViThanhPham(string ma) =>
+        _donViThanhPham.TryGetValue(ma, out var dv) && !string.IsNullOrWhiteSpace(dv) ? " " + dv : "";
 
     private static string TenTrangThai(TrangThaiDonHangBan t) => t switch
     {

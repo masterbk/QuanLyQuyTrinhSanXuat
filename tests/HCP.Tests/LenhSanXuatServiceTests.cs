@@ -161,6 +161,37 @@ public class LenhSanXuatServiceTests
     }
 
     [Fact]
+    public async Task Hoan_Thanh_Ghi_Han_Dung_Lo_Nhap_O_Buoc_Hoan_Thanh()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 5m, new DateOnly(2026, 1, 1));
+
+        var id = await TaoAsync(Lenh(10));   // dòng sản phẩm KHÔNG khai hạn dùng lúc tạo
+
+        int spId;
+        using (var db = MoDb())
+            spId = (await db.LenhSanXuatSanPhams.SingleAsync(s => s.LenhSanXuatId == id)).Id;
+
+        var hsd = new DateOnly(2026, 9, 9);   // nhập lúc hoàn thành
+        var anh = await AnhAsync(id);
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).ThucHienAsync(id, anh,
+                hanSuDungTheoSanPham: new Dictionary<int, DateOnly?> { [spId] = hsd });
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        using (var db = MoDb())
+        {
+            // Ghi vào dòng sản phẩm và vào sổ kho khi nhập thành phẩm.
+            Assert.Equal(hsd, (await db.LenhSanXuatSanPhams.SingleAsync(s => s.Id == spId)).HanSuDung);
+            var nhap = await db.KhoGiaoDichs.SingleAsync(g =>
+                g.MaSanPham == "BANH_MI" && g.Loai == LoaiGiaoDichKho.NhapThanhPham);
+            Assert.Equal(hsd, nhap.HanSuDung);
+        }
+    }
+
+    [Fact]
     public async Task Thieu_Nguyen_Lieu_Thi_Khong_Tru_Gi()
     {
         SeedDanhMuc();
@@ -712,6 +743,56 @@ public class LenhSanXuatServiceTests
         Assert.True((await HoanThanhAsync(id)).ThanhCong);
         Assert.Equal(2.9m, TonLo("BOT_MI", "LO_A"));            // (20 + 1) × 0.1
         Assert.Equal(20m, TonLo("BANH_MI", Lo1));
+    }
+
+    [Fact]
+    public async Task Sua_Lenh_Khi_Khau_Mang_Id_Cu_Nhu_UI_Van_Luu_Duoc()
+    {
+        // Màn Sửa dựng bản sao MANG ĐÚNG Id của khâu đã lưu (MoSuaAsync/SaoKhau). Trước đây điều này làm
+        // CapNhatAsync xung đột khoá EF (vừa xoá vừa thêm khâu cùng Id) -> ném lỗi -> nút Lưu treo.
+        SeedDanhMuc();
+        NhapBot("LO_A", 5m, new DateOnly(2026, 1, 1));
+
+        var id = await TaoAsync(Lenh(10));
+
+        int[] khauIds;
+        string loTp;
+        using (var db = MoDb())
+        {
+            var sp = await db.LenhSanXuatSanPhams.Include(x => x.Khau).SingleAsync();
+            loTp = sp.MaLoThanhPham;
+            khauIds = sp.Khau.OrderBy(k => k.ThuTu).Select(k => k.Id).ToArray();
+        }
+        Assert.All(khauIds, x => Assert.True(x > 0));   // đảm bảo test đúng: khâu có Id thật
+
+        var ban = new LenhSanXuat
+        {
+            Id = id, MaLenh = "MA-GUI-LEN", MaKho = "KHO01", NgaySanXuat = new DateOnly(2026, 9, 6),
+            SanPham = new()
+            {
+                new LenhSanXuatSanPham
+                {
+                    MaThanhPham = "BANH_MI", SoLuong = 15m, MaLoThanhPham = loTp, MaQuyTrinh = "QT01",
+                    Khau = new()
+                    {
+                        new() { Id = khauIds[0], MaKhau = "KHAU01", ThuTu = 1, MaCoSo = "CS01", NguoiThucHienCsv = "NS01" },
+                        new() { Id = khauIds[1], MaKhau = "KHAU02", ThuTu = 2, MaCoSo = "CS01", NguoiThucHienCsv = "NS01" }
+                    }
+                }
+            }
+        };
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).CapNhatAsync(ban);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        using (var db = MoDb())
+        {
+            var sp = await db.LenhSanXuatSanPhams.Include(x => x.Khau).SingleAsync();
+            Assert.Equal(15m, sp.SoLuong);
+            Assert.Equal(2, sp.Khau.Count);
+        }
     }
 
     [Fact]

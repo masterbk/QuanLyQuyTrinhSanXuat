@@ -142,40 +142,92 @@ class OKhau extends ConsumerWidget {
   }
 
   Future<void> _chonNguoi(BuildContext context, List<NhanSu> nhanSu) async {
-    final chon = {...khau.nguoi};
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, datLai) => AlertDialog(
-          title: Text('Người thực hiện: ${khau.tenKhau}'),
-          content: SizedBox(
-            width: 380,
-            child: nhanSu.isEmpty
-                ? const Text('Chưa có nhân sự nào đang hoạt động.')
-                : ListView(
-                    shrinkWrap: true,
-                    children: nhanSu
-                        .map((n) => CheckboxListTile(
-                              dense: true,
-                              value: chon.contains(n.maNhanSu),
-                              title: Text(n.hoTen),
-                              subtitle: Text([n.maNhanSu, if (n.viTri != null) n.viTri!].join(' · ')),
-                              onChanged: (v) => datLai(() => v == true ? chon.add(n.maNhanSu) : chon.remove(n.maNhanSu)),
-                            ))
-                        .toList(),
-                  ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: Text('Chọn (${chon.length})')),
-          ],
-        ),
-      ),
-    );
-    if (ok == true) {
-      // Giữ thứ tự theo danh mục cho ổn định.
-      khau.nguoi = nhanSu.map((n) => n.maNhanSu).where(chon.contains).toList();
+    final kq = await chonNhieuNguoi(context, nhanSu, {...khau.nguoi},
+        tieuDe: 'Người thực hiện: ${khau.tenKhau}');
+    if (kq != null) {
+      khau.nguoi = kq;
       khiDoi();
     }
+  }
+}
+
+/// Hộp thoại chọn nhiều nhân sự (dùng chung cho ô một khâu và nút gán cho mọi khâu). Trả danh sách
+/// đã chọn (giữ thứ tự theo danh mục), hoặc null nếu huỷ.
+Future<List<String>?> chonNhieuNguoi(BuildContext context, List<NhanSu> nhanSu, Set<String> daChon,
+    {required String tieuDe}) async {
+  final chon = {...daChon};
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => StatefulBuilder(
+      builder: (c, datLai) => AlertDialog(
+        title: Text(tieuDe),
+        content: SizedBox(
+          width: 380,
+          child: nhanSu.isEmpty
+              ? const Text('Chưa có nhân sự nào đang hoạt động.')
+              : ListView(
+                  shrinkWrap: true,
+                  children: nhanSu
+                      .map((n) => CheckboxListTile(
+                            dense: true,
+                            value: chon.contains(n.maNhanSu),
+                            title: Text(n.hoTen),
+                            subtitle: Text([n.maNhanSu, if (n.viTri != null) n.viTri!].join(' · ')),
+                            onChanged: (v) => datLai(() => v == true ? chon.add(n.maNhanSu) : chon.remove(n.maNhanSu)),
+                          ))
+                      .toList(),
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Huỷ')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text('Chọn (${chon.length})')),
+        ],
+      ),
+    ),
+  );
+  if (ok != true) return null;
+  return nhanSu.map((n) => n.maNhanSu).where(chon.contains).toList();
+}
+
+/// Nút gán cùng một danh sách người thực hiện cho TẤT CẢ khâu (chọn 1 lần thay vì từng khâu) -
+/// dùng khi ít người làm suốt cả quy trình nhiều khâu.
+class OGanNguoiMoiKhau extends ConsumerWidget {
+  final List<KhauSua> khau;
+  final VoidCallback khiDoi;
+  final bool khoa;
+
+  const OGanNguoiMoiKhau({super.key, required this.khau, required this.khiDoi, this.khoa = false});
+
+  /// Người đang gán chung cho mọi khâu (mọi khâu cùng danh sách); khác nhau thì rỗng.
+  List<String> _nguoiChung() {
+    if (khau.isEmpty) return const [];
+    final dau = ([...khau.first.nguoi]..sort()).join(',');
+    final chung = khau.every((k) => ([...k.nguoi]..sort()).join(',') == dau);
+    return chung ? khau.first.nguoi : const [];
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final nhanSu = ref.watch(nhanSuProvider).value ?? const <NhanSu>[];
+    final chung = _nguoiChung();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        onPressed: khoa
+            ? null
+            : () async {
+                final kq = await chonNhieuNguoi(context, nhanSu, chung.toSet(),
+                    tieuDe: 'Gán người cho tất cả khâu');
+                if (kq != null) {
+                  for (final k in khau) {
+                    k.nguoi = [...kq];
+                  }
+                  khiDoi();
+                }
+              },
+        icon: const Icon(Icons.groups_outlined, size: 18),
+        label: Text(chung.isEmpty ? 'Gán người cho tất cả khâu' : 'Người mọi khâu (${chung.length})'),
+      ),
+    );
   }
 }

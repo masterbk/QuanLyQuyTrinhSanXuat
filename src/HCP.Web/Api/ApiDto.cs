@@ -80,6 +80,9 @@ public sealed record LenhSanXuatKhauRequest(
 public sealed record KhauSuaLaiRequest(
     int Id, string MaCoSo, IReadOnlyList<string>? NguoiThucHien, string? GhiChu);
 
+/// <summary>Hạn dùng lô của một dòng sản phẩm, nhập lúc Hoàn thành (Id = LenhSanXuatSanPham.Id).</summary>
+public sealed record HanDungSanPhamRequest(int Id, DateOnly? HanSuDung);
+
 public sealed record HuyLenhRequest(string LyDo);
 
 /// <summary>Xem trước nguyên liệu cho NHIỀU dòng sản phẩm cùng lúc (nhu cầu được cộng dồn).</summary>

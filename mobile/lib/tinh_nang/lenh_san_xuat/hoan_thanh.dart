@@ -29,6 +29,11 @@ class _ManHoanThanhState extends ConsumerState<ManHoanThanh> {
     for (final s in widget.lenh.sanPham)
       s.id: ([...s.khau]..sort((a, b) => a.thuTu.compareTo(b.thuTu))).map(KhauSua.tuKhauLenh).toList()
   };
+  // Hạn dùng lô nhập ở bước hoàn thành; mặc định 3 ngày kể từ ngày sản xuất.
+  late final Map<int, DateTime> _hanSuDung = {
+    for (final s in widget.lenh.sanPham)
+      s.id: s.hanSuDung ?? widget.lenh.ngaySanXuat.add(const Duration(days: 3))
+  };
   bool _dangGui = false;
 
   /// Album ảnh của Lô sản xuất gửi HanoiCheck: tối đa 3 ảnh mỗi lô.
@@ -92,7 +97,8 @@ class _ManHoanThanhState extends ConsumerState<ManHoanThanh> {
     setState(() => _dangGui = true);
     try {
       final khau = _khau.values.expand((ds) => ds).map((k) => k.choSuaLai()).toList();
-      final tb = await ref.read(khoLenhProvider).hoanThanh(widget.lenh.id, _anh, khau);
+      final tb = await ref.read(khoLenhProvider)
+          .hoanThanh(widget.lenh.id, _anh, khau, hanSuDung: _hanSuDung);
       if (!mounted) return;
       Navigator.pop(context, tb);
     } on LoiApi catch (e) {
@@ -103,6 +109,19 @@ class _ManHoanThanhState extends ConsumerState<ManHoanThanh> {
   }
 
   void _bao(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
+
+  String _ngayVn(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<void> _chonHanSuDung(int idSanPham) async {
+    final chon = await showDatePicker(
+      context: context,
+      initialDate: _hanSuDung[idSanPham]!,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (chon != null && mounted) setState(() => _hanSuDung[idSanPham] = chon);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +185,20 @@ class _ManHoanThanhState extends ConsumerState<ManHoanThanh> {
             Text('${s.tenHienThi} ×${soGon(s.soLuong)}',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             Text('Lô ${s.maLoThanhPham}', style: TextStyle(color: Theme.of(context).hintColor)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.event_outlined, size: 18),
+                const SizedBox(width: 6),
+                Text('Hạn dùng: ${_ngayVn(_hanSuDung[s.id]!)}'),
+                const Spacer(),
+                TextButton(
+                  onPressed: _dangGui ? null : () => _chonHanSuDung(s.id),
+                  child: const Text('Đổi'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
             Row(
               children: [
                 Text('Ảnh lô sản phẩm', style: Theme.of(context).textTheme.titleSmall),
@@ -233,6 +265,8 @@ class _ManHoanThanhState extends ConsumerState<ManHoanThanh> {
                 title: Text('Người thực hiện (${khau.length} khâu)'),
                 subtitle: const Text('Sửa nếu thực tế khác kế hoạch'),
                 children: [
+                  if (khau.length > 1)
+                    OGanNguoiMoiKhau(khau: khau, khoa: _dangGui, khiDoi: () => setState(() {})),
                   for (final k in khau)
                     OKhau(key: ObjectKey(k), khau: k, khoa: _dangGui, khiDoi: () => setState(() {})),
                 ],

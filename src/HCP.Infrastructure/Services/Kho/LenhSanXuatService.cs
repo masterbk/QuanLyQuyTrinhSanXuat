@@ -160,6 +160,13 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
 
         // Lệnh chưa hoàn thành nên chưa có tiêu hao/ảnh: thay nguyên danh sách sản phẩm cho gọn.
         _db.LenhSanXuatSanPhams.RemoveRange(goc.SanPham);
+        // Bản gửi từ UI dựng đối tượng mới nhưng khâu vẫn mang Id của khâu cũ (vừa bị xoá ở trên).
+        // Ép Id = 0 để EF chèn hàng mới, tránh lỗi "một thực thể khác cùng khoá đang được theo dõi".
+        foreach (var sp in lenh.SanPham)
+        {
+            sp.Id = 0;
+            foreach (var k in sp.Khau) k.Id = 0;
+        }
         goc.SanPham = lenh.SanPham;
 
         await _db.SaveChangesAsync(ct);
@@ -284,6 +291,7 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         IReadOnlyList<LenhSanXuatKhau>? khauSuaLai = null,
         bool coQuyenNhapLieu = true,
         string? maNguoiThucHien = null,
+        IReadOnlyDictionary<int, DateOnly?>? hanSuDungTheoSanPham = null,
         CancellationToken ct = default)
     {
         var lenh = await QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
@@ -386,6 +394,11 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
 
         foreach (var sp in lenh.SanPham)
         {
+            // Hạn dùng lô được nhập ở bước Hoàn thành (mặc định 3 ngày trên UI) - cập nhật vào dòng sản phẩm
+            // rồi ghi vào sổ kho khi nhập thành phẩm.
+            if (hanSuDungTheoSanPham is not null && hanSuDungTheoSanPham.TryGetValue(sp.Id, out var hsd))
+                sp.HanSuDung = hsd;
+
             // Nhập thành phẩm (dương).
             _db.KhoGiaoDichs.Add(new KhoGiaoDich
             {
