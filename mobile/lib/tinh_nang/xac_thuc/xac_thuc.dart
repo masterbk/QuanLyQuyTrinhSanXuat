@@ -29,6 +29,9 @@ class NguoiDung {
   /// Quản trị cơ sở/nhân viên nhập liệu: được xác nhận đơn hàng mới (khớp QuyenNhapLieu phía máy chủ).
   bool get coQuyenNhapLieu => vaiTro.any({'TenantAdmin', 'TenantStaff'}.contains);
 
+  /// Chủ cơ sở (quản trị cơ sở): bao quát mọi đơn, không đi giao nên không cần tab "Chờ giao hàng"/"Của tôi".
+  bool get laChuCoSo => vaiTro.contains('TenantAdmin');
+
   factory NguoiDung.tuJson(Map<String, dynamic> j) => NguoiDung(
         id: j['id'] as String? ?? '',
         email: j['email'] as String? ?? '',

@@ -130,7 +130,11 @@ final locDonProvider = NotifierProvider<LocDonNotifier, LocDon>(LocDonNotifier.n
 
 class LocDonNotifier extends Notifier<LocDon> {
   @override
-  LocDon build() => LocDon.canGiao;
+  LocDon build() {
+    // Chủ cơ sở không có tab "Chờ giao hàng" nên mặc định xem "Tất cả"; còn lại giữ "Chờ giao hàng".
+    final laChuCoSo = ref.read(xacThucProvider).nguoiDung?.laChuCoSo ?? false;
+    return laChuCoSo ? LocDon.tatCa : LocDon.canGiao;
+  }
 
   void dat(LocDon v) => state = v;
 }

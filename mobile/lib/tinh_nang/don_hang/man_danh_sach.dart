@@ -63,7 +63,9 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
     final loc = ref.watch(locDonProvider);
     final khoangNgay = ref.watch(locNgayDonProvider);
     final maKhachHangLoc = ref.watch(locKhachHangDonProvider);
-    final coQuyenNhapLieu = ref.watch(xacThucProvider).nguoiDung?.coQuyenNhapLieu ?? false;
+    final nguoiDungHienTai = ref.watch(xacThucProvider).nguoiDung;
+    final coQuyenNhapLieu = nguoiDungHienTai?.coQuyenNhapLieu ?? false;
+    final laChuCoSo = nguoiDungHienTai?.laChuCoSo ?? false;
 
     return Scaffold(
       body: Column(
@@ -74,6 +76,7 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
                 child: _BoLoc(
                   dangChon: loc,
                   coQuyenNhapLieu: coQuyenNhapLieu,
+                  laChuCoSo: laChuCoSo,
                   khiChon: (v) => ref.read(locDonProvider.notifier).dat(v),
                 ),
               ),
@@ -281,8 +284,10 @@ class TheDonHang extends ConsumerWidget {
     final nguoiDung = ref.watch(xacThucProvider).nguoiDung;
     final maToi = nguoiDung?.maNhanSu;
     final cuaToi = don.cuaToi(maToi);
+    final laChuCoSo = nguoiDung?.laChuCoSo ?? false;
     final nhanDuoc = don.choGiaoHang;
-    final giaoDuoc = don.dangGiao && cuaToi;
+    // Shipper hoàn tất đơn mình nhận; Chủ cơ sở hoàn tất được mọi đơn đang giao.
+    final giaoDuoc = don.dangGiao && (cuaToi || laChuCoSo);
     // Xác nhận/Xuất kho: việc của quản lý/nhập liệu, không phải shipper.
     final coQuyenNhapLieu = nguoiDung?.coQuyenNhapLieu ?? false;
     final xacNhanDuoc = don.choXacNhan && coQuyenNhapLieu;
@@ -424,9 +429,15 @@ class TheDonHang extends ConsumerWidget {
 class _BoLoc extends StatelessWidget {
   final LocDon dangChon;
   final bool coQuyenNhapLieu;
+  final bool laChuCoSo;
   final ValueChanged<LocDon> khiChon;
 
-  const _BoLoc({required this.dangChon, required this.coQuyenNhapLieu, required this.khiChon});
+  const _BoLoc({
+    required this.dangChon,
+    required this.coQuyenNhapLieu,
+    required this.laChuCoSo,
+    required this.khiChon,
+  });
 
   static const _mucCoBan = <({LocDon ma, String ten})>[
     (ma: LocDon.canGiao, ten: 'Chờ giao hàng'),
@@ -441,8 +452,12 @@ class _BoLoc extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Shipper thuần chỉ thấy "Chờ giao hàng" + "Của tôi" - không phải việc của họ xem đơn chưa xuất kho
-    // hay toàn bộ đơn của cơ sở.
-    final muc = [..._mucCoBan, if (coQuyenNhapLieu) ..._mucQuanLy, if (coQuyenNhapLieu) _mucTatCa];
+    // hay toàn bộ đơn của cơ sở. Chủ cơ sở thì ngược lại: bao quát mọi đơn, bỏ 2 tab giao hàng đó.
+    final muc = [
+      if (!laChuCoSo) ..._mucCoBan,
+      if (coQuyenNhapLieu) ..._mucQuanLy,
+      if (coQuyenNhapLieu) _mucTatCa,
+    ];
     return SizedBox(
       height: 50,
       child: ListView.separated(
