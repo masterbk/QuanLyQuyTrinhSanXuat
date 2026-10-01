@@ -4,6 +4,7 @@ using HCP.Infrastructure.Services.DanhMuc;
 using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace HCP.Tests;
 
@@ -21,6 +22,12 @@ public class DanhMucIsolationTests
     private const string CoSoB = "coso-b";
 
     private readonly string _dbName = Guid.NewGuid().ToString();
+
+    /// <summary>Bộ nhớ đệm dùng chung trong cùng một bài kiểm thử (xUnit tạo thực thể lớp mới cho mỗi bài),
+    /// đúng như khi chạy thật: cache là singleton, danh mục chỉ đọc CSDL một lần cho tới khi cập nhật lại.</summary>
+    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+
+    private DanhMucChuanService DanhMucChuan(AppDbContext db) => new(db, _cache);
 
     private AppDbContext OpenAs(string tenantId)
     {
@@ -306,9 +313,16 @@ public class DanhMucIsolationTests
             db.SaveChanges();
         }
 
+        // Đọc trước một lần để danh mục nằm sẵn trong bộ nhớ đệm - cập nhật xong phải thấy bản mới,
+        // không được trả lại bản cũ còn trong đệm.
         using (var db = OpenAs(CoSoA))
         {
-            var svc = new DanhMucChuanService(db);
+            Assert.Single(await DanhMucChuan(db).LayTatCaAsync());
+        }
+
+        using (var db = OpenAs(CoSoA))
+        {
+            var svc = DanhMucChuan(db);
             await svc.CapNhatTuHnCAsync(new[]
             {
                 new StandardFoodCategory { Code = "48533", Name = "Thịt ba chỉ" },
@@ -318,7 +332,7 @@ public class DanhMucIsolationTests
 
         using (var db = OpenAs(CoSoA))
         {
-            var ds = await new DanhMucChuanService(db).LayTatCaAsync();
+            var ds = await DanhMucChuan(db).LayTatCaAsync();
             Assert.Equal(2, ds.Count);
             Assert.DoesNotContain(ds, c => c.Code == "ba_chi_que"); // bản slug cũ đã bị thay thế
             Assert.Contains(ds, c => c.Code == "48533");
@@ -331,7 +345,7 @@ public class DanhMucIsolationTests
         // Danh mục do HanoiCheck ban hành - cố ý KHÔNG lọc theo tenant.
         using (var db = OpenAs(CoSoA))
         {
-            var service = new DanhMucChuanService(db);
+            var service = DanhMucChuan(db);
             await service.CapNhatTuHnCAsync(new[]
             {
                 new StandardFoodCategory { Code = "THIT", Name = "Thịt và sản phẩm từ thịt" },
@@ -341,7 +355,7 @@ public class DanhMucIsolationTests
 
         using (var db = OpenAs(CoSoB))
         {
-            var service = new DanhMucChuanService(db);
+            var service = DanhMucChuan(db);
             var danhMuc = await service.LayTatCaAsync();
 
             Assert.Equal(2, danhMuc.Count);

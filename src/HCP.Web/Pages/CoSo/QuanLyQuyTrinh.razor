@@ -55,16 +55,21 @@ else
                 <MudTh Style="width:120px"></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
+                <MudTd DataLabel="STT">@(_stt.GetValueOrDefault(context.Id))</MudTd>
                 <MudTd DataLabel="Mã"><b>@context.MaQuyTrinh</b></MudTd>
                 <MudTd DataLabel="Tên">@context.TenQuyTrinh</MudTd>
                 <MudTd DataLabel="Các khâu">
-                    @foreach (var khau in context.DanhSachKhau.OrderBy(k => k.ThuTu))
-                    {
-                        <MudChip T="string" Size="Size.Small" Class="ma-1">
-                            @khau.ThuTu. @khau.MaKhau
-                        </MudChip>
-                    }
+                    @* Bọc trong khung có bề rộng tối đa + tự xuống dòng: quy trình nhiều khâu mà để các chip
+                       nằm một hàng thì ô này kéo bảng rộng hơn màn hình, trên điện thoại các cột khác bị đẩy
+                       ra ngoài nên nhìn như ô trống (chỉ thấy nhãn STT/Mã/Tên). *@
+                    <div class="d-flex flex-wrap" style="gap:4px; max-width:min(460px, 62vw)">
+                        @foreach (var khau in context.DanhSachKhau.OrderBy(k => k.ThuTu))
+                        {
+                            <MudChip T="string" Size="Size.Small" Class="ma-0">
+                                @khau.ThuTu. @khau.MaKhau
+                            </MudChip>
+                        }
+                    </div>
                 </MudTd>
                 <MudTd>
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
@@ -73,6 +78,10 @@ else
                                    OnClick="@(() => XacNhanXoaAsync(context))" />
                 </MudTd>
             </RowTemplate>
+            @* Có phân trang thì mỗi lần chỉ dựng 10 dòng thay vì toàn bộ danh sách - điện thoại nhẹ hơn hẳn. *@
+            <PagerContent>
+                <MudTablePager RowsPerPageString="Số dòng mỗi trang:" />
+            </PagerContent>
         </MudTable>
     }
 }
@@ -173,6 +182,9 @@ else
     private List<ProductionProcess> _danhSach = new();
     private List<ProductionStep> _danhSachKhau = new();
     private List<StandardFoodCategory> _danhMucChuan = new();
+
+    /// <summary>Số thứ tự hiển thị theo Id quy trình (tính sẵn khi tải danh sách).</summary>
+    private Dictionary<int, int> _stt = new();
     private string? _maDanhMucChon;
 
     private bool _dangTai = true;
@@ -197,6 +209,10 @@ else
         _danhSach = (await QuyTrinhService.LayTatCaAsync()).ToList();
         _danhSachKhau = (await KhauService.LayTatCaAsync()).ToList();
         _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
+
+        // Số thứ tự tính sẵn một lần: tra trong vòng lặp dựng bảng (IndexOf) là quét lại cả danh sách cho
+        // từng dòng, danh sách càng dài càng chậm theo bình phương.
+        _stt = _danhSach.Select((q, i) => (q.Id, Stt: i + 1)).ToDictionary(x => x.Id, x => x.Stt);
         _dangTai = false;
     }
 

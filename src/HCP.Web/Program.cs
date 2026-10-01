@@ -176,6 +176,8 @@ builder.Services.AddScoped<IDanhMucService<Staff>, NhanSuService>();
 builder.Services.AddScoped<IDanhMucService<Product>, ThucPhamService>();
 builder.Services.AddScoped<IDanhMucService<Batch>, LoSanXuatService>();
 builder.Services.AddScoped<IDanhMucService<Dish>, MonAnService>();
+// Danh mục thực phẩm chuẩn (>5.000 dòng, dùng chung mọi cơ sở) giữ trong bộ nhớ - xem DanhMucChuanService.
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
 builder.Services.AddScoped<ISyncNhatKyService, SyncNhatKyService>();
 builder.Services.AddScoped<IKhoNoiBoService, KhoNoiBoService>();
@@ -349,8 +351,16 @@ using (var scope = app.Services.CreateScope())
     var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Migrations");
     try
     {
-        await sp.GetRequiredService<TenantStoreDbContext>().Database.MigrateAsync();
-        await sp.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+        // Mốc chờ rộng tay cho DDL: mặc định 30 giây là quá ngắn với các lệnh phải quét/sắp xếp cả bảng
+        // (vd tạo chỉ mục trên bảng danh mục hơn 5.000 dòng - trên máy chủ production đo được hơn 30 giây).
+        // Quá mốc thì migration bị huỷ giữa chừng và ỨNG DỤNG KHÔNG KHỞI ĐỘNG ĐƯỢC, nên thà chờ lâu.
+        var tenantStore = sp.GetRequiredService<TenantStoreDbContext>();
+        var appDb = sp.GetRequiredService<AppDbContext>();
+        tenantStore.Database.SetCommandTimeout((int)TimeSpan.FromMinutes(15).TotalSeconds);
+        appDb.Database.SetCommandTimeout((int)TimeSpan.FromMinutes(15).TotalSeconds);
+
+        await tenantStore.Database.MigrateAsync();
+        await appDb.Database.MigrateAsync();
         logger.LogInformation("Đã áp dụng migration cơ sở dữ liệu (TenantStore + App).");
     }
     catch (Exception ex)

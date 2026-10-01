@@ -629,6 +629,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         standardFood.Property(c => c.MeasureName).HasMaxLength(100);
         standardFood.HasIndex(c => c.Code).IsUnique();
 
+        // Chỉ mục PHỦ cho câu "lấy toàn bộ danh mục, sắp theo tên" (DanhMucChuanService.LayTatCaAsync).
+        // Bảng này hơn 5.000 dòng; không có chỉ mục thì SQL phải tự sắp xếp, và trên máy chủ production
+        // riêng bước sắp xếp đó đo được 25 GIÂY (cùng câu lệnh bỏ ORDER BY chỉ mất 0,3 giây) - đủ làm
+        // ba màn Quy trình / Thực phẩm / NCC đầu vào treo hàng chục giây. Có chỉ mục theo Name kèm sẵn
+        // các cột còn lại thì SQL đọc thẳng theo thứ tự, không còn bước sắp xếp nào.
+        standardFood.HasIndex(c => c.Name)
+            .IncludeProperties(c => new { c.Code, c.MeasureName, c.CapNhatLucUtc });
+
         // Cột thời gian tên *Utc lưu giờ UTC: đọc ra gắn Kind=Utc để API trả JSON có "Z" (app di động quy đổi đúng
         // sang giờ Việt Nam). Chỉ đổi cách ĐỌC, không đổi dữ liệu hay cấu trúc bảng.
         var docLaUtc = new ValueConverter<DateTime, DateTime>(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));

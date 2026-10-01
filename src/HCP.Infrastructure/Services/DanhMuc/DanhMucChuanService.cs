@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace HCP.Infrastructure.Services.DanhMuc;
 
@@ -26,12 +27,35 @@ public interface IDanhMucChuanService
 /// </summary>
 public class DanhMucChuanService : IDanhMucChuanService
 {
+    /// <summary>Khoá cache dùng chung cho mọi cơ sở - danh mục này KHÔNG theo tenant.</summary>
+    private const string KhoaCache = "danh-muc-thuc-pham-chuan";
+
     private readonly AppDbContext _db;
+    private readonly IMemoryCache _cache;
 
-    public DanhMucChuanService(AppDbContext db) => _db = db;
+    public DanhMucChuanService(AppDbContext db, IMemoryCache cache)
+    {
+        _db = db;
+        _cache = cache;
+    }
 
-    public async Task<IReadOnlyList<StandardFoodCategory>> LayTatCaAsync(CancellationToken ct = default) =>
-        await _db.StandardFoodCategories.AsNoTracking().OrderBy(c => c.Name).ToListAsync(ct);
+    /// <summary>
+    /// Bảng này rất lớn (HanoiCheck trả hơn 5.000 dòng) nhưng cả tháng mới đổi một lần, trong khi mỗi lần mở
+    /// màn Quy trình / Thực phẩm / NCC đầu vào lại nạp lại toàn bộ - đó là một phần lý do các màn đó tải lâu.
+    /// Giữ sẵn trong bộ nhớ cho tới khi tải lại danh mục từ HanoiCheck (CapNhatTuHnCAsync tự xoá cache).
+    /// Danh sách trả về là dùng chung, chỉ để đọc - nơi gọi không được sửa phần tử bên trong.
+    /// </summary>
+    public async Task<IReadOnlyList<StandardFoodCategory>> LayTatCaAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(KhoaCache, out IReadOnlyList<StandardFoodCategory>? daCo) && daCo is not null)
+        {
+            return daCo;
+        }
+
+        var danhSach = await _db.StandardFoodCategories.AsNoTracking().OrderBy(c => c.Name).ToListAsync(ct);
+        _cache.Set(KhoaCache, (IReadOnlyList<StandardFoodCategory>)danhSach, TimeSpan.FromHours(12));
+        return danhSach;
+    }
 
     public async Task<KetQuaThaoTac> CapNhatTuHnCAsync(IEnumerable<StandardFoodCategory> danhMuc,
                                                        CancellationToken ct = default)
@@ -64,6 +88,7 @@ public class DanhMucChuanService : IDanhMucChuanService
 
         // Xoá + thêm trong một SaveChanges -> EF bọc trong transaction (toàn bộ hoặc không gì).
         await _db.SaveChangesAsync(ct);
+        _cache.Remove(KhoaCache);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} danh mục thực phẩm chuẩn.");
     }

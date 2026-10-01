@@ -102,7 +102,9 @@ else
                     <MudTh Style="width:1%"></MudTh>
                 }
                 <MudTh>Mã đơn</MudTh>
-                <MudTh>Khách hàng</MudTh>
+                @* Bề rộng tối thiểu: cột này giờ có thêm dòng địa chỉ, cửa sổ hẹp mà không chặn thì
+                   trình duyệt bóp cột lại đến mức mỗi dòng một chữ. *@
+                <MudTh Style="min-width:220px">Khách hàng</MudTh>
                 <MudTh>Ngày đặt / giao</MudTh>
                 <MudTh Style="text-align:right">Tổng tiền</MudTh>
                 <MudTh>Trạng thái</MudTh>
@@ -135,7 +137,22 @@ else
                         </MudText>
                     }
                 </MudTd>
-                <MudTd DataLabel="Khách hàng">@TenKhach(context.MaKhachHang)</MudTd>
+                <MudTd DataLabel="Khách hàng">
+                    @* Tên và địa chỉ nằm trong CÙNG một khối để xếp chồng lên nhau. Ở khổ điện thoại, MudBlazor
+                       dựng mỗi ô thành một hàng ngang (nhãn bên trái, nội dung bên phải) - tách làm hai khối thì
+                       tên khách bị ép hẹp lại thành mỗi dòng một chữ. Chặn bề rộng vì địa chỉ dài tới 500 ký tự. *@
+                    <div style="max-width:min(340px, 62vw); white-space:normal">
+                        @TenKhach(context.MaKhachHang)
+                        @if (DiaChiGiao(context) is { Length: > 0 } diaChi)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                                <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small"
+                                         Style="vertical-align:text-bottom" />
+                                @diaChi
+                            </MudText>
+                        }
+                    </div>
+                </MudTd>
                 <MudTd DataLabel="Ngày">
                     @context.NgayDat.ToString("dd/MM/yyyy")
                     @if (context.NgayGiao is { } ng)
@@ -515,6 +532,9 @@ else
     private List<Warehouse> _kho = new();
     private List<Staff> _nguoiGiao = new();
     private Dictionary<string, string> _tenKhach = new();
+
+    /// <summary>Địa chỉ đăng ký của khách hàng, theo mã khách - dùng cho đơn chưa có địa chỉ giao riêng.</summary>
+    private Dictionary<string, string> _diaChiKhach = new();
     private Dictionary<string, string> _tenThanhPham = new();
     private Dictionary<string, string?> _donViThanhPham = new();
 
@@ -620,12 +640,21 @@ else
         // Ưu tiên nhân sự đánh dấu "người giao hàng"; chưa ai được đánh dấu thì cho chọn mọi nhân sự.
         _nguoiGiao = nhanSu.Any(n => n.LaNguoiGiaoHang) ? nhanSu.Where(n => n.LaNguoiGiaoHang).ToList() : nhanSu;
         _tenKhach = _khachHang.GroupBy(k => k.MaKhachHang).ToDictionary(g => g.Key, g => g.First().TenKhachHang);
+        _diaChiKhach = _khachHang.GroupBy(k => k.MaKhachHang)
+                                 .ToDictionary(g => g.Key, g => g.First().DiaChi ?? string.Empty);
         _tenThanhPham = sp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
         _donViThanhPham = sp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().DonViTinh);
         _dangTai = false;
     }
 
     private string TenKhach(string ma) => _tenKhach.GetValueOrDefault(ma) ?? ma;
+
+    /// <summary>Địa chỉ giao của đơn; đơn cũ chưa có thì lấy địa chỉ đăng ký của khách hàng - đúng quy tắc
+    /// mà lúc tạo đơn và lúc kéo đơn từ HanoiCheck vẫn dùng để điền sẵn ô này.</summary>
+    private string DiaChiGiao(DonHangBan don) =>
+        (string.IsNullOrWhiteSpace(don.DiaChiGiao)
+            ? _diaChiKhach.GetValueOrDefault(don.MaKhachHang)
+            : don.DiaChiGiao)?.Trim() ?? string.Empty;
     private string TenThanhPham(string ma) => _tenThanhPham.GetValueOrDefault(ma) ?? ma;
 
     /// <summary>Đơn vị tính của thành phẩm, có khoảng trắng đầu để ghép sau số lượng (rỗng nếu không khai).</summary>
