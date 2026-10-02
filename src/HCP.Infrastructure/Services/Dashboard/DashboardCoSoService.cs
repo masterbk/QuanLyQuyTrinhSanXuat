@@ -18,7 +18,14 @@ public sealed class DashboardCoSoService : IDashboardCoSoService
         _nhatKy = nhatKy;
     }
 
-    public async Task<DashboardCoSo> LayAsync(int soNgayCanhBao = 30, CancellationToken ct = default)
+    /// <summary>
+    /// Mốc bắt đầu đếm đơn hàng trên dashboard - do cơ sở chốt, số liệu trước mốc này không tính.
+    /// Muốn đổi thì sửa ở đây (hoặc truyền tham số <c>tuNgay</c> cho <see cref="LayAsync"/>).
+    /// </summary>
+    public static readonly DateOnly MocDemDonHang = new(2026, 9, 27);
+
+    public async Task<DashboardCoSo> LayAsync(int soNgayCanhBao = 30, DateOnly? tuNgay = null,
+                                              CancellationToken ct = default)
     {
         // Outbox: tái dùng dịch vụ nhật ký (đã lọc theo cơ sở đang đăng nhập).
         var outbox = await _nhatKy.DemTheoTrangThaiAsync(ct);
@@ -27,6 +34,7 @@ public sealed class DashboardCoSoService : IDashboardCoSoService
 
         var canhBao = await LayCanhBaoGiayToAsync(soNgayCanhBao, ct);
         var canhBaoKho = await LayCanhBaoTonKhoAsync(soNgayCanhBao, ct);
+        var donHang = await DemDonHangAsync(tuNgay ?? MocDemDonHang, ct);
 
         return new DashboardCoSo(
             OutboxTheoTrangThai: outbox,
@@ -35,7 +43,39 @@ public sealed class DashboardCoSoService : IDashboardCoSoService
             SoLoi: Dem(SyncOutboxStatus.Failed, SyncOutboxStatus.NeedsManualReview),
             SoThanhCong: Dem(SyncOutboxStatus.Success),
             CanhBaoGiayTo: canhBao,
-            CanhBaoTonKho: canhBaoKho);
+            CanhBaoTonKho: canhBaoKho,
+            DonHang: donHang);
+    }
+
+    /// <summary>
+    /// Đếm đơn hàng bán của cơ sở theo trạng thái, từ <paramref name="tuNgay"/> trở đi (theo ngày đặt).
+    /// Đơn đã huỷ không nằm trong ô nào. DonHangBan lọc theo tenant nên chỉ đếm đơn của cơ sở đang đăng nhập.
+    /// </summary>
+    private async Task<ThongKeDonHang> DemDonHangAsync(DateOnly tuNgay, CancellationToken ct)
+    {
+        var theoTrangThai = await _db.DonHangBans.AsNoTracking()
+            .Where(d => d.NgayDat >= tuNgay)
+            .GroupBy(d => d.TrangThai)
+            .Select(g => new { TrangThai = g.Key, So = g.Count() })
+            .ToDictionaryAsync(x => x.TrangThai, x => x.So, ct);
+
+        // "Giao thành công" là trạng thái chỉ nhà trường đặt được trên HanoiCheck - hệ thống này không tự đặt,
+        // chỉ nhận về khi kéo đơn (xem DongBoDonHangJob), nên đếm theo TrangThaiHnC chứ không theo trạng thái nội bộ.
+        var truongXacNhan = await _db.DonHangBans.AsNoTracking()
+            .CountAsync(d => d.NgayDat >= tuNgay
+                             && d.Nguon == NguonDonHang.HanoiCheck
+                             && d.TrangThaiHnC == "GIAO_HANG_THANH_CONG", ct);
+
+        int So(TrangThaiDonHangBan tt) => theoTrangThai.GetValueOrDefault(tt);
+
+        return new ThongKeDonHang(
+            TuNgay: tuNgay,
+            ChoXacNhan: So(TrangThaiDonHangBan.ChoXacNhan),
+            ChoXuatKho: So(TrangThaiDonHangBan.DaXacNhan),
+            // Gộp ChoGiaoHang vào đây: đơn đã trừ tồn kho, chỉ còn chờ nhân viên giao hàng nhận.
+            DangGiao: So(TrangThaiDonHangBan.DangGiao) + So(TrangThaiDonHangBan.ChoGiaoHang),
+            DaGiao: So(TrangThaiDonHangBan.DaGiao),
+            TruongXacNhanGiaoThanhCong: truongXacNhan);
     }
 
     /// <summary>

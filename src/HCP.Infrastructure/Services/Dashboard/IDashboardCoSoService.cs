@@ -22,6 +22,23 @@ public sealed record CanhBaoTonKho(
     decimal SoLuongTon,
     string? DonViTinh);
 
+/// <summary>
+/// Đếm đơn hàng bán theo trạng thái, tính từ <paramref name="TuNgay"/> (theo NGÀY ĐẶT của đơn).
+/// </summary>
+/// <param name="TuNgay">Mốc bắt đầu tính - hiển thị lên màn hình để người xem biết phạm vi số liệu.</param>
+/// <param name="ChoXacNhan">Đơn mới nhận, chờ cơ sở xác nhận.</param>
+/// <param name="ChoXuatKho">Đã xác nhận nhưng chưa xuất kho.</param>
+/// <param name="DangGiao">Đã xuất kho mà chưa giao xong - gồm cả đơn chờ nhân viên giao hàng nhận.</param>
+/// <param name="DaGiao">Cơ sở đã xác nhận giao xong.</param>
+/// <param name="TruongXacNhanGiaoThanhCong">Đơn từ HanoiCheck được nhà trường xác nhận "Giao thành công".</param>
+public sealed record ThongKeDonHang(
+    DateOnly TuNgay,
+    int ChoXacNhan,
+    int ChoXuatKho,
+    int DangGiao,
+    int DaGiao,
+    int TruongXacNhanGiaoThanhCong);
+
 /// <summary>Số liệu tổng quan cho dashboard của một cơ sở.</summary>
 public sealed record DashboardCoSo(
     IReadOnlyDictionary<SyncOutboxStatus, int> OutboxTheoTrangThai,
@@ -30,10 +47,14 @@ public sealed record DashboardCoSo(
     int SoLoi,
     int SoThanhCong,
     IReadOnlyList<CanhBaoGiayTo> CanhBaoGiayTo,
-    IReadOnlyList<CanhBaoTonKho> CanhBaoTonKho);
+    IReadOnlyList<CanhBaoTonKho> CanhBaoTonKho,
+    ThongKeDonHang DonHang);
 
 /// <summary>Tổng hợp số liệu hiển thị trên dashboard của cơ sở đang đăng nhập.</summary>
 public interface IDashboardCoSoService
 {
-    Task<DashboardCoSo> LayAsync(int soNgayCanhBao = 30, CancellationToken ct = default);
+    /// <param name="tuNgay">Mốc bắt đầu đếm đơn hàng; bỏ trống thì dùng
+    /// <see cref="DashboardCoSoService.MocDemDonHang"/>.</param>
+    Task<DashboardCoSo> LayAsync(int soNgayCanhBao = 30, DateOnly? tuNgay = null,
+                                 CancellationToken ct = default);
 }

@@ -89,6 +89,77 @@ public class DashboardCoSoServiceTests
         Assert.Empty(data.CanhBaoGiayTo); // cơ sở A không thấy giấy tờ của cơ sở B
     }
 
+    [Fact]
+    public async Task Dem_Don_Hang_Theo_Trang_Thai_Tu_Moc_Thoi_Gian()
+    {
+        var moc = new DateOnly(2026, 9, 27);
+        using (var db = MoDb(CoSoA))
+        {
+            // Trước mốc: KHÔNG được tính, dù trạng thái gì.
+            db.DonHangBans.Add(Don("DH-TRUOC", moc.AddDays(-1), TrangThaiDonHangBan.ChoXacNhan));
+
+            db.DonHangBans.Add(Don("DH-01", moc, TrangThaiDonHangBan.ChoXacNhan));
+            db.DonHangBans.Add(Don("DH-02", moc.AddDays(1), TrangThaiDonHangBan.ChoXacNhan));
+            db.DonHangBans.Add(Don("DH-03", moc.AddDays(1), TrangThaiDonHangBan.DaXacNhan));
+            db.DonHangBans.Add(Don("DH-04", moc.AddDays(2), TrangThaiDonHangBan.DangGiao));
+            // Chờ giao hàng = đã xuất kho, chưa ai nhận -> vẫn tính vào "đang giao".
+            db.DonHangBans.Add(Don("DH-05", moc.AddDays(2), TrangThaiDonHangBan.ChoGiaoHang));
+            db.DonHangBans.Add(Don("DH-06", moc.AddDays(3), TrangThaiDonHangBan.DaGiao));
+            // Đã huỷ: không vào ô nào.
+            db.DonHangBans.Add(Don("DH-07", moc.AddDays(3), TrangThaiDonHangBan.DaHuy));
+
+            // Đơn trường đã xác nhận giao thành công trên HanoiCheck.
+            var truong = Don("DH-08", moc.AddDays(3), TrangThaiDonHangBan.DaGiao);
+            truong.Nguon = NguonDonHang.HanoiCheck;
+            truong.MaDonHnC = "HNC-08";
+            truong.TrangThaiHnC = "GIAO_HANG_THANH_CONG";
+            db.DonHangBans.Add(truong);
+
+            // Đơn HanoiCheck nhưng trường chưa xác nhận -> không tính vào ô đó.
+            var chuaXacNhan = Don("DH-09", moc.AddDays(3), TrangThaiDonHangBan.DangGiao);
+            chuaXacNhan.Nguon = NguonDonHang.HanoiCheck;
+            chuaXacNhan.TrangThaiHnC = "DANG_GIAO";
+            db.DonHangBans.Add(chuaXacNhan);
+
+            db.SaveChanges();
+        }
+
+        using var db2 = MoDb(CoSoA);
+        var dh = (await TaoService(db2).LayAsync(tuNgay: moc)).DonHang;
+
+        Assert.Equal(moc, dh.TuNgay);
+        Assert.Equal(2, dh.ChoXacNhan);   // DH-01, DH-02 (DH-TRUOC nằm trước mốc)
+        Assert.Equal(1, dh.ChoXuatKho);   // DH-03
+        Assert.Equal(3, dh.DangGiao);     // DH-04, DH-05 (chờ nhận), DH-09
+        Assert.Equal(2, dh.DaGiao);       // DH-06, DH-08
+        Assert.Equal(1, dh.TruongXacNhanGiaoThanhCong);  // DH-08
+    }
+
+    [Fact]
+    public async Task Chi_Dem_Don_Hang_Cua_Co_So_Minh()
+    {
+        var moc = new DateOnly(2026, 9, 27);
+        using (var db = MoDb(CoSoB))
+        {
+            db.DonHangBans.Add(Don("DH-B01", moc, TrangThaiDonHangBan.ChoXacNhan));
+            db.SaveChanges();
+        }
+
+        using var dbA = MoDb(CoSoA);
+        var dh = (await TaoService(dbA).LayAsync(tuNgay: moc)).DonHang;
+
+        Assert.Equal(0, dh.ChoXacNhan);
+    }
+
+    private static DonHangBan Don(string ma, DateOnly ngayDat, TrangThaiDonHangBan trangThai) => new()
+    {
+        MaDonHang = ma,
+        MaKhachHang = "KH01",
+        MaKho = "KHO01",
+        NgayDat = ngayDat,
+        TrangThai = trangThai
+    };
+
     private sealed class FakeNhatKy : ISyncNhatKyService
     {
         public Task<IReadOnlyList<SyncOutboxItem>> LayDanhSachAsync(SyncOutboxStatus? loc = null, int gioiHan = 200, CancellationToken ct = default)

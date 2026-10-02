@@ -52,6 +52,53 @@ else
         </MudItem>
     </MudGrid>
 
+    <MudText Typo="Typo.h6" Class="mb-2 mt-4">
+        Đơn hàng bán
+        <span class="mud-text-secondary" style="font-size:0.8rem">
+            (tính từ @_data.DonHang.TuNgay.ToString("dd/MM/yyyy"))
+        </span>
+    </MudText>
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Chờ xác nhận</MudText>
+                <MudText Typo="Typo.h4" Color="@(_data.DonHang.ChoXacNhan > 0 ? Color.Warning : Color.Default)">
+                    @_data.DonHang.ChoXacNhan
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Chờ xuất kho</MudText>
+                <MudText Typo="Typo.h4" Color="@(_data.DonHang.ChoXuatKho > 0 ? Color.Info : Color.Default)">
+                    @_data.DonHang.ChoXuatKho
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Đang giao</MudText>
+                <MudText Typo="Typo.h4" Color="@(_data.DonHang.DangGiao > 0 ? Color.Primary : Color.Default)">
+                    @_data.DonHang.DangGiao
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Gồm đơn chờ nhân viên nhận</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Đã giao</MudText>
+                <MudText Typo="Typo.h4" Color="Color.Success">@_data.DonHang.DaGiao</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline" Class="mud-text-secondary">Trường xác nhận giao thành công</MudText>
+                <MudText Typo="Typo.h4" Color="Color.Success">@_data.DonHang.TruongXacNhanGiaoThanhCong</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Đơn từ HanoiCheck</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
     @if (_data.SoLoi > 0)
     {
         <MudAlert Severity="Severity.Error" Class="mb-4">
