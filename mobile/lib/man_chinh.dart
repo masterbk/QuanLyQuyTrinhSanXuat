@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'tinh_nang/bieu_mau/man_danh_sach.dart';
 import 'tinh_nang/danh_muc/man_danh_sach.dart';
 import 'tinh_nang/don_hang/man_danh_sach.dart';
 import 'tinh_nang/kho_noi_bo/man_danh_sach.dart';
@@ -20,6 +21,7 @@ const _quyenLenhSanXuat = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenKhoNoiBo = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenDonHang = {'TenantAdmin', 'TenantStaff', 'TenantGiaoHang'};
 const _quyenDanhMuc = {'TenantAdmin', 'TenantStaff'};
+const _quyenBieuMau = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat', 'TenantGiaoHang'};
 
 class _ManChinhState extends ConsumerState<ManChinh> {
   int _tab = 0;
@@ -56,6 +58,13 @@ class _ManChinhState extends ConsumerState<ManChinh> {
           man: const ManDanhMuc(),
           nut: const NavigationDestination(icon: Icon(Icons.category_outlined),
                                            selectedIcon: Icon(Icons.category), label: 'Danh mục'),
+        ),
+      if (vaiTro.any(_quyenBieuMau.contains))
+        (
+          ten: 'Biểu mẫu',
+          man: const ManDanhSachBieuMau(),
+          nut: const NavigationDestination(icon: Icon(Icons.assignment_outlined),
+                                           selectedIcon: Icon(Icons.assignment), label: 'Biểu mẫu'),
         ),
     ];
     final tab = muc.isEmpty ? 0 : _tab.clamp(0, muc.length - 1);

@@ -1,0 +1,65 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../loi/api.dart';
+import '../xac_thuc/xac_thuc.dart';
+import 'mo_hinh.dart';
+
+/// Kho dữ liệu biểu mẫu kiểm soát: tải mẫu được phép điền, gửi phiếu, và danh mục để chọn.
+class KhoBieuMau {
+  final ApiClient _api;
+  KhoBieuMau(this._api);
+
+  Future<List<BieuMau>> bieuMau() async =>
+      ((await _api.get('/api/v1/bieu-mau')) as List)
+          .map((e) => BieuMau.tuJson(e as Map<String, dynamic>)).toList();
+
+  Future<List<PhieuGhiNhan>> phieu({DateTime? ngay, bool cuaToi = false, int? bieuMauId}) async {
+    final thamSo = <String, dynamic>{if (cuaToi) 'cuaToi': true};
+    if (ngay != null) thamSo['ngay'] = _chuoiNgay(ngay);
+    if (bieuMauId != null) thamSo['bieuMauId'] = bieuMauId;
+    return ((await _api.get('/api/v1/phieu-ghi-nhan', thamSo: thamSo)) as List)
+        .map((e) => PhieuGhiNhan.tuJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Gửi phiếu. [dong]: mỗi dòng {hangMucBieuMauId?, giaTri: {ma_truong: giá trị}, ghiChu?}.
+  Future<String> taoPhieu({
+    required int bieuMauId,
+    DateTime? ngay,
+    String? ca,
+    String? khuVuc,
+    String? ghiChu,
+    required List<Map<String, dynamic>> dong,
+  }) async {
+    final j = await _api.post('/api/v1/phieu-ghi-nhan', than: {
+      'bieuMauId': bieuMauId,
+      'ngay': ngay == null ? null : _chuoiNgay(ngay),
+      'ca': ca,
+      'khuVuc': khuVuc,
+      'ghiChu': ghiChu,
+      'dong': dong,
+    }) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
+  }
+
+  // ---- Danh mục để chọn trong trường "Chọn..." ----
+  Future<List<MucChon>> nhanSu() => _dm('nhan-su', (j) => MucChon(j['maNhanSu'] as String? ?? '', j['hoTen'] as String? ?? ''));
+  Future<List<MucChon>> coSo() => _dm('co-so', (j) => MucChon(j['maCoSo'] as String? ?? '', j['tenCoSo'] as String? ?? ''));
+  Future<List<MucChon>> thanhPham() => _dm('thanh-pham-ban', (j) => MucChon(j['maSanPham'] as String? ?? '', j['tenSanPham'] as String? ?? ''));
+
+  Future<List<MucChon>> _dm(String duongDan, MucChon Function(Map<String, dynamic>) doc) async =>
+      ((await _api.get('/api/v1/danh-muc/$duongDan')) as List)
+          .map((e) => doc(e as Map<String, dynamic>)).toList();
+
+  static String _chuoiNgay(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
+final khoBieuMauProvider = Provider<KhoBieuMau>((ref) => KhoBieuMau(ref.watch(apiProvider)));
+
+/// Danh sách biểu mẫu người đang đăng nhập được phép điền.
+final bieuMauProvider = FutureProvider<List<BieuMau>>((ref) => ref.watch(khoBieuMauProvider).bieuMau());
+
+/// Danh mục dùng chung cho các trường chọn (tải một lần).
+final nhanSuBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).nhanSu());
+final coSoBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).coSo());
+final thanhPhamBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).thanhPham());

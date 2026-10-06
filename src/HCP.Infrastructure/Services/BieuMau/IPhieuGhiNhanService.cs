@@ -1,0 +1,23 @@
+using HCP.Domain.Entities.Business;
+using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
+
+namespace HCP.Infrastructure.Services.BieuMau;
+
+/// <summary>Nhân viên nhập phiếu ghi nhận theo một biểu mẫu (nhiệt độ, vệ sinh, checklist…).</summary>
+public interface IPhieuGhiNhanService
+{
+    /// <summary>Danh sách biểu mẫu đang kích hoạt mà một trong các vai trò được phép điền.</summary>
+    Task<IReadOnlyList<BieuMauEntity>> LayBieuMauChoNhapAsync(IEnumerable<string> vaiTro, CancellationToken ct = default);
+
+    /// <summary>Lấy một biểu mẫu (kèm trường + hạng mục) để dựng form nhập.</summary>
+    Task<BieuMauEntity?> LayBieuMauAsync(int bieuMauId, CancellationToken ct = default);
+
+    /// <summary>Danh sách phiếu đã ghi, lọc theo ngày / người lập / biểu mẫu (mọi tham số là tuỳ chọn).</summary>
+    Task<IReadOnlyList<PhieuGhiNhan>> LayPhieuAsync(DateOnly? ngay, string? nguoiLap, int? bieuMauId,
+                                                    CancellationToken ct = default);
+
+    Task<PhieuGhiNhan?> LayPhieuTheoIdAsync(int id, CancellationToken ct = default);
+
+    /// <summary>Tạo một phiếu ghi nhận mới (kiểm tra theo định nghĩa biểu mẫu).</summary>
+    Task<KetQuaThaoTac> TaoPhieuAsync(PhieuGhiNhan phieu, CancellationToken ct = default);
+}

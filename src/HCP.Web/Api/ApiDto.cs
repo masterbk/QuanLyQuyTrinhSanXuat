@@ -205,3 +205,29 @@ public sealed record QuyTrinhKhauRequest(string MaKhau, int ThuTu);
 public sealed record QuyTrinhLuuRequest(
     bool DongBoHnC, string MaQuyTrinh, string TenQuyTrinh, int? MaDanhMucThucPham,
     IReadOnlyList<QuyTrinhKhauRequest>? DanhSachKhau);
+
+// ==================== Biểu mẫu kiểm soát (GMP/ISO) ====================
+
+public sealed record BieuMauDto(
+    int Id, string MaHieu, string Ten, string BoCuc, string? TanSuat, string? GhiChuChan,
+    IReadOnlyList<TruongBieuMauDto> Truong, IReadOnlyList<HangMucBieuMauDto> HangMuc);
+
+public sealed record TruongBieuMauDto(
+    string Ma, string Ten, string Kieu, bool BatBuoc, string? DonVi, string? GiaTriChuan,
+    string? TuyChonCsv, string? Nhom);
+
+public sealed record HangMucBieuMauDto(int Id, string Ten, string? DienGiai, string? TanSuat);
+
+public sealed record PhieuGhiNhanDto(
+    int Id, int BieuMauId, DateOnly Ngay, string? Ca, string? KhuVuc, string? NguoiLap,
+    string TrangThai, string? GhiChu, DateTime ThoiGianUtc, IReadOnlyList<DongGhiNhanDto> Dong);
+
+public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string GiaTriJson, string? GhiChu);
+
+public sealed record TaoPhieuRequest(
+    int BieuMauId, DateOnly? Ngay, string? Ca, string? KhuVuc, string? GhiChu,
+    IReadOnlyList<DongGhiNhanRequest>? Dong);
+
+/// <summary>Một dòng của phiếu: giá trị theo khoá trường (GiaTri["ma_truong"] = giá trị) + hạng mục (checklist).</summary>
+public sealed record DongGhiNhanRequest(
+    int? HangMucBieuMauId, IReadOnlyDictionary<string, string?>? GiaTri, string? GhiChu);

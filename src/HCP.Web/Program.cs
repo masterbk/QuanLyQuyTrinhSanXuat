@@ -189,6 +189,7 @@ builder.Services.AddScoped<ILuuTruAnhService, LuuTruAnhService>();
 builder.Services.AddScoped<IKiemTraApiHnCService, KiemTraApiHnCService>();
 builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IBieuMauService, BieuMauService>();
+builder.Services.AddScoped<IPhieuGhiNhanService, PhieuGhiNhanService>();
 builder.Services.AddScoped<IDonHangBanService, DonHangBanService>();
 builder.Services.AddScoped<IDonHangHnCService, DonHangHnCService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
@@ -336,6 +337,7 @@ app.MapDonHangApi();
 app.MapQrApi();
 app.MapKhoNoiBoApi();
 app.MapQuanLyDanhMucApi();
+app.MapBieuMauApi();
 
 app.MapRazorPages();
 app.MapBlazorHub();
