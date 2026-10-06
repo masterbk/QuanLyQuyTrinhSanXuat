@@ -1,0 +1,322 @@
+@page "/app/bieu-mau"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Services.BieuMau
+@using Microsoft.AspNetCore.Authorization
+@using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau
+@attribute [Authorize(Roles = AppRoles.QuyenNhapLieu)]
+@inject IBieuMauService BieuMauService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Biểu mẫu kiểm soát</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <div>
+        <MudText Typo="Typo.h5">Biểu mẫu kiểm soát</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Định nghĩa các biểu mẫu GMP/ISO để nhân viên ghi nhận dữ liệu (nhiệt độ, vệ sinh, tiếp nhận nguyên liệu…).
+            Mỗi mẫu gồm các trường (cột) và - với Checklist - các hạng mục cố định.
+        </MudText>
+    </div>
+    <div class="d-flex gap-2">
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AutoAwesomeMotion"
+                   OnClick="NapMauMacDinhAsync" Disabled="_dangLuu">Nạp biểu mẫu mẫu</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => MoForm(null))">Thêm biểu mẫu</MudButton>
+    </div>
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        Chưa có biểu mẫu nào. Bấm <b>Nạp biểu mẫu mẫu</b> để tạo sẵn bộ mẫu (nhiệt độ tủ, đèn UV, vệ sinh xe, check list vệ sinh), hoặc <b>Thêm biểu mẫu</b> để tự định nghĩa.
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Dense="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>Mã hiệu</MudTh>
+            <MudTh>Tên biểu mẫu</MudTh>
+            <MudTh>Bố cục</MudTh>
+            <MudTh>Tần suất</MudTh>
+            <MudTh Style="text-align:center">Trường</MudTh>
+            <MudTh Style="text-align:center">Hạng mục</MudTh>
+            <MudTh Style="text-align:center">Kích hoạt</MudTh>
+            <MudTh Style="width:1%"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã hiệu"><b>@context.MaHieu</b></MudTd>
+            <MudTd DataLabel="Tên">@context.Ten</MudTd>
+            <MudTd DataLabel="Bố cục">@TenBoCuc(context.BoCuc)</MudTd>
+            <MudTd DataLabel="Tần suất">@context.TanSuat</MudTd>
+            <MudTd DataLabel="Trường" Style="text-align:center">@context.Truong.Count</MudTd>
+            <MudTd DataLabel="Hạng mục" Style="text-align:center">@(context.BoCuc == BoCucBieuMau.Checklist ? context.HangMuc.Count.ToString() : "—")</MudTd>
+            <MudTd DataLabel="Kích hoạt" Style="text-align:center">
+                @if (context.KichHoat)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.DoNotDisturbOn" Color="Color.Default" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd>
+                <div class="d-flex" style="white-space:nowrap">
+                    <MudTooltip Text="Sửa"><MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
+                                                          OnClick="@(() => MoSuaAsync(context))" /></MudTooltip>
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => XoaAsync(context))" />
+                </div>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager RowsPerPageString="Số dòng mỗi trang:" /></PagerContent>
+    </MudTable>
+}
+
+@* ==================== Tạo / sửa ==================== *@
+<MudDialog @bind-Visible="_hienForm" Options="_dialogLon">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_dangSua ? $"Sửa biểu mẫu {_input.MaHieu}" : "Thêm biểu mẫu")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="4">
+                <MudTextField @bind-Value="_input.MaHieu" Label="Mã hiệu *" Variant="Variant.Outlined" MaxLength="100" />
+            </MudItem>
+            <MudItem xs="12" sm="8">
+                <MudTextField @bind-Value="_input.Ten" Label="Tên biểu mẫu *" Variant="Variant.Outlined" MaxLength="255" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="BoCucBieuMau" @bind-Value="_input.BoCuc" Label="Bố cục" Variant="Variant.Outlined">
+                    @foreach (var bc in Enum.GetValues<BoCucBieuMau>())
+                    {
+                        <MudSelectItem T="BoCucBieuMau" Value="@bc">@TenBoCuc(bc)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudTextField @bind-Value="_input.TanSuat" Label="Tần suất" Variant="Variant.Outlined" MaxLength="255" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="string" @bind-Value="_input.NhomQuyen" Label="Ai được điền" Variant="Variant.Outlined">
+                    @foreach (var q in _nhomQuyen)
+                    {
+                        <MudSelectItem T="string" Value="@q.Ma">@q.Ten</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_input.GhiChuChan" Label="Quy chuẩn / ghi chú chân biểu mẫu" Variant="Variant.Outlined"
+                              Lines="2" MaxLength="2000" />
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudNumericField @bind-Value="_input.ThuTu" Label="Thứ tự" Variant="Variant.Outlined" Min="0" />
+            </MudItem>
+            <MudItem xs="6" sm="3" Class="d-flex align-center">
+                <MudCheckBox @bind-Value="_input.KichHoat" Label="Kích hoạt" Color="Color.Primary" />
+            </MudItem>
+        </MudGrid>
+
+        <div class="d-flex justify-space-between align-center mt-4 mb-1">
+            <MudText Typo="Typo.subtitle1">Trường dữ liệu (@_input.Truong.Count)</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => _input.Truong.Add(new TruongBieuMau { Kieu = KieuTruongBieuMau.Text }))">Thêm trường</MudButton>
+        </div>
+        <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto">
+            <thead>
+                <tr>
+                    <th style="min-width:160px">Tên</th>
+                    <th style="min-width:140px">Kiểu</th>
+                    <th style="width:90px">Đơn vị</th>
+                    <th style="width:110px">Chuẩn</th>
+                    <th style="min-width:120px">Nhóm cột</th>
+                    <th style="width:70px">Bắt buộc</th>
+                    <th style="width:40px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in _input.Truong)
+                {
+                    <tr>
+                        <td><MudTextField @bind-Value="t.Ten" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                        <td>
+                            <MudSelect T="KieuTruongBieuMau" @bind-Value="t.Kieu" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var k in Enum.GetValues<KieuTruongBieuMau>())
+                                {
+                                    <MudSelectItem T="KieuTruongBieuMau" Value="@k">@TenKieu(k)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </td>
+                        <td><MudTextField @bind-Value="t.DonVi" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                        <td><MudTextField @bind-Value="t.GiaTriChuan" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                        <td><MudTextField @bind-Value="t.Nhom" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                        <td style="text-align:center"><MudCheckBox @bind-Value="t.BatBuoc" Color="Color.Primary" /></td>
+                        <td><MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => _input.Truong.Remove(t))" /></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+
+        @if (_input.BoCuc == BoCucBieuMau.Checklist)
+        {
+            <div class="d-flex justify-space-between align-center mt-4 mb-1">
+                <MudText Typo="Typo.subtitle1">Hạng mục checklist (@_input.HangMuc.Count)</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="@(() => _input.HangMuc.Add(new HangMucBieuMau()))">Thêm hạng mục</MudButton>
+            </div>
+            <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto">
+                <thead>
+                    <tr>
+                        <th style="min-width:200px">Hạng mục</th>
+                        <th style="min-width:260px">Diễn giải</th>
+                        <th style="min-width:150px">Tần suất</th>
+                        <th style="width:40px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var h in _input.HangMuc)
+                    {
+                        <tr>
+                            <td><MudTextField @bind-Value="h.Ten" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                            <td><MudTextField @bind-Value="h.DienGiai" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                            <td><MudTextField @bind-Value="h.TanSuat" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                            <td><MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => _input.HangMuc.Remove(h))" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangLuu" OnClick="LuuAsync">
+            @(_dangSua ? "Lưu thay đổi" : "Tạo biểu mẫu")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<BieuMauEntity> _danhSach = new();
+    private bool _dangTai = true;
+    private bool _dangLuu;
+
+    private bool _hienForm;
+    private bool _dangSua;
+    private BieuMauEntity _input = new();
+
+    private readonly DialogOptions _dialogLon = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
+
+    private readonly (string Ma, string Ten)[] _nhomQuyen =
+    {
+        (AppRoles.QuyenNhapLieu, "Nhân viên nhập liệu (+ quản trị)"),
+        (AppRoles.QuyenSanXuat, "Nhân viên sản xuất (+ nhập liệu, quản trị)"),
+        (AppRoles.QuyenGiaoHang, "Nhân viên giao hàng (+ nhập liệu, quản trị)"),
+        (AppRoles.MoiNguoiDungCoSo, "Mọi nhân viên cơ sở"),
+    };
+
+    protected override async Task OnInitializedAsync() => await TaiAsync();
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await BieuMauService.LayTatCaAsync()).ToList();
+        _dangTai = false;
+    }
+
+    private static string TenBoCuc(BoCucBieuMau b) => b switch
+    {
+        BoCucBieuMau.TheoNgay => "Theo ngày",
+        BoCucBieuMau.Checklist => "Checklist (hạng mục)",
+        BoCucBieuMau.NhieuDongTuDo => "Nhiều dòng tự do",
+        _ => b.ToString()
+    };
+
+    private static string TenKieu(KieuTruongBieuMau k) => k switch
+    {
+        KieuTruongBieuMau.Text => "Chữ",
+        KieuTruongBieuMau.So => "Số",
+        KieuTruongBieuMau.Gio => "Giờ",
+        KieuTruongBieuMau.Ngay => "Ngày",
+        KieuTruongBieuMau.DatKhongDat => "Đạt/Không đạt",
+        KieuTruongBieuMau.ChonSanPham => "Chọn sản phẩm",
+        KieuTruongBieuMau.ChonNhanSu => "Chọn nhân sự",
+        KieuTruongBieuMau.ChonNcc => "Chọn NCC",
+        KieuTruongBieuMau.ChonCoSo => "Chọn cơ sở",
+        KieuTruongBieuMau.Anh => "Ảnh",
+        KieuTruongBieuMau.LuaChon => "Lựa chọn",
+        _ => k.ToString()
+    };
+
+    private void MoForm(BieuMauEntity? mau)
+    {
+        _dangSua = false;
+        _input = new BieuMauEntity
+        {
+            NhomQuyen = AppRoles.QuyenSanXuat,
+            ThuTu = _danhSach.Count == 0 ? 1 : _danhSach.Max(b => b.ThuTu) + 1,
+            Truong = new() { new TruongBieuMau { Kieu = KieuTruongBieuMau.Text } }
+        };
+        _hienForm = true;
+    }
+
+    /// <summary>Sửa trên BẢN SAO (tải lại bản mới nhất) - bấm Huỷ không làm đổi dữ liệu đang hiển thị.</summary>
+    private async Task MoSuaAsync(BieuMauEntity dong)
+    {
+        var mau = await BieuMauService.LayTheoIdAsync(dong.Id);
+        if (mau is null) { Snackbar.Add("Không tìm thấy biểu mẫu.", Severity.Error); return; }
+        _dangSua = true;
+        _input = new BieuMauEntity
+        {
+            Id = mau.Id, MaHieu = mau.MaHieu, Ten = mau.Ten, BoCuc = mau.BoCuc, TanSuat = mau.TanSuat,
+            NhomQuyen = mau.NhomQuyen, GhiChuChan = mau.GhiChuChan, KichHoat = mau.KichHoat, ThuTu = mau.ThuTu,
+            Truong = mau.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMau
+            {
+                Ten = t.Ten, Ma = t.Ma, Kieu = t.Kieu, BatBuoc = t.BatBuoc, DonVi = t.DonVi,
+                GiaTriChuan = t.GiaTriChuan, TuyChonCsv = t.TuyChonCsv, Nhom = t.Nhom
+            }).ToList(),
+            HangMuc = mau.HangMuc.OrderBy(h => h.ThuTu).Select(h => new HangMucBieuMau
+            {
+                Ten = h.Ten, DienGiai = h.DienGiai, TanSuat = h.TanSuat
+            }).ToList()
+        };
+        _hienForm = true;
+    }
+
+    private async Task LuuAsync()
+    {
+        _dangLuu = true;
+        var kq = await BieuMauService.LuuAsync(_input);
+        _dangLuu = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) { _hienForm = false; await TaiAsync(); }
+    }
+
+    private async Task XoaAsync(BieuMauEntity mau)
+    {
+        var dongY = await DialogService.ShowMessageBox("Xác nhận xoá", $"Xoá biểu mẫu \"{mau.Ten}\"?",
+                                                       yesText: "Xoá", cancelText: "Huỷ");
+        if (dongY != true) return;
+        var kq = await BieuMauService.XoaAsync(mau.Id);
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) await TaiAsync();
+    }
+
+    private async Task NapMauMacDinhAsync()
+    {
+        _dangLuu = true;
+        var kq = await BieuMauService.NapMauMacDinhAsync();
+        _dangLuu = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (kq.ThanhCong) await TaiAsync();
+    }
+}

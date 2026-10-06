@@ -1,0 +1,39 @@
+using HCP.Domain.Entities.Common;
+using HCP.Domain.Enums;
+
+namespace HCP.Domain.Entities.Business;
+
+/// <summary>
+/// Định nghĩa một biểu mẫu kiểm soát (GMP/ISO) - mẫu để nhân viên ghi nhận dữ liệu thay cho biểu mẫu giấy.
+/// Một biểu mẫu gồm các TRƯỜNG (cột) và - với bố cục Checklist - các HẠNG MỤC cố định. Hồ sơ nội bộ, KHÔNG
+/// đồng bộ HanoiCheck.
+/// </summary>
+public class BieuMau : TenantEntity
+{
+    public int Id { get; set; }
+
+    /// <summary>Mã hiệu biểu mẫu (khoá nghiệp vụ), vd "BM-GMP.08-04".</summary>
+    public string MaHieu { get; set; } = string.Empty;
+
+    public string Ten { get; set; } = string.Empty;
+
+    public BoCucBieuMau BoCuc { get; set; } = BoCucBieuMau.TheoNgay;
+
+    /// <summary>Tần suất thực hiện (mô tả tự do), vd "Hàng ngày", "Mỗi mẻ", "Mỗi lần nhập".</summary>
+    public string? TanSuat { get; set; }
+
+    /// <summary>Chuỗi vai trò được phép điền (khớp AppRoles, phân tách bằng dấu phẩy), vd QuyenSanXuat.</summary>
+    public string NhomQuyen { get; set; } = string.Empty;
+
+    /// <summary>Quy chuẩn / chú thích in ở chân biểu mẫu.</summary>
+    public string? GhiChuChan { get; set; }
+
+    public bool KichHoat { get; set; } = true;
+
+    public int ThuTu { get; set; }
+
+    public List<TruongBieuMau> Truong { get; set; } = new();
+
+    /// <summary>Danh sách hạng mục cố định (chỉ dùng cho bố cục Checklist).</summary>
+    public List<HangMucBieuMau> HangMuc { get; set; } = new();
+}

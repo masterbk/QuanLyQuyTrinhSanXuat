@@ -103,6 +103,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<DishIngredient> DishIngredients => Set<DishIngredient>();
     public DbSet<DishStep> DishSteps => Set<DishStep>();
     public DbSet<DishFile> DishFiles => Set<DishFile>();
+    public DbSet<BieuMau> BieuMaus => Set<BieuMau>();
+    public DbSet<TruongBieuMau> TruongBieuMaus => Set<TruongBieuMau>();
+    public DbSet<HangMucBieuMau> HangMucBieuMaus => Set<HangMucBieuMau>();
+    public DbSet<PhieuGhiNhan> PhieuGhiNhans => Set<PhieuGhiNhan>();
+    public DbSet<DongGhiNhan> DongGhiNhans => Set<DongGhiNhan>();
 
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
@@ -636,6 +641,59 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         // các cột còn lại thì SQL đọc thẳng theo thứ tự, không còn bước sắp xếp nào.
         standardFood.HasIndex(c => c.Name)
             .IncludeProperties(c => new { c.Code, c.MeasureName, c.CapNhatLucUtc });
+
+        // ---------- Biểu mẫu kiểm soát (GMP/ISO) - hồ sơ nội bộ, không đồng bộ HanoiCheck ----------
+        var bieuMau = builder.Entity<BieuMau>();
+        bieuMau.ToTable("BieuMau");
+        bieuMau.Property(b => b.MaHieu).HasMaxLength(100).IsRequired();
+        bieuMau.Property(b => b.Ten).HasMaxLength(255).IsRequired();
+        bieuMau.Property(b => b.TanSuat).HasMaxLength(255);
+        bieuMau.Property(b => b.NhomQuyen).HasMaxLength(255).IsRequired();
+        bieuMau.Property(b => b.GhiChuChan).HasMaxLength(2000);
+        bieuMau.HasMany(b => b.Truong).WithOne(t => t.BieuMau!)
+               .HasForeignKey(t => t.BieuMauId).OnDelete(DeleteBehavior.Cascade);
+        bieuMau.HasMany(b => b.HangMuc).WithOne(h => h.BieuMau!)
+               .HasForeignKey(h => h.BieuMauId).OnDelete(DeleteBehavior.Cascade);
+        bieuMau.HasIndex(b => b.MaHieu).IsUnique();
+        bieuMau.IsMultiTenant().AdjustUniqueIndexes();
+
+        var truong = builder.Entity<TruongBieuMau>();
+        truong.ToTable("TruongBieuMau");
+        truong.Property(t => t.Ten).HasMaxLength(255).IsRequired();
+        truong.Property(t => t.Ma).HasMaxLength(100).IsRequired();
+        truong.Property(t => t.DonVi).HasMaxLength(50);
+        truong.Property(t => t.GiaTriChuan).HasMaxLength(255);
+        truong.Property(t => t.TuyChonCsv).HasMaxLength(1000);
+        truong.Property(t => t.Nhom).HasMaxLength(255);
+        truong.HasIndex(t => t.BieuMauId);
+        truong.IsMultiTenant();
+
+        var hangMuc = builder.Entity<HangMucBieuMau>();
+        hangMuc.ToTable("HangMucBieuMau");
+        hangMuc.Property(h => h.Ten).HasMaxLength(500).IsRequired();
+        hangMuc.Property(h => h.DienGiai).HasMaxLength(2000);
+        hangMuc.Property(h => h.TanSuat).HasMaxLength(255);
+        hangMuc.HasIndex(h => h.BieuMauId);
+        hangMuc.IsMultiTenant();
+
+        var phieu = builder.Entity<PhieuGhiNhan>();
+        phieu.ToTable("PhieuGhiNhan");
+        phieu.Property(p => p.Ca).HasMaxLength(100);
+        phieu.Property(p => p.KhuVuc).HasMaxLength(255);
+        phieu.Property(p => p.NguoiLap).HasMaxLength(100);
+        phieu.Property(p => p.NguoiThamTra).HasMaxLength(100);
+        phieu.Property(p => p.GhiChu).HasMaxLength(2000);
+        phieu.HasMany(p => p.Dong).WithOne(d => d.PhieuGhiNhan!)
+             .HasForeignKey(d => d.PhieuGhiNhanId).OnDelete(DeleteBehavior.Cascade);
+        phieu.HasIndex(p => new { p.BieuMauId, p.Ngay });
+        phieu.IsMultiTenant();
+
+        var dong = builder.Entity<DongGhiNhan>();
+        dong.ToTable("DongGhiNhan");
+        dong.Property(d => d.GiaTriJson).IsRequired();
+        dong.Property(d => d.GhiChu).HasMaxLength(2000);
+        dong.HasIndex(d => d.PhieuGhiNhanId);
+        dong.IsMultiTenant();
 
         // Cột thời gian tên *Utc lưu giờ UTC: đọc ra gắn Kind=Utc để API trả JSON có "Z" (app di động quy đổi đúng
         // sang giờ Việt Nam). Chỉ đổi cách ĐỌC, không đổi dữ liệu hay cấu trúc bảng.
