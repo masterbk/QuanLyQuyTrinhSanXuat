@@ -4,6 +4,7 @@ using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.BanHang;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace HCP.Infrastructure.Sync;
@@ -11,8 +12,8 @@ namespace HCP.Infrastructure.Sync;
 /// <inheritdoc cref="IDongBoDonHangJob"/>
 public sealed class DongBoDonHangJob : IDongBoDonHangJob
 {
-    /// <summary>Cửa sổ kéo về: chỉ lấy đơn có ngày giao trong khoảng gần đây (bao đủ, gọn tải).</summary>
-    private static readonly int SoNgayCuaSo = 60;
+    /// <summary>Cửa sổ kéo về mặc định (ngày) khi không khai cấu hình.</summary>
+    private const int SoNgayCuaSoMacDinh = 60;
 
     private readonly AppDbContext _db;
     private readonly IHanoiCheckOrderQueryClient _client;
@@ -20,10 +21,14 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
     private readonly ILogger<DongBoDonHangJob> _logger;
     private readonly IDonHangHnCTheoCoSo? _donBanTheoCoSo;
 
+    /// <summary>Số ngày kéo đơn gần đây, đọc từ cấu hình "HanoiCheck:SoNgayKeoDon" (mặc định 60, tối thiểu 1).</summary>
+    private readonly int _soNgayCuaSo;
+
     public DongBoDonHangJob(AppDbContext db,
                             IHanoiCheckOrderQueryClient client,
                             TimeProvider clock,
                             ILogger<DongBoDonHangJob> logger,
+                            IConfiguration? cauHinh = null,
                             IDonHangHnCTheoCoSo? donBanTheoCoSo = null)
     {
         _db = db;
@@ -31,6 +36,7 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
         _clock = clock;
         _logger = logger;
         _donBanTheoCoSo = donBanTheoCoSo;
+        _soNgayCuaSo = Math.Max(1, cauHinh?.GetValue("HanoiCheck:SoNgayKeoDon", SoNgayCuaSoMacDinh) ?? SoNgayCuaSoMacDinh);
     }
 
     public async Task DongBoTatCaAsync(CancellationToken ct = default)
@@ -62,7 +68,7 @@ public sealed class DongBoDonHangJob : IDongBoDonHangJob
     public async Task<KetQuaDongBoDon> DongBoMotCoSoAsync(string tenantId, CancellationToken ct = default)
     {
         var homNay = DateOnly.FromDateTime(GioVietNam.TuUtc(_clock.GetUtcNow().UtcDateTime));
-        var filter = new OrderQueryFilter { OrderDateFrom = homNay.AddDays(-SoNgayCuaSo) };
+        var filter = new OrderQueryFilter { OrderDateFrom = homNay.AddDays(-_soNgayCuaSo) };
 
         var kq = await _client.LayDanhSachAsync(tenantId, filter, ct);
         if (kq.ChuaCauHinh) return KetQuaDongBoDon.ChuaKetNoi();
