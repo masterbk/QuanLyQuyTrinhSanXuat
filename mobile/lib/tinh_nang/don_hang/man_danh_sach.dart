@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../loi/api.dart';
+import '../lenh_san_xuat/man_sua.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'man_chi_tiet.dart';
@@ -39,6 +40,9 @@ class ManDanhSachDon extends ConsumerStatefulWidget {
 
 class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
   final _cuon = ScrollController();
+
+  /// Đơn được tick để gộp thành một lệnh sản xuất (chỉ nhân viên nhập liệu, đơn chưa xuất kho).
+  final Set<int> _chon = {};
 
   @override
   void initState() {
@@ -154,11 +158,33 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 88),
                         itemCount: ds.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (c, i) => TheDonHang(don: ds[i]),
+                        itemBuilder: (c, i) => _oDon(ds[i], coQuyenNhapLieu),
                       ),
               ),
             ),
           ),
+          if (coQuyenNhapLieu && _chon.isNotEmpty)
+            Material(
+              elevation: 8,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text('Đã chọn ${_chon.length} đơn')),
+                      TextButton(onPressed: () => setState(_chon.clear), child: const Text('Bỏ chọn')),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: _taoLenhTheoDon,
+                        icon: const Icon(Icons.factory_outlined, size: 18),
+                        label: const Text('Tạo lệnh sản xuất'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -171,6 +197,46 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
       ),
     );
   }
+
+  /// Thẻ đơn, kèm checkbox chọn nếu là nhân viên nhập liệu và đơn chưa xuất kho (chưa gán lô).
+  Widget _oDon(DonHangBan don, bool coQuyenNhapLieu) {
+    final card = TheDonHang(don: don);
+    if (!coQuyenNhapLieu || !don.chuaXuatKho) return card;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Checkbox(
+          value: _chon.contains(don.id),
+          onChanged: (v) => setState(() => v == true ? _chon.add(don.id) : _chon.remove(don.id)),
+        ),
+        Expanded(child: card),
+      ],
+    );
+  }
+
+  /// Gộp sản phẩm + cộng dồn số lượng các đơn đã chọn rồi mở màn tạo lệnh điền sẵn.
+  Future<void> _taoLenhTheoDon() async {
+    final ds = ref.read(danhSachDonProvider).value ?? const <DonHangBan>[];
+    final tong = <String, double>{};
+    for (final don in ds.where((d) => _chon.contains(d.id) && d.chuaXuatKho)) {
+      for (final l in don.dong) {
+        if (l.maThanhPham.isEmpty || l.soLuong <= 0) continue;
+        tong[l.maThanhPham] = (tong[l.maThanhPham] ?? 0) + l.soLuong;
+      }
+    }
+    if (tong.isEmpty) {
+      _bao('Các đơn đã chọn không có sản phẩm nào để sản xuất.');
+      return;
+    }
+    final kq = await Navigator.push<bool>(
+        context, MaterialPageRoute(builder: (_) => ManSuaLenh(soLuongDat: tong)));
+    if (kq == true && mounted) {
+      setState(_chon.clear);
+      ref.read(danhSachDonProvider.notifier).taiLai();
+    }
+  }
+
+  void _bao(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
 
   Future<void> _chonKhoangNgay() async {
     final hienTai = ref.read(locNgayDonProvider);

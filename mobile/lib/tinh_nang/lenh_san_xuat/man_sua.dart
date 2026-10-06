@@ -44,10 +44,12 @@ class _DongSp {
 
 /// Tạo lệnh mới (lenh = null) hoặc sửa lệnh chưa hoàn thành. Một lệnh gồm nhiều sản phẩm; mỗi sản
 /// phẩm chọn quy trình và khai cơ sở + người thực hiện cho từng khâu.
+/// [soLuongDat]: khi tạo mới từ đơn hàng - điền sẵn mã thành phẩm → tổng số lượng (gộp nhiều đơn).
 class ManSuaLenh extends ConsumerStatefulWidget {
   final LenhSanXuat? lenh;
+  final Map<String, double>? soLuongDat;
 
-  const ManSuaLenh({super.key, this.lenh});
+  const ManSuaLenh({super.key, this.lenh, this.soLuongDat});
 
   @override
   ConsumerState<ManSuaLenh> createState() => _ManSuaLenhState();
@@ -78,24 +80,53 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
     _maKho = l?.maKho;
     _ngaySanXuat = l?.ngaySanXuat ?? bayGioVietNam();
     _taoLoDongBo = l?.taoLoDongBo ?? false;
-    _dong = l == null || l.sanPham.isEmpty ? [_DongSp(soLuong: '1')] : l.sanPham.map(_DongSp.tu).toList();
+    _dong = _dongBanDau();
 
-    // Lệnh cũ (trước khi có khâu) chưa có dữ liệu khâu: dựng sẵn theo quy trình để người dùng khai.
+    // Dựng sẵn khâu theo quy trình (lệnh cũ chưa có khâu, hoặc dòng điền sẵn từ đơn hàng).
     Future.microtask(() async {
       try {
-        final ds = await ref.read(quyTrinhProvider.future);
+        final quyTrinh = await ref.read(quyTrinhProvider.future);
         final coSo = await ref.read(coSoProvider.future);
+        // Dòng điền sẵn từ đơn hàng: gán quy trình mặc định theo thành phẩm; bỏ mặt hàng không có định mức.
+        final laDonHang = widget.soLuongDat != null && widget.lenh == null;
+        final boQua = <String>[];
+        if (laDonHang) {
+          final thanhPham = await ref.read(thanhPhamProvider.future);
+          for (final d in [..._dong]) {
+            final tp = thanhPham.where((t) => t.maSanPham == d.maThanhPham).firstOrNull;
+            if (tp == null) {
+              boQua.add(d.maThanhPham ?? '');
+              _dong.remove(d);
+            } else {
+              d.maQuyTrinh ??= tp.maQuyTrinh;
+            }
+          }
+          if (_dong.isEmpty) _dong.add(_DongSp(soLuong: '1'));
+        }
         if (!mounted) return;
         setState(() {
           for (final d in _dong.where((d) => d.khau.isEmpty && d.maQuyTrinh != null)) {
-            final qt = ds.where((q) => q.maQuyTrinh == d.maQuyTrinh).firstOrNull;
+            final qt = quyTrinh.where((q) => q.maQuyTrinh == d.maQuyTrinh).firstOrNull;
             if (qt != null) d.khau = dungKhauTheoQuyTrinh(qt, const [], coSoMacDinh: _coSoMacDinh(coSo));
           }
         });
+        if (boQua.isNotEmpty && mounted) {
+          _bao('Bỏ qua ${boQua.length} sản phẩm chưa có định mức: ${boQua.where((s) => s.isNotEmpty).join(", ")}');
+        }
       } on LoiApi {
         // Lỗi tải danh mục đã hiện ở ô chọn tương ứng.
       }
     });
+  }
+
+  List<_DongSp> _dongBanDau() {
+    final l = widget.lenh;
+    if (l != null && l.sanPham.isNotEmpty) return l.sanPham.map(_DongSp.tu).toList();
+    final dat = widget.soLuongDat;
+    if (dat != null && dat.isNotEmpty) {
+      return dat.entries.map((e) => _DongSp(maThanhPham: e.key, soLuong: soGon(e.value))).toList();
+    }
+    return [_DongSp(soLuong: '1')];
   }
 
   @override
