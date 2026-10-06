@@ -19,6 +19,9 @@ public sealed record DongXuatKhoDto(int DongId, string MaThanhPham, string TenTh
 /// <summary>Người dùng chốt: lấy bao nhiêu từ lô nào cho dòng nào.</summary>
 public sealed record PhanBoLoRequest(int DongId, string MaLo, decimal SoLuong);
 
+/// <summary>Số lượng mới cho một dòng của đơn đã xuất kho (sửa số lượng đơn đang giao).</summary>
+public sealed record SuaSoLuongDongRequest(int DongId, decimal SoLuongMoi);
+
 /// <summary>Một ảnh tổng quan đã tải lên (tên gốc + đường dẫn công khai) gắn cho đơn lúc xuất kho.</summary>
 public sealed record AnhDauVao(string TenAnh, string DuongDan);
 
@@ -49,6 +52,14 @@ public interface IDonHangBanService
 
     /// <summary>Sửa đơn chưa xuất kho (thay toàn bộ dòng hàng). Mã đơn không đổi.</summary>
     Task<KetQuaThaoTac> CapNhatAsync(DonHangBan don, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sửa SỐ LƯỢNG của đơn ĐÃ XUẤT KHO (Đang giao / Chờ giao hàng) và tự điều chỉnh tồn kho theo chênh lệch:
+    /// giảm thì trả phần dư về đúng các lô đã xuất (bút toán đảo), tăng thì trừ thêm từ kho theo FEFO (chặn nếu
+    /// không đủ tồn). Đơn nguồn HanoiCheck được đẩy lại "process" với nguồn hàng mới trước khi ghi kho.
+    /// </summary>
+    Task<KetQuaThaoTac> SuaSoLuongDaXuatKhoAsync(int id, IReadOnlyList<SuaSoLuongDongRequest> thayDoi,
+                                                 CancellationToken ct = default);
 
     Task<KetQuaThaoTac> XacNhanAsync(int id, CancellationToken ct = default);
 
@@ -204,6 +215,142 @@ public sealed class DonHangBanService : IDonHangBanService
 
         await _db.SaveChangesAsync(ct);
         return KetQuaThaoTac.Ok($"Đã cập nhật đơn hàng \"{goc.MaDonHang}\".");
+    }
+
+    public async Task<KetQuaThaoTac> SuaSoLuongDaXuatKhoAsync(int id, IReadOnlyList<SuaSoLuongDongRequest> thayDoi,
+                                                              CancellationToken ct = default)
+    {
+        var don = await QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (don is null) return KetQuaThaoTac.Loi("Không tìm thấy đơn hàng.");
+        if (don.ThoiGianXuatKhoUtc is null
+            || don.TrangThai is not (TrangThaiDonHangBan.DangGiao or TrangThaiDonHangBan.ChoGiaoHang))
+            return KetQuaThaoTac.Loi("Chỉ sửa số lượng được đơn đã xuất kho và đang giao / chờ giao hàng.");
+
+        var theoId = don.Dong.ToDictionary(l => l.Id);
+        var doi = new List<(DonHangBanDong Dong, decimal Moi, decimal Delta)>();
+        foreach (var t in thayDoi ?? Array.Empty<SuaSoLuongDongRequest>())
+        {
+            if (!theoId.TryGetValue(t.DongId, out var dong))
+                return KetQuaThaoTac.Loi($"Dòng #{t.DongId} không thuộc đơn này.");
+            if (t.SoLuongMoi <= 0)
+                return KetQuaThaoTac.Loi($"Số lượng của \"{dong.MaThanhPham}\" phải lớn hơn 0.");
+            var delta = t.SoLuongMoi - dong.SoLuong;
+            if (delta != 0) doi.Add((dong, t.SoLuongMoi, delta));
+        }
+        if (doi.Count == 0) return KetQuaThaoTac.Ok("Số lượng không thay đổi.");
+
+        // Tồn còn lại theo (thành phẩm, lô) - phục vụ các dòng TĂNG. Phần trả về của dòng giảm cộng vào đây để
+        // dòng tăng cùng thành phẩm dùng lại được.
+        var tonConLai = new Dictionary<(string Sp, string Lo), (DateOnly? Hsd, decimal Ton)>();
+        foreach (var sp in doi.Where(d => d.Delta > 0).Select(d => d.Dong.MaThanhPham).Distinct())
+            foreach (var l in await LayLoFefoAsync(sp, don.MaKho, ct))
+                tonConLai[(sp, l.MaLo)] = (l.Hsd, l.Ton);
+
+        var now = DateTime.UtcNow;
+        var butToan = new List<KhoGiaoDich>();
+        var allocMoi = new Dictionary<int, List<(string MaLo, DateOnly? Hsd, decimal SoLuong)>>();
+
+        // GIẢM trước: trả về đúng lô đã xuất (từ lô xuất sau cùng trở lên) và bơm vào tonConLai.
+        foreach (var (dong, _, delta) in doi.Where(d => d.Delta < 0))
+        {
+            var alloc = dong.XuatLo.Select(x => (MaLo: x.MaLo, Hsd: x.HanSuDung, SoLuong: x.SoLuong)).ToList();
+            var canTra = -delta;
+            // Trả về lô có HSD muộn nhất trước (đảo FEFO) - giữ lô hết hạn sớm vẫn thuộc đơn, tồn còn lại vẫn FEFO đúng.
+            var thuTuTra = Enumerable.Range(0, alloc.Count)
+                .OrderByDescending(i => alloc[i].Hsd ?? DateOnly.MaxValue).ThenByDescending(i => alloc[i].MaLo).ToList();
+            foreach (var i in thuTuTra)
+            {
+                if (canTra <= 0) break;
+                var tra = Math.Min(canTra, alloc[i].SoLuong);
+                if (tra <= 0) continue;
+                alloc[i] = (alloc[i].MaLo, alloc[i].Hsd, alloc[i].SoLuong - tra);
+                canTra -= tra;
+                butToan.Add(new KhoGiaoDich
+                {
+                    MaSanPham = dong.MaThanhPham, MaKho = don.MaKho, MaLo = alloc[i].MaLo, SoLuong = tra,
+                    HanSuDung = alloc[i].Hsd, Loai = LoaiGiaoDichKho.HoanTacXuatBan, ChungTu = don.MaDonHang,
+                    GhiChu = $"Trả về kho do sửa số lượng đơn {don.MaDonHang}", ThoiGianUtc = now
+                });
+                var key = (dong.MaThanhPham, alloc[i].MaLo);
+                var cu = tonConLai.TryGetValue(key, out var v) ? v : (Hsd: alloc[i].Hsd, Ton: 0m);
+                tonConLai[key] = (cu.Hsd ?? alloc[i].Hsd, cu.Ton + tra);
+            }
+            allocMoi[dong.Id] = alloc.Where(a => a.SoLuong > 0).ToList();
+        }
+
+        // TĂNG: trừ thêm từ tồn còn lại theo FEFO (lô hết hạn trước xuất trước).
+        foreach (var (dong, moi, delta) in doi.Where(d => d.Delta > 0))
+        {
+            var alloc = dong.XuatLo.Select(x => (MaLo: x.MaLo, Hsd: x.HanSuDung, SoLuong: x.SoLuong)).ToList();
+            var canTru = delta;
+            var loFefo = tonConLai.Where(k => k.Key.Sp == dong.MaThanhPham && k.Value.Ton > 0)
+                .OrderBy(k => k.Value.Hsd ?? DateOnly.MaxValue).ThenBy(k => k.Key.Lo).ToList();
+            foreach (var lo in loFefo)
+            {
+                if (canTru <= 0) break;
+                var tru = Math.Min(canTru, lo.Value.Ton);
+                canTru -= tru;
+                tonConLai[lo.Key] = (lo.Value.Hsd, lo.Value.Ton - tru);
+                butToan.Add(new KhoGiaoDich
+                {
+                    MaSanPham = dong.MaThanhPham, MaKho = don.MaKho, MaLo = lo.Key.Lo, SoLuong = -tru,
+                    HanSuDung = lo.Value.Hsd, Loai = LoaiGiaoDichKho.XuatBan, ChungTu = don.MaDonHang,
+                    GhiChu = $"Trừ thêm do sửa số lượng đơn {don.MaDonHang}", ThoiGianUtc = now
+                });
+                var idx = alloc.FindIndex(a => a.MaLo == lo.Key.Lo);
+                if (idx >= 0) alloc[idx] = (alloc[idx].MaLo, alloc[idx].Hsd, alloc[idx].SoLuong + tru);
+                else alloc.Add((lo.Key.Lo, lo.Value.Hsd, tru));
+            }
+            if (canTru > 0)
+                return KetQuaThaoTac.Loi($"Không đủ tồn \"{dong.MaThanhPham}\" để tăng lên {moi:0.###} "
+                                         + $"(còn thiếu {canTru:0.###}).");
+            allocMoi[dong.Id] = alloc.Where(a => a.SoLuong > 0).ToList();
+        }
+
+        // Đơn nguồn HanoiCheck: đẩy lại "process" với nguồn hàng mới TRƯỚC khi ghi kho - lỗi thì không lưu gì.
+        if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
+        {
+            var chiTiet = don.Dong.Select(l =>
+            {
+                var alloc = allocMoi.TryGetValue(l.Id, out var a)
+                    ? a
+                    : l.XuatLo.Select(x => (x.MaLo, Hsd: x.HanSuDung, x.SoLuong)).ToList();
+                return new ProcessOrderLine
+                {
+                    TraceCode = l.MaTruyVetHnC,
+                    MaThucPham = l.MaTruyVetHnC is null ? l.MaThanhPham : null,
+                    PhanBo = alloc.Select(x => new ProcessOrderAllocation(x.MaLo, don.MaKho, x.SoLuong)).ToList()
+                };
+            }).Where(x => x.PhanBo.Count > 0).ToList();
+
+            var ket = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
+            {
+                MaNguoiGiao = don.MaNguoiGiao,
+                GhiChu = don.GhiChu,
+                ChiTiet = chiTiet
+            }, ct);
+            if (!ket.ThanhCong && !ket.ChuaCauHinh)
+                return KetQuaThaoTac.Loi($"Không đẩy được nguồn hàng mới sang HanoiCheck: {ket.ThongBao}");
+        }
+
+        // Chốt: ghi bút toán, thay phân bổ lô, đổi số lượng dòng.
+        foreach (var gd in butToan) _db.KhoGiaoDichs.Add(gd);
+        foreach (var (dong, moi, _) in doi)
+        {
+            if (allocMoi.TryGetValue(dong.Id, out var alloc))
+            {
+                _db.DonHangBanXuatLos.RemoveRange(dong.XuatLo);
+                dong.XuatLo = alloc.Select(a => new DonHangBanXuatLo
+                {
+                    MaLo = a.MaLo, HanSuDung = a.Hsd, SoLuong = a.SoLuong
+                }).ToList();
+            }
+            dong.SoLuong = moi;
+        }
+        don.UpdatedAtUtc = now;
+        await _db.SaveChangesAsync(ct);
+
+        return KetQuaThaoTac.Ok($"Đã sửa số lượng đơn \"{don.MaDonHang}\" và điều chỉnh tồn kho theo chênh lệch.");
     }
 
     /// <summary>Chuẩn hoá + kiểm tra phần đầu đơn và dòng hàng. Trả thông báo lỗi hoặc null.</summary>

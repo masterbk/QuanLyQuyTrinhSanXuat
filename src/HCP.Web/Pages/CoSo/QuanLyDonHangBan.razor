@@ -222,6 +222,9 @@ else
                                      AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                                 @if (context.TrangThai is TrangThaiDonHangBan.DangGiao or TrangThaiDonHangBan.ChoGiaoHang)
                                 {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit"
+                                                 OnClick="@(() => MoSuaSoLuongAsync(context))">Sửa số lượng (điều chỉnh tồn kho)</MudMenuItem>
+                                    <MudDivider />
                                     <MudMenuItem Icon="@Icons.Material.Filled.Undo" IconColor="Color.Error"
                                                  OnClick="@(() => MoHuy(context))">Huỷ đơn (trả hàng về kho)</MudMenuItem>
                                 }
@@ -490,6 +493,34 @@ else
     </DialogActions>
 </MudDialog>
 
+@* ==================== Sửa số lượng (đơn đã xuất kho) ==================== *@
+<MudDialog @bind-Visible="_hienSuaSoLuong" Options="_dialogNho">
+    <TitleContent><MudText Typo="Typo.h6">Sửa số lượng đơn @_donSuaSoLuong?.MaDonHang</MudText></TitleContent>
+    <DialogContent>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Đơn đã xuất kho. Đổi số lượng sẽ tự điều chỉnh tồn kho: giảm thì trả phần dư về đúng lô đã xuất,
+            tăng thì trừ thêm từ kho (lô hết hạn trước), chặn nếu không đủ tồn.
+        </MudAlert>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>Thành phẩm</th><th style="width:150px">Số lượng mới</th></tr></thead>
+            <tbody>
+                @foreach (var d in _dongSoLuong)
+                {
+                    <tr>
+                        <td>@TenThanhPham(d.MaThanhPham) <span class="mud-text-secondary">(@d.MaThanhPham)</span></td>
+                        <td><MudNumericField @bind-Value="d.SoLuong" Min="0m" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                             Format="0.###" Culture="@System.Globalization.CultureInfo.InvariantCulture" /></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienSuaSoLuong = false)">Đóng</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangXuLy" OnClick="LuuSuaSoLuongAsync">Lưu số lượng</MudButton>
+    </DialogActions>
+</MudDialog>
+
 <MudDialog @bind-Visible="_hienHuy" Options="_dialogNho">
     <TitleContent><MudText Typo="Typo.h6">Huỷ đơn @_donHuy?.MaDonHang</MudText></TitleContent>
     <DialogContent>
@@ -571,6 +602,17 @@ else
     private bool _hienHuy;
     private DonHangBan? _donHuy;
     private string? _lyDoHuy;
+
+    // Sửa số lượng đơn đã xuất kho.
+    private sealed class ODongSoLuong
+    {
+        public int DongId { get; init; }
+        public string MaThanhPham { get; init; } = "";
+        public decimal SoLuong { get; set; }
+    }
+    private bool _hienSuaSoLuong;
+    private DonHangBan? _donSuaSoLuong;
+    private List<ODongSoLuong> _dongSoLuong = new();
 
     private readonly DialogOptions _dialogLon = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
     private readonly DialogOptions _dialogNho = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
@@ -821,6 +863,26 @@ else
         _donHuy = d;
         _lyDoHuy = null;
         _hienHuy = true;
+    }
+
+    /// <summary>Tải lại bản mới nhất rồi dựng danh sách dòng để sửa số lượng (đơn có thể vừa bị job HnC đổi).</summary>
+    private async Task MoSuaSoLuongAsync(DonHangBan dong)
+    {
+        var d = await DonHangService.LayTheoIdAsync(dong.Id);
+        if (d is null) { Snackbar.Add("Không tìm thấy đơn hàng.", Severity.Error); return; }
+        _donSuaSoLuong = d;
+        _dongSoLuong = d.Dong.OrderBy(l => l.Id)
+            .Select(l => new ODongSoLuong { DongId = l.Id, MaThanhPham = l.MaThanhPham, SoLuong = l.SoLuong })
+            .ToList();
+        _hienSuaSoLuong = true;
+    }
+
+    private async Task LuuSuaSoLuongAsync()
+    {
+        if (_donSuaSoLuong is null) return;
+        var thayDoi = _dongSoLuong.Select(d => new SuaSoLuongDongRequest(d.DongId, d.SoLuong)).ToList();
+        await ChayAsync(() => DonHangService.SuaSoLuongDaXuatKhoAsync(_donSuaSoLuong.Id, thayDoi),
+                        () => _hienSuaSoLuong = false);
     }
 
     private async Task HuyAsync()

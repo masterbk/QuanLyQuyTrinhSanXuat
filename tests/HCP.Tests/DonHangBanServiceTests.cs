@@ -310,6 +310,57 @@ public class DonHangBanServiceTests
     }
 
     [Fact]
+    public async Task Sua_So_Luong_Don_Dang_Giao_Dieu_Chinh_Kho_Theo_Chenh_Lech()
+    {
+        Seed();
+        var id = await TaoAsync(Don((6, 5000)));                         // 6 bánh
+        Assert.True((await ChayAsync(s => s.XacNhanAsync(id))).ThanhCong);
+        Assert.True((await ChayAsync(s => s.XuatKhoAsync(id, null, "NS01"))).ThanhCong);  // FEFO: LOTP_A 5 + LOTP_B 1
+        Assert.Equal(0m, TonLo("LOTP_A"));
+        Assert.Equal(9m, TonLo("LOTP_B"));
+
+        int dongId;
+        using (var db = MoDb()) dongId = (await db.DonHangBanDongs.SingleAsync()).Id;
+
+        // GIẢM 6 -> 4: trả 2 về kho, lô HSD muộn (LOTP_B) trước rồi LOTP_A.
+        var kqGiam = await ChayAsync(s => s.SuaSoLuongDaXuatKhoAsync(id, new[] { new SuaSoLuongDongRequest(dongId, 4) }));
+        Assert.True(kqGiam.ThanhCong, kqGiam.ThongBao);
+        Assert.Equal(1m, TonLo("LOTP_A"));                               // trả 1 về
+        Assert.Equal(10m, TonLo("LOTP_B"));                             // trả 1 về (về đủ 10)
+        using (var db = MoDb())
+        {
+            var dong = await db.DonHangBanDongs.Include(l => l.XuatLo).SingleAsync();
+            Assert.Equal(4m, dong.SoLuong);
+            Assert.Equal(4m, dong.XuatLo.Sum(x => x.SoLuong));           // phân bổ còn đúng 4 (LOTP_A)
+        }
+
+        // TĂNG 4 -> 7: trừ thêm 3 theo FEFO (LOTP_A 1 rồi LOTP_B 2).
+        var kqTang = await ChayAsync(s => s.SuaSoLuongDaXuatKhoAsync(id, new[] { new SuaSoLuongDongRequest(dongId, 7) }));
+        Assert.True(kqTang.ThanhCong, kqTang.ThongBao);
+        Assert.Equal(0m, TonLo("LOTP_A"));
+        Assert.Equal(8m, TonLo("LOTP_B"));
+        using (var db = MoDb())
+        {
+            var dong = await db.DonHangBanDongs.Include(l => l.XuatLo).SingleAsync();
+            Assert.Equal(7m, dong.SoLuong);
+            Assert.Equal(7m, dong.XuatLo.Sum(x => x.SoLuong));
+        }
+
+        // Tăng vượt tồn -> chặn, không đổi gì.
+        var kqThieu = await ChayAsync(s => s.SuaSoLuongDaXuatKhoAsync(id, new[] { new SuaSoLuongDongRequest(dongId, 100) }));
+        Assert.False(kqThieu.ThanhCong);
+        Assert.Contains("Không đủ tồn", kqThieu.ThongBao);
+        Assert.Equal(8m, TonLo("LOTP_B"));                              // giữ nguyên
+
+        // Đơn chưa xuất kho thì không dùng hàm này.
+        var id2 = await TaoAsync(Don((1, 1000)));
+        int dong2;
+        using (var db = MoDb()) dong2 = (await db.DonHangBanDongs.SingleAsync(d => d.DonHangBanId == id2)).Id;
+        Assert.Contains("đã xuất kho",
+            (await ChayAsync(s => s.SuaSoLuongDaXuatKhoAsync(id2, new[] { new SuaSoLuongDongRequest(dong2, 2) }))).ThongBao);
+    }
+
+    [Fact]
     public async Task Xuat_Kho_Chan_Phan_Bo_Sai_Va_Khong_Tru_Gi()
     {
         Seed();
