@@ -299,6 +299,10 @@ public static class LenhSanXuatApi
         dm.MapGet("/nhan-su", async (IDanhMucService<Staff> ns) =>
             Results.Ok((await ns.LayTatCaAsync()).Where(n => n.TrangThai)
                 .Select(n => new NhanSuDto(n.MaNhanSu, n.HoTen, n.ViTri)).ToList()));
+
+        // Nhà cung ứng đầu vào - dùng cho trường "Chọn NCC" của biểu mẫu (vd tiếp nhận nguyên liệu).
+        dm.MapGet("/ncc", async (IDanhMucService<SubSupplier> ncc) =>
+            Results.Ok((await ncc.LayTatCaAsync()).Select(n => new { ma = n.MaNccDauVao, ten = n.Ten }).ToList()));
     }
 
     internal static (int Trang, int SoDong) ChuanHoaTrang(int trang, int soDong) =>

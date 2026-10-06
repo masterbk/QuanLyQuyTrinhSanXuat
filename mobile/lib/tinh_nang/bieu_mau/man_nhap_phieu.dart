@@ -56,6 +56,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     ref.watch(nhanSuBmProvider);
     ref.watch(coSoBmProvider);
     ref.watch(thanhPhamBmProvider);
+    ref.watch(nccBmProvider);
     final m = widget.mau;
 
     return Scaffold(
@@ -216,9 +217,11 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         return _oChon(dong, t, nhan, ref.watch(coSoBmProvider));
       case 'ChonSanPham':
         return _oChon(dong, t, nhan, ref.watch(thanhPhamBmProvider));
+      case 'ChonNcc':
+        return _oChon(dong, t, nhan, ref.watch(nccBmProvider));
       case 'LuaChon':
         return _oLuaChon(dong, t, nhan);
-      default: // Text, ChonNcc (tạm nhập chữ), Anh (chưa hỗ trợ)
+      default: // Text, Anh (chưa hỗ trợ ảnh ở GĐ này)
         return _oNhap(dong, t, nhan, chuan);
     }
   }

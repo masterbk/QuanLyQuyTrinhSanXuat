@@ -36,10 +36,12 @@ public class PhieuGhiNhanServiceTests
         using var db = MoDb();
         var svc = new PhieuGhiNhanService(db);
 
-        // Nhân viên sản xuất: thấy nhiệt độ tủ + đèn UV + checklist (QuyenSanXuat), KHÔNG thấy vệ sinh xe (QuyenGiaoHang).
+        // Nhân viên sản xuất: thấy các mẫu QuyenSanXuat (nhiệt độ tủ, đèn UV, checklist, nướng, KPH),
+        // KHÔNG thấy vệ sinh xe (QuyenGiaoHang) hay tiếp nhận NL (QuyenNhapLieu).
         var cuaSanXuat = await svc.LayBieuMauChoNhapAsync(new[] { "TenantSanXuat" });
-        Assert.Equal(3, cuaSanXuat.Count);
+        Assert.Equal(5, cuaSanXuat.Count);
         Assert.DoesNotContain(cuaSanXuat, b => b.MaHieu == "BM-GMP-ISO-06-01");
+        Assert.DoesNotContain(cuaSanXuat, b => b.MaHieu == "BM-GMP-ISO-01-01");
 
         // Nhân viên giao hàng: chỉ thấy vệ sinh xe.
         var cuaGiao = await svc.LayBieuMauChoNhapAsync(new[] { "TenantGiaoHang" });
@@ -85,6 +87,34 @@ public class PhieuGhiNhanServiceTests
             Assert.True(kq.ThanhCong, kq.ThongBao);
         }
         using (var db = MoDb()) Assert.Equal(1, await db.PhieuGhiNhans.CountAsync());
+    }
+
+    [Fact]
+    public async Task Tao_Phieu_Nhieu_Dong_Tu_Do_Luu_Nhieu_Dong()
+    {
+        await NapMauAsync();
+        int nuongId;
+        using (var db = MoDb()) nuongId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BMKS-01")).Id;
+
+        using (var db = MoDb())
+        {
+            var kq = await new PhieuGhiNhanService(db).TaoPhieuAsync(new PhieuGhiNhan
+            {
+                BieuMauId = nuongId, Ngay = new DateOnly(2026, 10, 7),
+                Dong =
+                {
+                    new DongGhiNhan { GiaTriJson = Json(("san_pham", "BANH_MI"), ("nhiet_do", "180")) },
+                    new DongGhiNhan { GiaTriJson = Json(("san_pham", "BANH_NGOT"), ("nhiet_do", "170")) },
+                }
+            });
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        using (var db = MoDb())
+        {
+            var phieu = await db.PhieuGhiNhans.Include(p => p.Dong).SingleAsync();
+            Assert.Equal(2, phieu.Dong.Count);
+            Assert.Equal(new[] { 0, 1 }, phieu.Dong.OrderBy(d => d.ThuTu).Select(d => d.ThuTu));
+        }
     }
 
     [Fact]

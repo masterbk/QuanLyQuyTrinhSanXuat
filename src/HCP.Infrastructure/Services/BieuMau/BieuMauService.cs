@@ -210,6 +210,61 @@ public sealed class BieuMauService : IBieuMauService
         };
         foreach (var h in HangMucVeSinh()) checklist.HangMuc.Add(h);
         yield return checklist;
+
+        // ----- Nhóm C: phiếu nhiều dòng tự do -----
+        yield return new BieuMauEntity
+        {
+            MaHieu = "BM-GMP-ISO-01-01", Ten = "Kiểm tra, tiếp nhận nguyên liệu NCC", BoCuc = BoCucBieuMau.NhieuDongTuDo,
+            TanSuat = "Mỗi lần nhập", NhomQuyen = AppRoles.QuyenNhapLieu, ThuTu = 5,
+            GhiChuChan = "Cảm quan: Đạt / Không đạt. Bộ phận: Kho nguyên liệu.",
+            Truong =
+            {
+                T("loai_nguyen_lieu", "Loại nguyên liệu", KieuTruongBieuMau.Text, batBuoc: true),
+                T("ten_ncc", "Cơ sở cung cấp", KieuTruongBieuMau.ChonNcc),
+                T("so_luong", "Số lượng", KieuTruongBieuMau.Text),
+                T("tinh_trang_xe", "Tình trạng xe (vệ sinh/nhiệt độ)", KieuTruongBieuMau.Text),
+                T("cam_quan", "Cảm quan chất lượng", KieuTruongBieuMau.DatKhongDat),
+                T("nsx", "Ngày sản xuất", KieuTruongBieuMau.Ngay),
+                T("hsd", "Hạn sử dụng", KieuTruongBieuMau.Ngay),
+                T("nguoi_kt", "Người kiểm tra", KieuTruongBieuMau.ChonNhanSu),
+                T("ghi_chu", "Ghi chú", KieuTruongBieuMau.Text),
+            }
+        };
+
+        yield return new BieuMauEntity
+        {
+            MaHieu = "BMKS-01", Ten = "Kiểm soát công đoạn nướng bánh", BoCuc = BoCucBieuMau.NhieuDongTuDo,
+            TanSuat = "Mỗi mẻ", NhomQuyen = AppRoles.QuyenSanXuat, ThuTu = 6,
+            GhiChuChan = "Ghi giờ vào/ra lò và ký xác nhận cho từng sản phẩm.",
+            Truong =
+            {
+                T("san_pham", "Sản phẩm", KieuTruongBieuMau.ChonSanPham, batBuoc: true),
+                T("so_luong", "Số lượng", KieuTruongBieuMau.So),
+                T("thoi_gian_nuong", "Thời gian nướng", KieuTruongBieuMau.Text, donVi: "phút"),
+                T("nhiet_do", "Nhiệt độ", KieuTruongBieuMau.So, donVi: "°C"),
+                T("gio_vao", "Giờ vào lò", KieuTruongBieuMau.Gio),
+                T("gio_ra", "Giờ ra lò", KieuTruongBieuMau.Gio),
+                T("chat_luong", "Chất lượng thành phẩm", KieuTruongBieuMau.DatKhongDat),
+                T("nguoi", "Người thực hiện", KieuTruongBieuMau.ChonNhanSu),
+                T("ghi_chu", "Ghi chú", KieuTruongBieuMau.Text),
+            }
+        };
+
+        yield return new BieuMauEntity
+        {
+            MaHieu = "BM-KPH-01", Ten = "Theo dõi sản phẩm không phù hợp (KPH)", BoCuc = BoCucBieuMau.NhieuDongTuDo,
+            TanSuat = "Khi phát sinh", NhomQuyen = AppRoles.QuyenSanXuat, ThuTu = 7,
+            GhiChuChan = "Ghi nhận sản phẩm/bán thành phẩm không đạt và cách xử lý; báo QC/quản lý.",
+            Truong =
+            {
+                T("san_pham", "Sản phẩm", KieuTruongBieuMau.ChonSanPham),
+                T("mo_ta", "Mô tả sự không phù hợp", KieuTruongBieuMau.Text, batBuoc: true),
+                T("so_luong", "Số lượng", KieuTruongBieuMau.So),
+                T("nguyen_nhan", "Nguyên nhân", KieuTruongBieuMau.Text),
+                T("huong_xu_ly", "Hướng xử lý", KieuTruongBieuMau.Text),
+                T("nguoi", "Người ghi nhận", KieuTruongBieuMau.ChonNhanSu),
+            }
+        };
     }
 
     private static IEnumerable<HangMucBieuMau> HangMucVeSinh()

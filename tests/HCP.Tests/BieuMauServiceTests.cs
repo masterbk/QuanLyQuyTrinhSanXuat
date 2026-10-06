@@ -30,7 +30,7 @@ public class BieuMauServiceTests
 
         using (var db = MoDb())
         {
-            Assert.Equal(4, await db.BieuMaus.CountAsync());                 // 3 nhóm A + 1 checklist
+            Assert.Equal(7, await db.BieuMaus.CountAsync());                 // 3 nhóm A + 1 checklist + 3 nhóm C
             Assert.Equal(20, await db.HangMucBieuMaus.CountAsync());         // check list vệ sinh 20 hạng mục
             var checklist = await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-KT.KCS-01");
             Assert.Equal(BoCucBieuMau.Checklist, checklist.BoCuc);
@@ -45,7 +45,7 @@ public class BieuMauServiceTests
             Assert.True(kq.ThanhCong);
             Assert.Contains("đã có sẵn", kq.ThongBao);
         }
-        using (var db = MoDb()) Assert.Equal(4, await db.BieuMaus.CountAsync());
+        using (var db = MoDb()) Assert.Equal(7, await db.BieuMaus.CountAsync());
     }
 
     [Fact]
