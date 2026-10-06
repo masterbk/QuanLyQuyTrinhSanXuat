@@ -187,14 +187,17 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManQuetDonHang()));
-          if (context.mounted) ref.read(danhSachDonProvider.notifier).taiLai();
-        },
-        icon: const Icon(Icons.qr_code_scanner),
-        label: const Text('Quét QR đơn'),
-      ),
+      // Đang chọn đơn để tạo lệnh thì ẩn FAB quét QR - tránh che nút "Tạo lệnh sản xuất" ở thanh dưới.
+      floatingActionButton: (coQuyenNhapLieu && _chon.isNotEmpty)
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManQuetDonHang()));
+                if (context.mounted) ref.read(danhSachDonProvider.notifier).taiLai();
+              },
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Quét QR đơn'),
+            ),
     );
   }
 
