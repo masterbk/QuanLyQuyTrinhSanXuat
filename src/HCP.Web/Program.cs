@@ -33,6 +33,9 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// QuestPDF: giấy phép Community (miễn phí cho doanh nghiệp doanh thu < 1 triệu USD/năm) - dùng để in biểu mẫu PDF.
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 // --- Ghi log ra file thay vì Windows Event Viewer ---
 // Mặc định ASP.NET Core tự thêm provider EventLog trên Windows - khó tra cứu liên tục, không xem
 // được từ xa, dễ lẫn với log của app khác trên cùng máy. Chuyển hẳn sang ghi file, xoay vòng theo
@@ -190,6 +193,7 @@ builder.Services.AddScoped<IKiemTraApiHnCService, KiemTraApiHnCService>();
 builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IBieuMauService, BieuMauService>();
 builder.Services.AddScoped<IPhieuGhiNhanService, PhieuGhiNhanService>();
+builder.Services.AddScoped<IPhieuPdfService, PhieuPdfService>();
 builder.Services.AddScoped<IDonHangBanService, DonHangBanService>();
 builder.Services.AddScoped<IDonHangHnCService, DonHangHnCService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
@@ -338,6 +342,7 @@ app.MapQrApi();
 app.MapKhoNoiBoApi();
 app.MapQuanLyDanhMucApi();
 app.MapBieuMauApi();
+app.MapPhieuPdfApi();
 
 app.MapRazorPages();
 app.MapBlazorHub();

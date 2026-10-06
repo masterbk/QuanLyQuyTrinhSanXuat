@@ -1,0 +1,110 @@
+@page "/app/phieu-ghi-nhan"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Infrastructure.Services.BieuMau
+@using HCP.Infrastructure.Services.DanhMuc
+@using Microsoft.AspNetCore.Authorization
+@using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau
+@attribute [Authorize(Roles = AppRoles.QuyenNhapLieu)]
+@inject IPhieuGhiNhanService PhieuService
+@inject IBieuMauService BieuMauService
+@inject IDanhMucService<Staff> NhanSuService
+
+<PageTitle>Phiếu ghi nhận</PageTitle>
+
+<div class="mb-4">
+    <MudText Typo="Typo.h5">Phiếu ghi nhận biểu mẫu</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Các phiếu nhân viên đã ghi theo biểu mẫu. Lọc theo mẫu/ngày và tải PDF theo đúng dáng biểu mẫu.
+    </MudText>
+</div>
+
+<div class="d-flex flex-wrap gap-2 align-center mb-3">
+    <MudSelect T="int?" Value="_locMauId" ValueChanged="DoiLocMau" Label="Biểu mẫu" Variant="Variant.Outlined"
+               Margin="Margin.Dense" Clearable="true" Style="min-width:260px">
+        @foreach (var m in _bieuMau)
+        {
+            <MudSelectItem T="int?" Value="@m.Id">@m.Ten (@m.MaHieu)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudDatePicker Date="_locNgay" DateChanged="DoiLocNgay" Label="Ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
+                   Style="min-width:180px" />
+</div>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_phieu.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Chưa có phiếu nào khớp bộ lọc.</MudAlert>
+}
+else
+{
+    <MudTable Items="_phieu" Hover="true" Dense="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>Ngày</MudTh>
+            <MudTh>Biểu mẫu</MudTh>
+            <MudTh>Ca</MudTh>
+            <MudTh>Khu vực</MudTh>
+            <MudTh>Người lập</MudTh>
+            <MudTh Style="text-align:center">Số dòng</MudTh>
+            <MudTh Style="width:1%"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Ngày">@context.Ngay.ToString("dd/MM/yyyy")</MudTd>
+            <MudTd DataLabel="Biểu mẫu">@TenMau(context.BieuMauId)</MudTd>
+            <MudTd DataLabel="Ca">@context.Ca</MudTd>
+            <MudTd DataLabel="Khu vực">@context.KhuVuc</MudTd>
+            <MudTd DataLabel="Người lập">@TenNhanSu(context.NguoiLap)</MudTd>
+            <MudTd DataLabel="Số dòng" Style="text-align:center">@context.Dong.Count</MudTd>
+            <MudTd>
+                <div class="d-flex" style="white-space:nowrap">
+                    <MudTooltip Text="Mở PDF">
+                        <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf" Color="Color.Error" Size="Size.Small"
+                                       Href="@($"/app/phieu/{context.Id}/pdf")" Target="_blank" />
+                    </MudTooltip>
+                    <MudTooltip Text="Tải PDF">
+                        <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small"
+                                       Href="@($"/app/phieu/{context.Id}/pdf?tai=true")" Target="_blank" />
+                    </MudTooltip>
+                </div>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent><MudTablePager RowsPerPageString="Số dòng mỗi trang:" /></PagerContent>
+    </MudTable>
+}
+
+@code {
+    private List<BieuMauEntity> _bieuMau = new();
+    private List<PhieuGhiNhan> _phieu = new();
+    private Dictionary<int, string> _tenMau = new();
+    private Dictionary<string, string> _tenNhanSu = new();
+    private bool _dangTai = true;
+
+    private int? _locMauId;
+    private DateTime? _locNgay;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _bieuMau = (await BieuMauService.LayTatCaAsync()).ToList();
+        _tenMau = _bieuMau.GroupBy(b => b.Id).ToDictionary(g => g.Key, g => g.First().Ten);
+        _tenNhanSu = (await NhanSuService.LayTatCaAsync()).GroupBy(n => n.MaNhanSu).ToDictionary(g => g.Key, g => g.First().HoTen);
+        await TaiAsync();
+    }
+
+    private async Task TaiAsync()
+    {
+        _dangTai = true;
+        var ngay = _locNgay is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
+        _phieu = (await PhieuService.LayPhieuAsync(ngay, null, _locMauId)).ToList();
+        _dangTai = false;
+    }
+
+    private async Task DoiLocMau(int? v) { _locMauId = v; await TaiAsync(); }
+    private async Task DoiLocNgay(DateTime? v) { _locNgay = v; await TaiAsync(); }
+
+    private string TenMau(int id) => _tenMau.GetValueOrDefault(id) ?? $"#{id}";
+    private string TenNhanSu(string? ma) => ma is null ? "" : (_tenNhanSu.GetValueOrDefault(ma) ?? ma);
+}
