@@ -571,6 +571,9 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         .toList();
     final ghiChu = _ghiChu.text.trim().isEmpty ? null : _ghiChu.text.trim();
 
+    // Xác nhận trước khi chốt (hoàn thành rồi sẽ khóa, không sửa tiếp được).
+    if (hoanThanh && !await _xacNhanHoanThanh()) return;
+
     setState(() => _dangLuu = true);
     try {
       final kho = ref.read(khoBieuMauProvider);
@@ -609,6 +612,24 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     } finally {
       if (mounted) setState(() => _dangLuu = false);
     }
+  }
+
+  /// Hỏi xác nhận trước khi chốt phiếu. Trả true nếu người dùng đồng ý.
+  Future<bool> _xacNhanHoanThanh() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Hoàn thành phiếu?'),
+        content: Text(_motPhieuNgay
+            ? 'Sau khi hoàn thành, phiếu của ngày này sẽ được chốt và chỉ xem lại được (không sửa tiếp). Tiếp tục?'
+            : 'Chốt và lưu phiếu này? Sau khi hoàn thành chỉ xem lại được.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Huỷ')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Hoàn thành')),
+        ],
+      ),
+    );
+    return ok ?? false;
   }
 
   void _bao(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
