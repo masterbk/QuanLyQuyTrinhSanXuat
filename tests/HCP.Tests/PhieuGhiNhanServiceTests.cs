@@ -215,4 +215,72 @@ public class PhieuGhiNhanServiceTests
             Assert.True(kq.ThanhCong, kq.ThongBao);
         }
     }
+
+    [Fact]
+    public async Task Mau_1_Phieu_Moi_Ngay_Chan_Tao_Trung()
+    {
+        await NapMauAsync();
+        int tuLanhId;
+        using (var db = MoDb()) tuLanhId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-GMP.08-04")).Id;
+        var ngay = new DateOnly(2026, 10, 7);
+
+        // Tạo phiếu cho ngày.
+        using (var db = MoDb())
+        {
+            var kq = await new PhieuGhiNhanService(db).TaoPhieuAsync(new PhieuGhiNhan
+            {
+                BieuMauId = tuLanhId, Ngay = ngay,
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("nhiet_do_dong_sang", "-18"), ("nhiet_do_mat_sang", "5")) } }
+            });
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        // Tạo phiếu thứ 2 cùng ngày -> chặn (khoá theo ngày).
+        using (var db = MoDb())
+        {
+            var kq = await new PhieuGhiNhanService(db).TaoPhieuAsync(new PhieuGhiNhan
+            {
+                BieuMauId = tuLanhId, Ngay = ngay,
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("nhiet_do_dong_sang", "-19"), ("nhiet_do_mat_sang", "4")) } }
+            });
+            Assert.False(kq.ThanhCong);
+            Assert.Contains("đã có phiếu", kq.ThongBao);
+        }
+
+        // Lấy phiếu theo ngày trả đúng phiếu (mọi trạng thái); chỉ có đúng 1 phiếu.
+        using (var db = MoDb())
+        {
+            var p = await new PhieuGhiNhanService(db).LayPhieuTheoNgayAsync(tuLanhId, ngay);
+            Assert.NotNull(p);
+            Assert.Equal(ngay, p!.Ngay);
+            Assert.Equal(1, await db.PhieuGhiNhans.CountAsync());
+        }
+
+        // Ngày khác chưa có phiếu -> null.
+        using (var db = MoDb())
+            Assert.Null(await new PhieuGhiNhanService(db).LayPhieuTheoNgayAsync(tuLanhId, ngay.AddDays(1)));
+    }
+
+    [Fact]
+    public async Task Mau_Nhieu_Phieu_Moi_Ngay_Cho_Tao_Nhieu()
+    {
+        await NapMauAsync();
+        int kphId;
+        using (var db = MoDb()) kphId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-KPH-01")).Id;
+        var ngay = new DateOnly(2026, 10, 7);
+
+        // KPH là mẫu "nhiều phiếu/ngày" -> tạo được nhiều phiếu cùng ngày.
+        for (var i = 0; i < 2; i++)
+        {
+            using var db = MoDb();
+            var kq = await new PhieuGhiNhanService(db).TaoPhieuAsync(new PhieuGhiNhan
+            {
+                BieuMauId = kphId, Ngay = ngay,
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("mo_ta", $"Sự cố {i}")) } }
+            });
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        using (var db = MoDb()) Assert.Equal(2, await db.PhieuGhiNhans.CountAsync());
+    }
 }

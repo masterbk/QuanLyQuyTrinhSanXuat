@@ -27,9 +27,14 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   final _ghiChu = TextEditingController();
   final _DongNhap _dauPhieu = _DongNhap(); // giá trị các trường đầu phiếu
   late List<_DongNhap> _dong;
-  int? _phieuId; // phiếu nháp đang nhập tiếp (null = tạo mới)
-  int _napLan = 0; // tăng mỗi lần nạp lại (đổi ngày) để ép các ô initialValue dựng lại
+  int? _phieuId; // phiếu đang mở (null = phiếu mới)
+  bool _choXem = false; // true = phiếu đã hoàn thành -> chỉ xem, khóa nhập
+  List<PhieuGhiNhan> _dsNgay = []; // phiếu trong ngày (biểu mẫu nhiều phiếu/ngày)
+  int _napLan = 0; // tăng mỗi lần nạp lại (đổi ngày/đổi phiếu) để ép các ô initialValue dựng lại
   bool _dangLuu = false;
+
+  bool get _motPhieuNgay => widget.mau.motPhieuMoiNgay;
+  bool get _khoaNhap => _dangLuu || _choXem; // khóa các thao tác nhập dữ liệu
 
   /// Khoá ô nhập: đổi khi nạp lại (ngày khác) hoặc khi dòng bị thay -> Flutter dựng ô mới, áp lại initialValue.
   Key _khoaO(_DongNhap dong, TruongBieuMau t) => ValueKey('${_napLan}_${identityHashCode(dong)}_${t.ma}');
@@ -41,29 +46,52 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   void initState() {
     super.initState();
     _dong = _dungDongBanDau();
-    Future.microtask(_napNhap);
+    Future.microtask(_napTheoNgay);
   }
 
-  /// Nạp phiếu nháp của ngày đang chọn (nếu có) để nhập tiếp.
-  Future<void> _napNhap() async {
+  /// Nạp dữ liệu theo ngày đang chọn.
+  /// - Mẫu 1 phiếu/ngày: lấy phiếu của ngày (nếu có) -> còn nháp thì sửa, đã hoàn thành thì xem.
+  /// - Mẫu nhiều phiếu/ngày: lấy danh sách phiếu trong ngày; form bắt đầu là phiếu mới.
+  Future<void> _napTheoNgay() async {
     try {
-      final nhap = await ref.read(khoBieuMauProvider).phieuNhap(widget.mau.id, _ngay);
-      if (!mounted) return;
-      setState(() {
-        _napLan++;
-        _phieuId = nhap?.id;
-        _dong = _dungDongBanDau();
-        _dauPhieu.giaTri.clear();
-        _ghiChu.text = nhap?.ghiChu ?? '';
-        if (nhap != null) {
-          _dauPhieu.giaTri.addAll(nhap.giaTriDau);
-          _apDungNhap(nhap);
-        }
-      });
+      final kho = ref.read(khoBieuMauProvider);
+      if (_motPhieuNgay) {
+        final p = await kho.phieuTheoNgay(widget.mau.id, _ngay);
+        if (!mounted) return;
+        setState(() => _apDungPhieu(p));
+      } else {
+        final ds = await kho.phieu(ngay: _ngay, bieuMauId: widget.mau.id);
+        if (!mounted) return;
+        setState(() { _dsNgay = ds; _apDungPhieu(null); });
+      }
     } catch (_) {
-      // Lỗi tải nháp -> coi như phiếu mới.
+      if (mounted) setState(() => _apDungPhieu(null)); // lỗi tải -> coi như phiếu mới
     }
   }
+
+  /// Đưa một phiếu vào form. null = phiếu mới (trống). Phiếu đã hoàn thành -> chỉ xem (khóa nhập).
+  void _apDungPhieu(PhieuGhiNhan? p) {
+    _napLan++;
+    _dong = _dungDongBanDau();
+    _dauPhieu.giaTri.clear();
+    if (p == null) {
+      _phieuId = null;
+      _choXem = false;
+      _ghiChu.text = '';
+      return;
+    }
+    _phieuId = p.id;
+    _choXem = p.laHoanThanh;
+    _ghiChu.text = p.ghiChu ?? '';
+    _dauPhieu.giaTri.addAll(p.giaTriDau);
+    _apDungNhap(p);
+  }
+
+  /// Mở một phiếu trong danh sách ngày (mẫu nhiều phiếu/ngày): nháp -> sửa, đã hoàn thành -> xem.
+  void _moPhieu(PhieuGhiNhan p) => setState(() => _apDungPhieu(p));
+
+  /// Bắt đầu nhập một phiếu mới (mẫu nhiều phiếu/ngày).
+  void _phieuMoi() => setState(() => _apDungPhieu(null));
 
   void _apDungNhap(PhieuGhiNhan nhap) {
     if (widget.mau.laChecklist) {
@@ -116,23 +144,10 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         children: [
           Text(m.maHieu, style: Theme.of(context).textTheme.bodySmall),
-          if (_phieuId != null)
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.tertiaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(children: [
-                const Icon(Icons.edit_note, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Đang nhập tiếp phiếu nháp của ngày này. Bấm "Hoàn thành" khi xong.',
-                    style: Theme.of(context).textTheme.bodySmall)),
-              ]),
-            ),
+          _banner(),
           const SizedBox(height: 12),
           _oNgay(),
+          if (!_motPhieuNgay) _dsNgaySection(),
           // Trường đầu phiếu (khu vực, biển số, tổ... - do biểu mẫu khai).
           for (final t in _truongDau)
             Padding(padding: const EdgeInsets.only(top: 12), child: _oTruong(_dauPhieu, t)),
@@ -145,7 +160,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: _dangLuu ? null : () => setState(() => _dong.add(_DongNhap())),
+                onPressed: _khoaNhap ? null : () => setState(() => _dong.add(_DongNhap())),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Thêm dòng'),
               ),
@@ -173,30 +188,122 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
           ],
         ],
       ),
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 12),
-        child: Row(
+      bottomNavigationBar: _thanhDuoi(context),
+    );
+  }
+
+  // ---------- Banner + danh sách phiếu trong ngày + thanh nút ----------
+
+  Widget _banner() {
+    if (_choXem) {
+      return _hopTin(Icons.lock_outline, 'Phiếu đã hoàn thành — chỉ xem, không sửa.',
+          Theme.of(context).colorScheme.surfaceContainerHighest);
+    }
+    if (_phieuId != null) {
+      return _hopTin(Icons.edit_note, 'Đang nhập tiếp phiếu nháp. Bấm "Hoàn thành" khi xong.',
+          Theme.of(context).colorScheme.tertiaryContainer);
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _hopTin(IconData icon, String text, Color mau) => Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: mau, borderRadius: BorderRadius.circular(8)),
+        child: Row(children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodySmall)),
+        ]),
+      );
+
+  /// Danh sách phiếu đã nhập trong ngày (mẫu nhiều phiếu/ngày): chạm để mở (nháp sửa, hoàn thành xem).
+  Widget _dsNgaySection() => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _dangLuu ? null : () => _luu(false),
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: const Text('Lưu nháp'),
+            Row(children: [
+              Expanded(child: Text('Phiếu trong ngày (${_dsNgay.length})',
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
+              TextButton.icon(
+                onPressed: _dangLuu ? null : _phieuMoi,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Phiếu mới'),
               ),
+            ]),
+            if (_dsNgay.isEmpty)
+              Text('Chưa có phiếu nào trong ngày.', style: Theme.of(context).textTheme.bodySmall)
+            else
+              ..._dsNgay.map((p) {
+                final dangMo = p.id == _phieuId;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  color: dangMo ? Theme.of(context).colorScheme.secondaryContainer : null,
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(p.laHoanThanh ? Icons.check_circle : Icons.edit_note,
+                        color: p.laHoanThanh ? Colors.green : null, size: 20),
+                    title: Text('Phiếu #${p.id}'),
+                    subtitle: Text(p.laHoanThanh ? 'Đã hoàn thành' : 'Nháp'),
+                    trailing: dangMo ? const Text('Đang mở') : const Icon(Icons.chevron_right, size: 18),
+                    onTap: _dangLuu ? null : () => _moPhieu(p),
+                  ),
+                );
+              }),
+            const Divider(height: 24),
+          ],
+        ),
+      );
+
+  Widget _thanhDuoi(BuildContext context) {
+    final pad = EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 12);
+    if (_choXem) {
+      return Padding(
+        padding: pad,
+        child: Row(children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              child: const Text('Đóng'),
             ),
+          ),
+          if (!_motPhieuNgay) ...[
             const SizedBox(width: 12),
             Expanded(
-              child: FilledButton(
-                onPressed: _dangLuu ? null : () => _luu(true),
+              child: FilledButton.icon(
+                onPressed: _phieuMoi,
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: _dangLuu
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Hoàn thành'),
+                icon: const Icon(Icons.add),
+                label: const Text('Phiếu mới'),
               ),
             ),
           ],
+        ]),
+      );
+    }
+    return Padding(
+      padding: pad,
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _dangLuu ? null : () => _luu(false),
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            child: const Text('Lưu nháp'),
+          ),
         ),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed: _dangLuu ? null : () => _luu(true),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            child: _dangLuu
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Hoàn thành'),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -244,7 +351,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
                 if (_dong.length > 1)
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
-                    onPressed: _dangLuu ? null : () => setState(() => _dong.removeAt(i)),
+                    onPressed: _khoaNhap ? null : () => setState(() => _dong.removeAt(i)),
                   ),
               ]),
               ..._theoNhom(dong),
@@ -303,6 +410,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       TextFormField(
         key: _khoaO(dong, t),
         initialValue: dong.giaTri[t.ma],
+        enabled: !_choXem,
         keyboardType: soL ? const TextInputType.numberWithOptions(decimal: true, signed: true) : TextInputType.text,
         decoration: InputDecoration(labelText: nhan, helperText: chuan, border: const OutlineInputBorder(), isDense: true),
         onChanged: (v) => dong.giaTri[t.ma] = v,
@@ -319,12 +427,12 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
           ChoiceChip(
             label: const Text('Đạt'),
             selected: v == 'Đạt',
-            onSelected: _dangLuu ? null : (_) => setState(() => dong.giaTri[t.ma] = 'Đạt'),
+            onSelected: _khoaNhap ? null : (_) => setState(() => dong.giaTri[t.ma] = 'Đạt'),
           ),
           ChoiceChip(
             label: const Text('Không đạt'),
             selected: v == 'Không đạt',
-            onSelected: _dangLuu ? null : (_) => setState(() => dong.giaTri[t.ma] = 'Không đạt'),
+            onSelected: _khoaNhap ? null : (_) => setState(() => dong.giaTri[t.ma] = 'Không đạt'),
           ),
         ]),
       ],
@@ -372,7 +480,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       isExpanded: true,
       decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
       items: ds.map((m) => DropdownMenuItem(value: m.ma, child: Text(m.ten, overflow: TextOverflow.ellipsis))).toList(),
-      onChanged: _dangLuu ? null : (v) => setState(() => dong.giaTri[t.ma] = v ?? ''),
+      onChanged: _khoaNhap ? null : (v) => setState(() => dong.giaTri[t.ma] = v ?? ''),
     );
   }
 
@@ -385,13 +493,13 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       isExpanded: true,
       decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
       items: ds.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
-      onChanged: _dangLuu ? null : (v) => setState(() => dong.giaTri[t.ma] = v ?? ''),
+      onChanged: _khoaNhap ? null : (v) => setState(() => dong.giaTri[t.ma] = v ?? ''),
     );
   }
 
   Widget _oBam({required String nhan, required String? giaTri, required IconData icon, required VoidCallback onTap}) =>
       InkWell(
-        onTap: _dangLuu ? null : onTap,
+        onTap: _khoaNhap ? null : onTap,
         child: InputDecorator(
           decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true,
               suffixIcon: Icon(icon, size: 18)),
@@ -411,7 +519,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
                 );
                 if (chon != null && chon != _ngay) {
                   setState(() => _ngay = chon);
-                  await _napNhap(); // nạp nháp của ngày mới (nếu có)
+                  await _napTheoNgay(); // nạp phiếu của ngày mới chọn
                 }
               },
         child: InputDecorator(
@@ -424,12 +532,14 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   Widget _oText(TextEditingController c, String nhan, {String? hint, int lines = 1}) => TextField(
         controller: c,
         maxLines: lines,
+        enabled: !_choXem,
         decoration: InputDecoration(labelText: nhan, hintText: hint, border: const OutlineInputBorder(), isDense: true),
       );
 
   // ---------- Lưu ----------
 
   Future<void> _luu(bool hoanThanh) async {
+    if (_choXem) return; // đang xem phiếu đã hoàn thành
     // Trường bắt buộc chỉ bắt khi Hoàn thành (Lưu nháp cho phép thiếu).
     if (hoanThanh) {
       for (final t in _truongDau.where((t) => t.batBuoc)) {
@@ -474,13 +584,24 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       }
       if (!mounted) return;
       if (hoanThanh) {
-        Navigator.pop(context, tb);
+        if (_motPhieuNgay) {
+          Navigator.pop(context, tb); // 1 phiếu/ngày: về lại danh sách biểu mẫu
+          return;
+        }
+        // Nhiều phiếu/ngày: ở lại, làm mới danh sách và reset form để nhập phiếu kế tiếp.
+        _bao(tb);
+        await _napTheoNgay();
       } else {
         _bao(tb);
-        // Lấy lại id nháp để lần lưu sau nhập tiếp đúng phiếu.
-        if (_phieuId == null) {
-          final nhap = await kho.phieuNhap(widget.mau.id, _ngay);
-          if (mounted) setState(() => _phieuId = nhap?.id);
+        // Đảm bảo có id để lần lưu sau nhập tiếp đúng phiếu.
+        if (_motPhieuNgay) {
+          if (_phieuId == null) {
+            final p = await kho.phieuTheoNgay(widget.mau.id, _ngay);
+            if (mounted) setState(() => _phieuId = p?.id);
+          }
+        } else {
+          final ds = await kho.phieu(ngay: _ngay, bieuMauId: widget.mau.id);
+          if (mounted) setState(() { _dsNgay = ds; _phieuId ??= ds.isNotEmpty ? ds.first.id : null; });
         }
       }
     } on LoiApi catch (e) {

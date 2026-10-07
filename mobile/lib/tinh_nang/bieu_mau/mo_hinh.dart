@@ -10,6 +10,7 @@ class BieuMau {
   final String boCuc; // TheoNgay | Checklist | NhieuDongTuDo
   final String? tanSuat;
   final String? ghiChuChan;
+  final bool motPhieuMoiNgay; // true = 1 phiếu/ngày (khóa theo ngày); false = nhiều phiếu/ngày (sổ/log)
   final List<TruongBieuMau> truong;
   final List<HangMucBieuMau> hangMuc;
 
@@ -20,6 +21,7 @@ class BieuMau {
     required this.boCuc,
     this.tanSuat,
     this.ghiChuChan,
+    this.motPhieuMoiNgay = true,
     this.truong = const [],
     this.hangMuc = const [],
   });
@@ -34,6 +36,7 @@ class BieuMau {
         boCuc: j['boCuc'] as String? ?? 'TheoNgay',
         tanSuat: j['tanSuat'] as String?,
         ghiChuChan: j['ghiChuChan'] as String?,
+        motPhieuMoiNgay: j['motPhieuMoiNgay'] as bool? ?? true,
         truong: ((j['truong'] as List?) ?? const [])
             .map((e) => TruongBieuMau.tuJson(e as Map<String, dynamic>))
             .toList(),
@@ -118,6 +121,9 @@ class PhieuGhiNhan {
     this.ghiChu,
     this.dong = const [],
   });
+
+  /// true nếu phiếu đã chốt (không còn nháp) -> chỉ xem, không sửa.
+  bool get laHoanThanh => trangThai != 'Nhap';
 
   factory PhieuGhiNhan.tuJson(Map<String, dynamic> j) {
     Map<String, String> dau = {};

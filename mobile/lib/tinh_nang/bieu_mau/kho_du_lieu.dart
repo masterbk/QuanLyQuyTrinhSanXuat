@@ -28,6 +28,13 @@ class KhoBieuMau {
     return r is Map<String, dynamic> ? PhieuGhiNhan.tuJson(r) : null;
   }
 
+  /// Phiếu của biểu mẫu trong một NGÀY (mọi trạng thái) - cho biểu mẫu "1 phiếu/ngày". Null nếu chưa có.
+  Future<PhieuGhiNhan?> phieuTheoNgay(int bieuMauId, DateTime ngay) async {
+    final r = await _api.get('/api/v1/phieu-ghi-nhan/theo-ngay',
+        thamSo: {'bieuMauId': bieuMauId, 'ngay': _chuoiNgay(ngay)});
+    return r is Map<String, dynamic> ? PhieuGhiNhan.tuJson(r) : null;
+  }
+
   /// Tạo phiếu mới. [hoanThanh]=false lưu nháp (nhập tiếp sau). [giaTriDau]: giá trị trường đầu phiếu.
   /// [dong]: mỗi dòng {hangMucBieuMauId?, giaTri: {ma_truong: giá trị}, ghiChu?}.
   Future<String> taoPhieu({

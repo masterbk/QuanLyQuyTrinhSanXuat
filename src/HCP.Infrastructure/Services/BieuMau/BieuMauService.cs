@@ -54,6 +54,7 @@ public sealed class BieuMauService : IBieuMauService
             goc.NhomQuyen = mau.NhomQuyen;
             goc.GhiChuChan = mau.GhiChuChan;
             goc.KichHoat = mau.KichHoat;
+            goc.MotPhieuMoiNgay = mau.MotPhieuMoiNgay;
             goc.ThuTu = mau.ThuTu;
             // Thay toàn bộ trường và hạng mục (mẫu chưa có phiếu hoặc chấp nhận định nghĩa mới).
             _db.TruongBieuMaus.RemoveRange(goc.Truong);
@@ -260,7 +261,7 @@ public sealed class BieuMauService : IBieuMauService
         yield return new BieuMauEntity
         {
             MaHieu = "BM-KPH-01", Ten = "Theo dõi sản phẩm không phù hợp (KPH)", BoCuc = BoCucBieuMau.NhieuDongTuDo,
-            TanSuat = "Khi phát sinh", NhomQuyen = AppRoles.QuyenSanXuat, ThuTu = 7,
+            TanSuat = "Khi phát sinh", NhomQuyen = AppRoles.QuyenSanXuat, ThuTu = 7, MotPhieuMoiNgay = false,
             GhiChuChan = "Ghi nhận sản phẩm/bán thành phẩm không đạt và cách xử lý; báo QC/quản lý.",
             Truong =
             {

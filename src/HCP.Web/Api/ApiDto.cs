@@ -209,7 +209,7 @@ public sealed record QuyTrinhLuuRequest(
 // ==================== Biểu mẫu kiểm soát (GMP/ISO) ====================
 
 public sealed record BieuMauDto(
-    int Id, string MaHieu, string Ten, string BoCuc, string? TanSuat, string? GhiChuChan,
+    int Id, string MaHieu, string Ten, string BoCuc, string? TanSuat, string? GhiChuChan, bool MotPhieuMoiNgay,
     IReadOnlyList<TruongBieuMauDto> Truong, IReadOnlyList<HangMucBieuMauDto> HangMuc);
 
 public sealed record TruongBieuMauDto(

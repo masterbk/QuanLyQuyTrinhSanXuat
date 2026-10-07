@@ -30,6 +30,13 @@ public class BieuMau : TenantEntity
 
     public bool KichHoat { get; set; } = true;
 
+    /// <summary>
+    /// true = mỗi ngày chỉ MỘT phiếu (khoá nghiệp vụ = biểu mẫu + ngày): mở ngày đã có phiếu thì sửa (nếu còn
+    /// nháp) hoặc xem (nếu đã hoàn thành), không tạo trùng. false = cho NHIỀU phiếu trong một ngày (sổ/log, vd
+    /// sản phẩm không phù hợp): mỗi lần là một phiếu riêng.
+    /// </summary>
+    public bool MotPhieuMoiNgay { get; set; } = true;
+
     public int ThuTu { get; set; }
 
     public List<TruongBieuMau> Truong { get; set; } = new();

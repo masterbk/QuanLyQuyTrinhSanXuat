@@ -26,6 +26,12 @@ public interface IPhieuGhiNhanService
     Task<PhieuGhiNhan?> LayPhieuNhapAsync(int bieuMauId, DateOnly ngay, string? nguoiLap, CancellationToken ct = default);
 
     /// <summary>
+    /// Phiếu của một biểu mẫu trong một NGÀY (mọi trạng thái, mới nhất) - dùng cho biểu mẫu "1 phiếu/ngày":
+    /// còn nháp thì mở sửa, đã hoàn thành thì xem. Null nếu ngày đó chưa có phiếu.
+    /// </summary>
+    Task<PhieuGhiNhan?> LayPhieuTheoNgayAsync(int bieuMauId, DateOnly ngay, CancellationToken ct = default);
+
+    /// <summary>
     /// Tạo một phiếu ghi nhận. <paramref name="hoanThanh"/>=false lưu NHÁP (cho phép thiếu trường bắt buộc, nhập
     /// tiếp sau); =true chốt (kiểm đủ trường bắt buộc).
     /// </summary>

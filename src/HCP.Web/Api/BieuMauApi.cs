@@ -58,6 +58,14 @@ public static class BieuMauApi
             return p is null ? Results.NoContent() : Results.Ok(MapPhieu(p));
         });
 
+        // Phiếu của một biểu mẫu trong một NGÀY (mọi trạng thái) - cho biểu mẫu "1 phiếu/ngày":
+        // còn nháp thì mở sửa, đã hoàn thành thì xem. 204 nếu ngày đó chưa có phiếu.
+        nhom.MapGet("/phieu-ghi-nhan/theo-ngay", async (IPhieuGhiNhanService svc, int bieuMauId, DateOnly ngay) =>
+        {
+            var p = await svc.LayPhieuTheoNgayAsync(bieuMauId, ngay);
+            return p is null ? Results.NoContent() : Results.Ok(MapPhieu(p));
+        });
+
         nhom.MapPost("/phieu-ghi-nhan", async (TaoPhieuRequest req, IPhieuGhiNhanService svc,
                                                ClaimsPrincipal user, AppDbContext db) =>
         {
@@ -95,7 +103,7 @@ public static class BieuMauApi
     };
 
     private static BieuMauDto Map(BieuMauEntity b) => new(
-        b.Id, b.MaHieu, b.Ten, b.BoCuc.ToString(), b.TanSuat, b.GhiChuChan,
+        b.Id, b.MaHieu, b.Ten, b.BoCuc.ToString(), b.TanSuat, b.GhiChuChan, b.MotPhieuMoiNgay,
         b.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMauDto(
             t.Ma, t.Ten, t.Kieu.ToString(), t.LaDauPhieu, t.BatBuoc, t.DonVi, t.GiaTriChuan, t.TuyChonCsv, t.Nhom)).ToList(),
         b.HangMuc.OrderBy(h => h.ThuTu).Select(h => new HangMucBieuMauDto(

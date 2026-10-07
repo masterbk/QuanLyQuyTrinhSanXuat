@@ -67,6 +67,10 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
                                       && p.TrangThai == TrangThaiPhieu.Nhap
                                       && (nguoiLap == null || p.NguoiLap == nguoiLap), ct);
 
+    public Task<PhieuGhiNhan?> LayPhieuTheoNgayAsync(int bieuMauId, DateOnly ngay, CancellationToken ct = default) =>
+        _db.PhieuGhiNhans.AsNoTracking().Include(p => p.Dong).OrderByDescending(p => p.Id)
+            .FirstOrDefaultAsync(p => p.BieuMauId == bieuMauId && p.Ngay == ngay, ct);
+
     public async Task<KetQuaThaoTac> TaoPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true,
                                                    CancellationToken ct = default)
     {
@@ -74,6 +78,13 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         if (mau is null) return KetQuaThaoTac.Loi("Không tìm thấy biểu mẫu.");
         if (!mau.KichHoat) return KetQuaThaoTac.Loi("Biểu mẫu đã ngừng kích hoạt.");
         if (phieu.Ngay == default) phieu.Ngay = GioVietNam.HomNay;
+
+        // Biểu mẫu "1 phiếu/ngày": khoá theo ngày - không cho tạo phiếu thứ 2 cho cùng ngày
+        // (mở phiếu đã có để sửa nếu còn nháp, hoặc xem nếu đã hoàn thành).
+        if (mau.MotPhieuMoiNgay
+            && await _db.PhieuGhiNhans.AnyAsync(p => p.BieuMauId == phieu.BieuMauId && p.Ngay == phieu.Ngay, ct))
+            return KetQuaThaoTac.Loi($"Ngày {phieu.Ngay:dd/MM/yyyy} đã có phiếu \"{mau.Ten}\". " +
+                                     "Hãy mở phiếu của ngày này để sửa (nếu còn nháp) hoặc xem (nếu đã hoàn thành).");
 
         var loi = KiemTraChuanHoaDong(mau, phieu.Dong ?? new(), hoanThanh)
                   ?? ChuanHoaDauPhieu(mau, phieu, hoanThanh);

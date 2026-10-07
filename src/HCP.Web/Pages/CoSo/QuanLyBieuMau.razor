@@ -46,6 +46,7 @@ else
             <MudTh>Tên biểu mẫu</MudTh>
             <MudTh>Bố cục</MudTh>
             <MudTh>Tần suất</MudTh>
+            <MudTh Style="text-align:center">Phiếu/ngày</MudTh>
             <MudTh Style="text-align:center">Trường</MudTh>
             <MudTh Style="text-align:center">Hạng mục</MudTh>
             <MudTh Style="text-align:center">Kích hoạt</MudTh>
@@ -56,6 +57,7 @@ else
             <MudTd DataLabel="Tên">@context.Ten</MudTd>
             <MudTd DataLabel="Bố cục">@TenBoCuc(context.BoCuc)</MudTd>
             <MudTd DataLabel="Tần suất">@context.TanSuat</MudTd>
+            <MudTd DataLabel="Phiếu/ngày" Style="text-align:center">@(context.MotPhieuMoiNgay ? "1/ngày" : "Nhiều")</MudTd>
             <MudTd DataLabel="Trường" Style="text-align:center">@context.Truong.Count</MudTd>
             <MudTd DataLabel="Hạng mục" Style="text-align:center">@(context.BoCuc == BoCucBieuMau.Checklist ? context.HangMuc.Count.ToString() : "—")</MudTd>
             <MudTd DataLabel="Kích hoạt" Style="text-align:center">
@@ -116,6 +118,13 @@ else
             <MudItem xs="12">
                 <MudTextField @bind-Value="_input.GhiChuChan" Label="Quy chuẩn / ghi chú chân biểu mẫu" Variant="Variant.Outlined"
                               Lines="2" MaxLength="2000" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="bool" @bind-Value="_input.MotPhieuMoiNgay" Label="Số phiếu mỗi ngày" Variant="Variant.Outlined"
+                           HelperText="1 phiếu/ngày: khóa theo ngày, hoàn thành rồi chỉ xem. Nhiều phiếu/ngày: sổ/log (vd KPH).">
+                    <MudSelectItem T="bool" Value="true">1 phiếu/ngày (khóa theo ngày)</MudSelectItem>
+                    <MudSelectItem T="bool" Value="false">Nhiều phiếu/ngày (sổ/log)</MudSelectItem>
+                </MudSelect>
             </MudItem>
             <MudItem xs="6" sm="3">
                 <MudNumericField @bind-Value="_input.ThuTu" Label="Thứ tự" Variant="Variant.Outlined" Min="0" />
@@ -309,7 +318,8 @@ else
         _input = new BieuMauEntity
         {
             Id = mau.Id, MaHieu = mau.MaHieu, Ten = mau.Ten, BoCuc = mau.BoCuc, TanSuat = mau.TanSuat,
-            NhomQuyen = mau.NhomQuyen, GhiChuChan = mau.GhiChuChan, KichHoat = mau.KichHoat, ThuTu = mau.ThuTu,
+            NhomQuyen = mau.NhomQuyen, GhiChuChan = mau.GhiChuChan, KichHoat = mau.KichHoat,
+            MotPhieuMoiNgay = mau.MotPhieuMoiNgay, ThuTu = mau.ThuTu,
             Truong = mau.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMau
             {
                 Ten = t.Ten, Ma = t.Ma, Kieu = t.Kieu, LaDauPhieu = t.LaDauPhieu, BatBuoc = t.BatBuoc, DonVi = t.DonVi,
