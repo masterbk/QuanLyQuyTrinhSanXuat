@@ -213,19 +213,19 @@ public sealed record BieuMauDto(
     IReadOnlyList<TruongBieuMauDto> Truong, IReadOnlyList<HangMucBieuMauDto> HangMuc);
 
 public sealed record TruongBieuMauDto(
-    string Ma, string Ten, string Kieu, bool BatBuoc, string? DonVi, string? GiaTriChuan,
+    string Ma, string Ten, string Kieu, bool LaDauPhieu, bool BatBuoc, string? DonVi, string? GiaTriChuan,
     string? TuyChonCsv, string? Nhom);
 
 public sealed record HangMucBieuMauDto(int Id, string Ten, string? DienGiai, string? TanSuat);
 
 public sealed record PhieuGhiNhanDto(
-    int Id, int BieuMauId, DateOnly Ngay, string? Ca, string? KhuVuc, string? NguoiLap,
+    int Id, int BieuMauId, DateOnly Ngay, string GiaTriDauJson, string? NguoiLap,
     string TrangThai, string? GhiChu, DateTime ThoiGianUtc, IReadOnlyList<DongGhiNhanDto> Dong);
 
 public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string GiaTriJson, string? GhiChu);
 
 public sealed record TaoPhieuRequest(
-    int BieuMauId, DateOnly? Ngay, string? Ca, string? KhuVuc, string? GhiChu,
+    int BieuMauId, DateOnly? Ngay, IReadOnlyDictionary<string, string?>? GiaTriDau, string? GhiChu,
     IReadOnlyList<DongGhiNhanRequest>? Dong, bool? HoanThanh);
 
 /// <summary>Một dòng của phiếu: giá trị theo khoá trường (GiaTri["ma_truong"] = giá trị) + hạng mục (checklist).</summary>

@@ -24,12 +24,14 @@ class ManNhapPhieu extends ConsumerStatefulWidget {
 
 class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   DateTime _ngay = DateTime.now();
-  final _ca = TextEditingController();
-  final _khuVuc = TextEditingController();
   final _ghiChu = TextEditingController();
+  final _DongNhap _dauPhieu = _DongNhap(); // giá trị các trường đầu phiếu
   late List<_DongNhap> _dong;
   int? _phieuId; // phiếu nháp đang nhập tiếp (null = tạo mới)
   bool _dangLuu = false;
+
+  List<TruongBieuMau> get _truongDau => widget.mau.truong.where((t) => t.laDauPhieu).toList();
+  List<TruongBieuMau> get _truongDong => widget.mau.truong.where((t) => !t.laDauPhieu).toList();
 
   @override
   void initState() {
@@ -46,10 +48,12 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       setState(() {
         _phieuId = nhap?.id;
         _dong = _dungDongBanDau();
-        _ca.text = nhap?.ca ?? '';
-        _khuVuc.text = nhap?.khuVuc ?? '';
+        _dauPhieu.giaTri.clear();
         _ghiChu.text = nhap?.ghiChu ?? '';
-        if (nhap != null) _apDungNhap(nhap);
+        if (nhap != null) {
+          _dauPhieu.giaTri.addAll(nhap.giaTriDau);
+          _apDungNhap(nhap);
+        }
       });
     } catch (_) {
       // Lỗi tải nháp -> coi như phiếu mới.
@@ -88,8 +92,6 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
 
   @override
   void dispose() {
-    _ca.dispose();
-    _khuVuc.dispose();
     _ghiChu.dispose();
     super.dispose();
   }
@@ -125,14 +127,10 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
               ]),
             ),
           const SizedBox(height: 12),
-          // Ngày + ca + khu vực
-          Row(children: [
-            Expanded(child: _oNgay()),
-            const SizedBox(width: 12),
-            Expanded(child: _oText(_ca, 'Ca / buổi', hint: 'vd Đầu ca, Sáng')),
-          ]),
-          const SizedBox(height: 12),
-          _oText(_khuVuc, 'Khu vực / bộ phận', hint: 'vd khu sản xuất, biển số xe'),
+          _oNgay(),
+          // Trường đầu phiếu (khu vực, biển số, tổ... - do biểu mẫu khai).
+          for (final t in _truongDau)
+            Padding(padding: const EdgeInsets.only(top: 12), child: _oTruong(_dauPhieu, t)),
           const SizedBox(height: 16),
 
           if (m.laChecklist)
@@ -254,7 +252,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   List<Widget> _theoNhom(_DongNhap dong) {
     final w = <Widget>[];
     String? nhomHienTai;
-    for (final t in widget.mau.truong) {
+    for (final t in _truongDong) {
       if ((t.nhom ?? '') != (nhomHienTai ?? '') && (t.nhom ?? '').isNotEmpty) {
         nhomHienTai = t.nhom;
         w.add(Padding(
@@ -426,7 +424,10 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   Future<void> _luu(bool hoanThanh) async {
     // Trường bắt buộc chỉ bắt khi Hoàn thành (Lưu nháp cho phép thiếu).
     if (hoanThanh) {
-      final batBuoc = widget.mau.truong.where((t) => t.batBuoc).toList();
+      for (final t in _truongDau.where((t) => t.batBuoc)) {
+        if ((_dauPhieu.giaTri[t.ma] ?? '').trim().isEmpty) { _bao('Thiếu "${t.ten}".'); return; }
+      }
+      final batBuoc = _truongDong.where((t) => t.batBuoc).toList();
       for (final d in _dong) {
         for (final t in batBuoc) {
           if ((d.giaTri[t.ma] ?? '').trim().isEmpty) {
@@ -445,40 +446,23 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       return;
     }
 
-    final than = {
-      'bieuMauId': widget.mau.id,
-      'ngay': _ngay,
-      'ca': _ca.text.trim().isEmpty ? null : _ca.text.trim(),
-      'khuVuc': _khuVuc.text.trim().isEmpty ? null : _khuVuc.text.trim(),
-      'ghiChu': _ghiChu.text.trim().isEmpty ? null : _ghiChu.text.trim(),
-      'dong': guiDong
-          .map((d) => {'hangMucBieuMauId': d.hangMuc?.id, 'giaTri': d.giaTri, 'ghiChu': d.ghiChu})
-          .toList(),
-    };
+    final giaTriDau = Map<String, String>.fromEntries(
+        _dauPhieu.giaTri.entries.where((e) => e.value.trim().isNotEmpty));
+    final dongGui = guiDong
+        .map((d) => {'hangMucBieuMauId': d.hangMuc?.id, 'giaTri': d.giaTri, 'ghiChu': d.ghiChu})
+        .toList();
+    final ghiChu = _ghiChu.text.trim().isEmpty ? null : _ghiChu.text.trim();
 
     setState(() => _dangLuu = true);
     try {
       final kho = ref.read(khoBieuMauProvider);
       final String tb;
       if (_phieuId != null) {
-        tb = await kho.capNhatPhieu(
-            id: _phieuId!,
-            bieuMauId: than['bieuMauId'] as int,
-            ngay: than['ngay'] as DateTime,
-            ca: than['ca'] as String?,
-            khuVuc: than['khuVuc'] as String?,
-            ghiChu: than['ghiChu'] as String?,
-            dong: than['dong'] as List<Map<String, dynamic>>,
-            hoanThanh: hoanThanh);
+        tb = await kho.capNhatPhieu(id: _phieuId!, bieuMauId: widget.mau.id, ngay: _ngay,
+            giaTriDau: giaTriDau, ghiChu: ghiChu, dong: dongGui, hoanThanh: hoanThanh);
       } else {
-        tb = await kho.taoPhieu(
-            bieuMauId: than['bieuMauId'] as int,
-            ngay: than['ngay'] as DateTime,
-            ca: than['ca'] as String?,
-            khuVuc: than['khuVuc'] as String?,
-            ghiChu: than['ghiChu'] as String?,
-            dong: than['dong'] as List<Map<String, dynamic>>,
-            hoanThanh: hoanThanh);
+        tb = await kho.taoPhieu(bieuMauId: widget.mau.id, ngay: _ngay,
+            giaTriDau: giaTriDau, ghiChu: ghiChu, dong: dongGui, hoanThanh: hoanThanh);
       }
       if (!mounted) return;
       if (hoanThanh) {

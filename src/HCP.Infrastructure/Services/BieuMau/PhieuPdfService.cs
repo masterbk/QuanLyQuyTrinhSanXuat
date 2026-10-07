@@ -64,7 +64,9 @@ public sealed class PhieuPdfService : IPhieuPdfService
             };
         }
 
-        var truong = mau.Truong.OrderBy(t => t.ThuTu).ToList();
+        var truongDau = mau.Truong.Where(t => t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList();
+        var truong = mau.Truong.Where(t => !t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList();
+        var giaTriDau = DocGiaTri(phieu.GiaTriDauJson);
         var hangMucTen = mau.HangMuc.ToDictionary(h => h.Id, h => h.Ten);
         var laChecklist = mau.BoCuc == BoCucBieuMau.Checklist;
 
@@ -90,8 +92,13 @@ public sealed class PhieuPdfService : IPhieuPdfService
                     {
                         t.Span("Ngày: ").SemiBold();
                         t.Span($"{phieu.Ngay:dd/MM/yyyy}   ");
-                        if (!string.IsNullOrWhiteSpace(phieu.Ca)) { t.Span("Ca: ").SemiBold(); t.Span($"{phieu.Ca}   "); }
-                        if (!string.IsNullOrWhiteSpace(phieu.KhuVuc)) { t.Span("Khu vực: ").SemiBold(); t.Span($"{phieu.KhuVuc}   "); }
+                        foreach (var td in truongDau)
+                        {
+                            var v = Resolve(td, giaTriDau.GetValueOrDefault(td.Ma));
+                            if (string.IsNullOrWhiteSpace(v)) continue;
+                            t.Span($"{td.Ten}: ").SemiBold();
+                            t.Span($"{v}   ");
+                        }
                         if (!string.IsNullOrWhiteSpace(phieu.NguoiLap))
                         {
                             t.Span("Người lập: ").SemiBold();

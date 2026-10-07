@@ -678,8 +678,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
 
         var phieu = builder.Entity<PhieuGhiNhan>();
         phieu.ToTable("PhieuGhiNhan");
-        phieu.Property(p => p.Ca).HasMaxLength(100);
-        phieu.Property(p => p.KhuVuc).HasMaxLength(255);
+        phieu.Property(p => p.GiaTriDauJson).IsRequired();
         phieu.Property(p => p.NguoiLap).HasMaxLength(100);
         phieu.Property(p => p.NguoiThamTra).HasMaxLength(100);
         phieu.Property(p => p.GhiChu).HasMaxLength(2000);

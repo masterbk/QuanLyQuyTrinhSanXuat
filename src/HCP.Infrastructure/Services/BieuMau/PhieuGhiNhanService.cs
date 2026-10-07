@@ -64,7 +64,8 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         if (!mau.KichHoat) return KetQuaThaoTac.Loi("Biểu mẫu đã ngừng kích hoạt.");
         if (phieu.Ngay == default) phieu.Ngay = GioVietNam.HomNay;
 
-        var loi = KiemTraChuanHoaDong(mau, phieu.Dong ?? new(), hoanThanh);
+        var loi = KiemTraChuanHoaDong(mau, phieu.Dong ?? new(), hoanThanh)
+                  ?? ChuanHoaDauPhieu(mau, phieu, hoanThanh);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
         phieu.TrangThai = hoanThanh ? TrangThaiPhieu.DaGhiNhan : TrangThaiPhieu.Nhap;
@@ -89,11 +90,11 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         if (mau is null) return KetQuaThaoTac.Loi("Không tìm thấy biểu mẫu.");
 
         var dongMoi = phieu.Dong ?? new List<DongGhiNhan>();
-        var loi = KiemTraChuanHoaDong(mau, dongMoi, hoanThanh);
+        var loi = KiemTraChuanHoaDong(mau, dongMoi, hoanThanh)
+                  ?? ChuanHoaDauPhieu(mau, phieu, hoanThanh);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
-        goc.Ca = phieu.Ca;
-        goc.KhuVuc = phieu.KhuVuc;
+        goc.GiaTriDauJson = phieu.GiaTriDauJson;
         goc.GhiChu = phieu.GhiChu;
         goc.TrangThai = hoanThanh ? TrangThaiPhieu.DaGhiNhan : TrangThaiPhieu.Nhap;
         goc.ThoiGianUtc = DateTime.UtcNow;
@@ -118,7 +119,7 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
     private static string? KiemTraChuanHoaDong(BieuMauEntity mau, IList<DongGhiNhan> dong, bool hoanThanh)
     {
         if (dong.Count == 0) return "Phiếu phải có ít nhất một dòng dữ liệu.";
-        var truongBatBuoc = mau.Truong.Where(t => t.BatBuoc).ToList();
+        var truongBatBuoc = mau.Truong.Where(t => t.BatBuoc && !t.LaDauPhieu).ToList();
         var hangMucHopLe = mau.HangMuc.Select(h => h.Id).ToHashSet();
         var thuTu = 0;
         foreach (var d in dong)
@@ -150,6 +151,29 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
                     if (!giaTri.TryGetValue(t.Ma, out var v) || string.IsNullOrWhiteSpace(v))
                         return $"Thiếu giá trị bắt buộc \"{t.Ten}\".";
         }
+        return null;
+    }
+
+    /// <summary>Chuẩn hoá JSON đầu phiếu + kiểm tra trường đầu phiếu bắt buộc (chỉ khi hoàn thành).</summary>
+    private static string? ChuanHoaDauPhieu(BieuMauEntity mau, PhieuGhiNhan phieu, bool hoanThanh)
+    {
+        Dictionary<string, string?> giaTri;
+        try
+        {
+            giaTri = string.IsNullOrWhiteSpace(phieu.GiaTriDauJson)
+                ? new()
+                : JsonSerializer.Deserialize<Dictionary<string, string?>>(phieu.GiaTriDauJson) ?? new();
+        }
+        catch (JsonException)
+        {
+            return "Dữ liệu đầu phiếu không hợp lệ.";
+        }
+        phieu.GiaTriDauJson = JsonSerializer.Serialize(giaTri);
+
+        if (hoanThanh)
+            foreach (var t in mau.Truong.Where(t => t.LaDauPhieu && t.BatBuoc))
+                if (!giaTri.TryGetValue(t.Ma, out var v) || string.IsNullOrWhiteSpace(v))
+                    return $"Thiếu thông tin đầu phiếu bắt buộc \"{t.Ten}\".";
         return null;
     }
 }

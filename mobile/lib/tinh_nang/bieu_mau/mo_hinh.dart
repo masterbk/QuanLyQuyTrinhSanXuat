@@ -47,6 +47,7 @@ class TruongBieuMau {
   final String ma;
   final String ten;
   final String kieu; // Text | So | Gio | Ngay | DatKhongDat | ChonSanPham | ChonNhanSu | ChonNcc | ChonCoSo | Anh | LuaChon
+  final bool laDauPhieu; // true = trường đầu phiếu (nhập 1 lần cho cả phiếu)
   final bool batBuoc;
   final String? donVi;
   final String? giaTriChuan;
@@ -57,6 +58,7 @@ class TruongBieuMau {
     required this.ma,
     required this.ten,
     required this.kieu,
+    this.laDauPhieu = false,
     this.batBuoc = false,
     this.donVi,
     this.giaTriChuan,
@@ -71,6 +73,7 @@ class TruongBieuMau {
         ma: j['ma'] as String? ?? '',
         ten: j['ten'] as String? ?? '',
         kieu: j['kieu'] as String? ?? 'Text',
+        laDauPhieu: j['laDauPhieu'] as bool? ?? false,
         batBuoc: j['batBuoc'] as bool? ?? false,
         donVi: j['donVi'] as String?,
         giaTriChuan: j['giaTriChuan'] as String?,
@@ -99,8 +102,7 @@ class PhieuGhiNhan {
   final int id;
   final int bieuMauId;
   final DateTime ngay;
-  final String? ca;
-  final String? khuVuc;
+  final Map<String, String> giaTriDau; // giá trị các trường đầu phiếu
   final String? nguoiLap;
   final String trangThai;
   final String? ghiChu;
@@ -110,27 +112,34 @@ class PhieuGhiNhan {
     required this.id,
     required this.bieuMauId,
     required this.ngay,
-    this.ca,
-    this.khuVuc,
+    this.giaTriDau = const {},
     this.nguoiLap,
     this.trangThai = 'DaGhiNhan',
     this.ghiChu,
     this.dong = const [],
   });
 
-  factory PhieuGhiNhan.tuJson(Map<String, dynamic> j) => PhieuGhiNhan(
-        id: j['id'] as int? ?? 0,
-        bieuMauId: j['bieuMauId'] as int? ?? 0,
-        ngay: DateTime.tryParse(j['ngay'] as String? ?? '') ?? DateTime.now(),
-        ca: j['ca'] as String?,
-        khuVuc: j['khuVuc'] as String?,
-        nguoiLap: j['nguoiLap'] as String?,
-        trangThai: j['trangThai'] as String? ?? 'DaGhiNhan',
-        ghiChu: j['ghiChu'] as String?,
-        dong: ((j['dong'] as List?) ?? const [])
-            .map((e) => DongGhiNhan.tuJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+  factory PhieuGhiNhan.tuJson(Map<String, dynamic> j) {
+    Map<String, String> dau = {};
+    final raw = j['giaTriDauJson'];
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        dau = (jsonDecode(raw) as Map<String, dynamic>).map((k, v) => MapEntry(k, v?.toString() ?? ''));
+      } catch (_) {}
+    }
+    return PhieuGhiNhan(
+      id: j['id'] as int? ?? 0,
+      bieuMauId: j['bieuMauId'] as int? ?? 0,
+      ngay: DateTime.tryParse(j['ngay'] as String? ?? '') ?? DateTime.now(),
+      giaTriDau: dau,
+      nguoiLap: j['nguoiLap'] as String?,
+      trangThai: j['trangThai'] as String? ?? 'DaGhiNhan',
+      ghiChu: j['ghiChu'] as String?,
+      dong: ((j['dong'] as List?) ?? const [])
+          .map((e) => DongGhiNhan.tuJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }
 
 class DongGhiNhan {

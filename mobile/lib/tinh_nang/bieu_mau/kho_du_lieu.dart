@@ -28,19 +28,18 @@ class KhoBieuMau {
     return r is Map<String, dynamic> ? PhieuGhiNhan.tuJson(r) : null;
   }
 
-  /// Tạo phiếu mới. [hoanThanh]=false lưu nháp (nhập tiếp sau). [dong]: mỗi dòng
-  /// {hangMucBieuMauId?, giaTri: {ma_truong: giá trị}, ghiChu?}.
+  /// Tạo phiếu mới. [hoanThanh]=false lưu nháp (nhập tiếp sau). [giaTriDau]: giá trị trường đầu phiếu.
+  /// [dong]: mỗi dòng {hangMucBieuMauId?, giaTri: {ma_truong: giá trị}, ghiChu?}.
   Future<String> taoPhieu({
     required int bieuMauId,
     DateTime? ngay,
-    String? ca,
-    String? khuVuc,
+    Map<String, String>? giaTriDau,
     String? ghiChu,
     required List<Map<String, dynamic>> dong,
     bool hoanThanh = true,
   }) async {
-    final j = await _api.post('/api/v1/phieu-ghi-nhan', than: _than(bieuMauId, ngay, ca, khuVuc, ghiChu, dong, hoanThanh))
-        as Map<String, dynamic>;
+    final j = await _api.post('/api/v1/phieu-ghi-nhan',
+        than: _than(bieuMauId, ngay, giaTriDau, ghiChu, dong, hoanThanh)) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
   }
 
@@ -49,24 +48,22 @@ class KhoBieuMau {
     required int id,
     required int bieuMauId,
     DateTime? ngay,
-    String? ca,
-    String? khuVuc,
+    Map<String, String>? giaTriDau,
     String? ghiChu,
     required List<Map<String, dynamic>> dong,
     bool hoanThanh = true,
   }) async {
     final j = await _api.put('/api/v1/phieu-ghi-nhan/$id',
-        than: _than(bieuMauId, ngay, ca, khuVuc, ghiChu, dong, hoanThanh)) as Map<String, dynamic>;
+        than: _than(bieuMauId, ngay, giaTriDau, ghiChu, dong, hoanThanh)) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
   }
 
-  Map<String, dynamic> _than(int bieuMauId, DateTime? ngay, String? ca, String? khuVuc, String? ghiChu,
+  Map<String, dynamic> _than(int bieuMauId, DateTime? ngay, Map<String, String>? giaTriDau, String? ghiChu,
           List<Map<String, dynamic>> dong, bool hoanThanh) =>
       {
         'bieuMauId': bieuMauId,
         'ngay': ngay == null ? null : _chuoiNgay(ngay),
-        'ca': ca,
-        'khuVuc': khuVuc,
+        'giaTriDau': giaTriDau ?? <String, String>{},
         'ghiChu': ghiChu,
         'dong': dong,
         'hoanThanh': hoanThanh,

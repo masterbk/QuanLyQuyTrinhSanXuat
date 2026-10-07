@@ -46,8 +46,6 @@ else
         <HeaderContent>
             <MudTh>Ngày</MudTh>
             <MudTh>Biểu mẫu</MudTh>
-            <MudTh>Ca</MudTh>
-            <MudTh>Khu vực</MudTh>
             <MudTh>Người lập</MudTh>
             <MudTh Style="text-align:center">Số dòng</MudTh>
             <MudTh Style="width:1%"></MudTh>
@@ -55,8 +53,6 @@ else
         <RowTemplate>
             <MudTd DataLabel="Ngày">@context.Ngay.ToString("dd/MM/yyyy")</MudTd>
             <MudTd DataLabel="Biểu mẫu">@TenMau(context.BieuMauId)</MudTd>
-            <MudTd DataLabel="Ca">@context.Ca</MudTd>
-            <MudTd DataLabel="Khu vực">@context.KhuVuc</MudTd>
             <MudTd DataLabel="Người lập">@TenNhanSu(context.NguoiLap)</MudTd>
             <MudTd DataLabel="Số dòng" Style="text-align:center">@context.Dong.Count</MudTd>
             <MudTd>

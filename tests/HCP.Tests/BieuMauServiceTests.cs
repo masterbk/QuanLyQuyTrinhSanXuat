@@ -35,7 +35,7 @@ public class BieuMauServiceTests
             var checklist = await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-KT.KCS-01");
             Assert.Equal(BoCucBieuMau.Checklist, checklist.BoCuc);
             var tuLanh = await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-GMP.08-04");
-            Assert.Equal(8, await db.TruongBieuMaus.CountAsync(t => t.BieuMauId == tuLanh.Id));
+            Assert.Equal(9, await db.TruongBieuMaus.CountAsync(t => t.BieuMauId == tuLanh.Id)); // 8 cột + 1 trường đầu phiếu (khu vực)
         }
 
         // Gọi lại không tạo trùng.

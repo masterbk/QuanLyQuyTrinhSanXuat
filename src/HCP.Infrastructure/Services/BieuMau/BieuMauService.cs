@@ -135,8 +135,9 @@ public sealed class BieuMauService : IBieuMauService
     // ==================== Dữ liệu biểu mẫu mẫu (nhóm A + B) ====================
 
     private static TruongBieuMau T(string ma, string ten, KieuTruongBieuMau kieu,
-        string? donVi = null, string? chuan = null, string? nhom = null, bool batBuoc = false) =>
-        new() { Ma = ma, Ten = ten, Kieu = kieu, DonVi = donVi, GiaTriChuan = chuan, Nhom = nhom, BatBuoc = batBuoc };
+        string? donVi = null, string? chuan = null, string? nhom = null, bool batBuoc = false, bool dauPhieu = false) =>
+        new() { Ma = ma, Ten = ten, Kieu = kieu, DonVi = donVi, GiaTriChuan = chuan, Nhom = nhom,
+                BatBuoc = batBuoc, LaDauPhieu = dauPhieu };
 
     private static HangMucBieuMau H(string ten, string? dienGiai = null, string? tanSuat = null) =>
         new() { Ten = ten, DienGiai = dienGiai, TanSuat = tanSuat };
@@ -151,6 +152,7 @@ public sealed class BieuMauService : IBieuMauService
             GhiChuChan = "Kiểm tra buổi sáng (8-9h) và buổi chiều (15-16h).",
             Truong =
             {
+                T("khu_vuc", "Khu vực", KieuTruongBieuMau.Text, dauPhieu: true),
                 T("nhiet_do_dong_sang", "Nhiệt độ tủ đông", KieuTruongBieuMau.So, "°C", nhom: "Buổi sáng (8-9h)", batBuoc: true),
                 T("nhiet_do_mat_sang", "Nhiệt độ tủ mát", KieuTruongBieuMau.So, "°C", nhom: "Buổi sáng (8-9h)"),
                 T("tinh_trang_sang", "Tình trạng hoạt động", KieuTruongBieuMau.DatKhongDat, nhom: "Buổi sáng (8-9h)"),
@@ -169,6 +171,7 @@ public sealed class BieuMauService : IBieuMauService
             GhiChuChan = "Bật đèn 1h sau khi vệ sinh phòng; đóng kín cửa, không còn người. Đèn \"Đạt\" khi bóng sáng bình thường, không nhấp nháy, không nứt.",
             Truong =
             {
+                T("khu_vuc", "Khu vực", KieuTruongBieuMau.Text, dauPhieu: true),
                 T("gio_bat", "Giờ bật", KieuTruongBieuMau.Gio, batBuoc: true),
                 T("gio_tat", "Giờ tắt", KieuTruongBieuMau.Gio),
                 T("den_hoat_dong", "Đèn hoạt động", KieuTruongBieuMau.DatKhongDat),
@@ -185,6 +188,7 @@ public sealed class BieuMauService : IBieuMauService
             GhiChuChan = "Giới hạn nhiệt độ thùng xe ≤ 28°C. Phát hiện tiêu chí Không đạt phải báo ngay QC/quản lý và ghi vào cột Ghi chú KPH. (Dùng ô Khu vực để ghi biển số xe.)",
             Truong =
             {
+                T("bien_so_xe", "Biển số xe", KieuTruongBieuMau.Text, dauPhieu: true),
                 T("dong_phuc_lai_xe", "Đồng phục lái xe", KieuTruongBieuMau.DatKhongDat),
                 T("ben_ngoai_xe", "Bên ngoài xe", KieuTruongBieuMau.DatKhongDat),
                 T("ben_trong_thung", "Bên trong thùng xe", KieuTruongBieuMau.DatKhongDat),
@@ -203,6 +207,7 @@ public sealed class BieuMauService : IBieuMauService
             GhiChuChan = "Đạt ghi X, Không đạt ghi O.",
             Truong =
             {
+                T("khu_vuc", "Khu vực", KieuTruongBieuMau.Text, dauPhieu: true),
                 T("dau_ca", "Đầu ca", KieuTruongBieuMau.DatKhongDat),
                 T("cuoi_ca", "Cuối ca", KieuTruongBieuMau.DatKhongDat),
                 T("ghi_chu", "Ghi chú", KieuTruongBieuMau.Text),
@@ -219,6 +224,7 @@ public sealed class BieuMauService : IBieuMauService
             GhiChuChan = "Cảm quan: Đạt / Không đạt. Bộ phận: Kho nguyên liệu.",
             Truong =
             {
+                T("bo_phan", "Bộ phận", KieuTruongBieuMau.Text, dauPhieu: true),
                 T("loai_nguyen_lieu", "Loại nguyên liệu", KieuTruongBieuMau.Text, batBuoc: true),
                 T("ten_ncc", "Cơ sở cung cấp", KieuTruongBieuMau.ChonNcc),
                 T("so_luong", "Số lượng", KieuTruongBieuMau.Text),
@@ -238,6 +244,7 @@ public sealed class BieuMauService : IBieuMauService
             GhiChuChan = "Ghi giờ vào/ra lò và ký xác nhận cho từng sản phẩm.",
             Truong =
             {
+                T("to", "Tổ", KieuTruongBieuMau.Text, dauPhieu: true),
                 T("san_pham", "Sản phẩm", KieuTruongBieuMau.ChonSanPham, batBuoc: true),
                 T("so_luong", "Số lượng", KieuTruongBieuMau.So),
                 T("thoi_gian_nuong", "Thời gian nướng", KieuTruongBieuMau.Text, donVi: "phút"),
@@ -257,6 +264,8 @@ public sealed class BieuMauService : IBieuMauService
             GhiChuChan = "Ghi nhận sản phẩm/bán thành phẩm không đạt và cách xử lý; báo QC/quản lý.",
             Truong =
             {
+                T("lan_bh", "Lần ban hành", KieuTruongBieuMau.Text, dauPhieu: true),
+                T("bo_phan", "Bộ phận", KieuTruongBieuMau.Text, dauPhieu: true),
                 T("san_pham", "Sản phẩm", KieuTruongBieuMau.ChonSanPham),
                 T("mo_ta", "Mô tả sự không phù hợp", KieuTruongBieuMau.Text, batBuoc: true),
                 T("so_luong", "Số lượng", KieuTruongBieuMau.So),

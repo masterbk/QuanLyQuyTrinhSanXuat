@@ -52,7 +52,8 @@ public class PhieuPdfServiceTests
         {
             var phieu = new PhieuGhiNhan
             {
-                BieuMauId = tuLanhId, Ngay = new DateOnly(2026, 10, 7), KhuVuc = "Khu sản xuất", NguoiLap = "NS01",
+                BieuMauId = tuLanhId, Ngay = new DateOnly(2026, 10, 7),
+                GiaTriDauJson = "{\"khu_vuc\":\"Khu sản xuất\"}", NguoiLap = "NS01",
                 Dong = { new DongGhiNhan { GiaTriJson = "{\"nhiet_do_dong_sang\":\"-18\",\"tinh_trang_sang\":\"Đạt\"}" } }
             };
             Assert.True((await new PhieuGhiNhanService(db).TaoPhieuAsync(phieu)).ThanhCong);

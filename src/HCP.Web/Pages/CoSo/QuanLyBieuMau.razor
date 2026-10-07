@@ -138,6 +138,7 @@ else
                     <th style="width:90px">Đơn vị</th>
                     <th style="width:110px">Chuẩn</th>
                     <th style="min-width:120px">Nhóm cột</th>
+                    <th style="width:75px">Đầu phiếu</th>
                     <th style="width:70px">Bắt buộc</th>
                     <th style="width:40px"></th>
                 </tr>
@@ -158,6 +159,7 @@ else
                         <td><MudTextField @bind-Value="t.DonVi" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
                         <td><MudTextField @bind-Value="t.GiaTriChuan" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
                         <td><MudTextField @bind-Value="t.Nhom" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
+                        <td style="text-align:center"><MudCheckBox @bind-Value="t.LaDauPhieu" Color="Color.Secondary" /></td>
                         <td style="text-align:center"><MudCheckBox @bind-Value="t.BatBuoc" Color="Color.Primary" /></td>
                         <td><MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
                                            OnClick="@(() => _input.Truong.Remove(t))" /></td>
@@ -281,7 +283,7 @@ else
             NhomQuyen = mau.NhomQuyen, GhiChuChan = mau.GhiChuChan, KichHoat = mau.KichHoat, ThuTu = mau.ThuTu,
             Truong = mau.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMau
             {
-                Ten = t.Ten, Ma = t.Ma, Kieu = t.Kieu, BatBuoc = t.BatBuoc, DonVi = t.DonVi,
+                Ten = t.Ten, Ma = t.Ma, Kieu = t.Kieu, LaDauPhieu = t.LaDauPhieu, BatBuoc = t.BatBuoc, DonVi = t.DonVi,
                 GiaTriChuan = t.GiaTriChuan, TuyChonCsv = t.TuyChonCsv, Nhom = t.Nhom
             }).ToList(),
             HangMuc = mau.HangMuc.OrderBy(h => h.ThuTu).Select(h => new HangMucBieuMau

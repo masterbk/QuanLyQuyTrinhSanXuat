@@ -83,8 +83,7 @@ public static class BieuMauApi
     {
         BieuMauId = req.BieuMauId,
         Ngay = req.Ngay ?? default,
-        Ca = req.Ca,
-        KhuVuc = req.KhuVuc,
+        GiaTriDauJson = JsonSerializer.Serialize(req.GiaTriDau ?? new Dictionary<string, string?>()),
         GhiChu = req.GhiChu,
         NguoiLap = nguoiLap,
         Dong = (req.Dong ?? Array.Empty<DongGhiNhanRequest>()).Select(d => new DongGhiNhan
@@ -98,12 +97,12 @@ public static class BieuMauApi
     private static BieuMauDto Map(BieuMauEntity b) => new(
         b.Id, b.MaHieu, b.Ten, b.BoCuc.ToString(), b.TanSuat, b.GhiChuChan,
         b.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMauDto(
-            t.Ma, t.Ten, t.Kieu.ToString(), t.BatBuoc, t.DonVi, t.GiaTriChuan, t.TuyChonCsv, t.Nhom)).ToList(),
+            t.Ma, t.Ten, t.Kieu.ToString(), t.LaDauPhieu, t.BatBuoc, t.DonVi, t.GiaTriChuan, t.TuyChonCsv, t.Nhom)).ToList(),
         b.HangMuc.OrderBy(h => h.ThuTu).Select(h => new HangMucBieuMauDto(
             h.Id, h.Ten, h.DienGiai, h.TanSuat)).ToList());
 
     private static PhieuGhiNhanDto MapPhieu(PhieuGhiNhan p) => new(
-        p.Id, p.BieuMauId, p.Ngay, p.Ca, p.KhuVuc, p.NguoiLap, p.TrangThai.ToString(), p.GhiChu, p.ThoiGianUtc,
+        p.Id, p.BieuMauId, p.Ngay, p.GiaTriDauJson, p.NguoiLap, p.TrangThai.ToString(), p.GhiChu, p.ThoiGianUtc,
         p.Dong.OrderBy(d => d.ThuTu).Select(d => new DongGhiNhanDto(
             d.HangMucBieuMauId, d.ThuTu, d.GiaTriJson, d.GhiChu)).ToList());
 }

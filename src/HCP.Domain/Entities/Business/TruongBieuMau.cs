@@ -18,6 +18,10 @@ public class TruongBieuMau : TenantEntity
 
     public KieuTruongBieuMau Kieu { get; set; } = KieuTruongBieuMau.Text;
 
+    /// <summary>True = trường ĐẦU PHIẾU (nhập một lần cho cả phiếu: khu vực, biển số, tổ, lần BH...);
+    /// false = cột dữ liệu của từng dòng.</summary>
+    public bool LaDauPhieu { get; set; }
+
     public bool BatBuoc { get; set; }
 
     /// <summary>Đơn vị (cho kiểu Số), vd "°C", "phút".</summary>

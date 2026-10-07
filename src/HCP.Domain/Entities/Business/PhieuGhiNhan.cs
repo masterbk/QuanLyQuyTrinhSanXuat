@@ -16,11 +16,8 @@ public class PhieuGhiNhan : TenantEntity
 
     public DateOnly Ngay { get; set; }
 
-    /// <summary>Ca / buổi (mô tả tự do), vd "Đầu ca", "Sáng". Null nếu không áp dụng.</summary>
-    public string? Ca { get; set; }
-
-    /// <summary>Khu vực / bộ phận / ngữ cảnh (vd khu sản xuất, biển số xe, mã thiết bị).</summary>
-    public string? KhuVuc { get; set; }
+    /// <summary>Giá trị các trường ĐẦU PHIẾU (khu vực, biển số, tổ...): JSON {ma_truong: giá trị}.</summary>
+    public string GiaTriDauJson { get; set; } = "{}";
 
     /// <summary>Mã nhân sự người lập phiếu.</summary>
     public string? NguoiLap { get; set; }
