@@ -28,7 +28,11 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   final _DongNhap _dauPhieu = _DongNhap(); // giá trị các trường đầu phiếu
   late List<_DongNhap> _dong;
   int? _phieuId; // phiếu nháp đang nhập tiếp (null = tạo mới)
+  int _napLan = 0; // tăng mỗi lần nạp lại (đổi ngày) để ép các ô initialValue dựng lại
   bool _dangLuu = false;
+
+  /// Khoá ô nhập: đổi khi nạp lại (ngày khác) hoặc khi dòng bị thay -> Flutter dựng ô mới, áp lại initialValue.
+  Key _khoaO(_DongNhap dong, TruongBieuMau t) => ValueKey('${_napLan}_${identityHashCode(dong)}_${t.ma}');
 
   List<TruongBieuMau> get _truongDau => widget.mau.truong.where((t) => t.laDauPhieu).toList();
   List<TruongBieuMau> get _truongDong => widget.mau.truong.where((t) => !t.laDauPhieu).toList();
@@ -46,6 +50,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       final nhap = await ref.read(khoBieuMauProvider).phieuNhap(widget.mau.id, _ngay);
       if (!mounted) return;
       setState(() {
+        _napLan++;
         _phieuId = nhap?.id;
         _dong = _dungDongBanDau();
         _dauPhieu.giaTri.clear();
@@ -296,6 +301,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
 
   Widget _oNhap(_DongNhap dong, TruongBieuMau t, String nhan, String? chuan, {bool soL = false}) =>
       TextFormField(
+        key: _khoaO(dong, t),
         initialValue: dong.giaTri[t.ma],
         keyboardType: soL ? const TextInputType.numberWithOptions(decimal: true, signed: true) : TextInputType.text,
         decoration: InputDecoration(labelText: nhan, helperText: chuan, border: const OutlineInputBorder(), isDense: true),
@@ -361,6 +367,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     final ds = dm.value ?? const <MucChon>[];
     final hople = ds.any((m) => m.ma == dong.giaTri[t.ma]) ? dong.giaTri[t.ma] : null;
     return DropdownButtonFormField<String>(
+      key: _khoaO(dong, t),
       initialValue: hople,
       isExpanded: true,
       decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
@@ -373,6 +380,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     final ds = t.tuyChon;
     final hople = ds.contains(dong.giaTri[t.ma]) ? dong.giaTri[t.ma] : null;
     return DropdownButtonFormField<String>(
+      key: _khoaO(dong, t),
       initialValue: hople,
       isExpanded: true,
       decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
