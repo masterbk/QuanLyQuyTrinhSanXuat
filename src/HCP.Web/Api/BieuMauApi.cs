@@ -49,30 +49,51 @@ public static class BieuMauApi
             return p is null ? Results.NotFound(new LoiDto("Không tìm thấy phiếu.")) : Results.Ok(MapPhieu(p));
         });
 
+        // Phiếu NHÁP của người đang đăng nhập cho một biểu mẫu + ngày (để mở nhập tiếp). 204 nếu chưa có.
+        nhom.MapGet("/phieu-ghi-nhan/nhap", async (IPhieuGhiNhanService svc, ClaimsPrincipal user, AppDbContext db,
+                                                   int bieuMauId, DateOnly ngay) =>
+        {
+            var nguoiLap = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
+            var p = await svc.LayPhieuNhapAsync(bieuMauId, ngay, nguoiLap);
+            return p is null ? Results.NoContent() : Results.Ok(MapPhieu(p));
+        });
+
         nhom.MapPost("/phieu-ghi-nhan", async (TaoPhieuRequest req, IPhieuGhiNhanService svc,
                                                ClaimsPrincipal user, AppDbContext db) =>
         {
-            var phieu = new PhieuGhiNhan
-            {
-                BieuMauId = req.BieuMauId,
-                Ngay = req.Ngay ?? default,
-                Ca = req.Ca,
-                KhuVuc = req.KhuVuc,
-                GhiChu = req.GhiChu,
-                NguoiLap = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db),
-                Dong = (req.Dong ?? Array.Empty<DongGhiNhanRequest>()).Select(d => new DongGhiNhan
-                {
-                    HangMucBieuMauId = d.HangMucBieuMauId,
-                    GiaTriJson = JsonSerializer.Serialize(d.GiaTri ?? new Dictionary<string, string?>()),
-                    GhiChu = d.GhiChu
-                }).ToList()
-            };
-            var kq = await svc.TaoPhieuAsync(phieu);
+            var phieu = TuRequest(req, await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db));
+            var kq = await svc.TaoPhieuAsync(phieu, req.HoanThanh ?? true);
             return kq.ThanhCong
                 ? Results.Created($"/api/v1/phieu-ghi-nhan/{phieu.Id}", new KetQuaDto(true, kq.ThongBao))
                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         });
+
+        nhom.MapPut("/phieu-ghi-nhan/{id:int}", async (int id, TaoPhieuRequest req, IPhieuGhiNhanService svc,
+                                                       ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var phieu = TuRequest(req, await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db));
+            phieu.Id = id;
+            var kq = await svc.CapNhatPhieuAsync(phieu, req.HoanThanh ?? true);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        });
     }
+
+    private static PhieuGhiNhan TuRequest(TaoPhieuRequest req, string? nguoiLap) => new()
+    {
+        BieuMauId = req.BieuMauId,
+        Ngay = req.Ngay ?? default,
+        Ca = req.Ca,
+        KhuVuc = req.KhuVuc,
+        GhiChu = req.GhiChu,
+        NguoiLap = nguoiLap,
+        Dong = (req.Dong ?? Array.Empty<DongGhiNhanRequest>()).Select(d => new DongGhiNhan
+        {
+            HangMucBieuMauId = d.HangMucBieuMauId,
+            GiaTriJson = JsonSerializer.Serialize(d.GiaTri ?? new Dictionary<string, string?>()),
+            GhiChu = d.GhiChu
+        }).ToList()
+    };
 
     private static BieuMauDto Map(BieuMauEntity b) => new(
         b.Id, b.MaHieu, b.Ten, b.BoCuc.ToString(), b.TanSuat, b.GhiChuChan,

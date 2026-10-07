@@ -18,6 +18,15 @@ public interface IPhieuGhiNhanService
 
     Task<PhieuGhiNhan?> LayPhieuTheoIdAsync(int id, CancellationToken ct = default);
 
-    /// <summary>Tạo một phiếu ghi nhận mới (kiểm tra theo định nghĩa biểu mẫu).</summary>
-    Task<KetQuaThaoTac> TaoPhieuAsync(PhieuGhiNhan phieu, CancellationToken ct = default);
+    /// <summary>Phiếu NHÁP (chưa hoàn thành) của một biểu mẫu cho một ngày/người lập - để mở nhập tiếp. Null nếu chưa có.</summary>
+    Task<PhieuGhiNhan?> LayPhieuNhapAsync(int bieuMauId, DateOnly ngay, string? nguoiLap, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tạo một phiếu ghi nhận. <paramref name="hoanThanh"/>=false lưu NHÁP (cho phép thiếu trường bắt buộc, nhập
+    /// tiếp sau); =true chốt (kiểm đủ trường bắt buộc).
+    /// </summary>
+    Task<KetQuaThaoTac> TaoPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true, CancellationToken ct = default);
+
+    /// <summary>Cập nhật một phiếu còn NHÁP (nhập tiếp). <paramref name="hoanThanh"/>=true thì chốt sau khi cập nhật.</summary>
+    Task<KetQuaThaoTac> CapNhatPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true, CancellationToken ct = default);
 }

@@ -21,7 +21,15 @@ class KhoBieuMau {
         .map((e) => PhieuGhiNhan.tuJson(e as Map<String, dynamic>)).toList();
   }
 
-  /// Gửi phiếu. [dong]: mỗi dòng {hangMucBieuMauId?, giaTri: {ma_truong: giá trị}, ghiChu?}.
+  /// Phiếu NHÁP của tôi cho biểu mẫu + ngày (để nhập tiếp). Null nếu chưa có.
+  Future<PhieuGhiNhan?> phieuNhap(int bieuMauId, DateTime ngay) async {
+    final r = await _api.get('/api/v1/phieu-ghi-nhan/nhap',
+        thamSo: {'bieuMauId': bieuMauId, 'ngay': _chuoiNgay(ngay)});
+    return r is Map<String, dynamic> ? PhieuGhiNhan.tuJson(r) : null;
+  }
+
+  /// Tạo phiếu mới. [hoanThanh]=false lưu nháp (nhập tiếp sau). [dong]: mỗi dòng
+  /// {hangMucBieuMauId?, giaTri: {ma_truong: giá trị}, ghiChu?}.
   Future<String> taoPhieu({
     required int bieuMauId,
     DateTime? ngay,
@@ -29,17 +37,40 @@ class KhoBieuMau {
     String? khuVuc,
     String? ghiChu,
     required List<Map<String, dynamic>> dong,
+    bool hoanThanh = true,
   }) async {
-    final j = await _api.post('/api/v1/phieu-ghi-nhan', than: {
-      'bieuMauId': bieuMauId,
-      'ngay': ngay == null ? null : _chuoiNgay(ngay),
-      'ca': ca,
-      'khuVuc': khuVuc,
-      'ghiChu': ghiChu,
-      'dong': dong,
-    }) as Map<String, dynamic>;
+    final j = await _api.post('/api/v1/phieu-ghi-nhan', than: _than(bieuMauId, ngay, ca, khuVuc, ghiChu, dong, hoanThanh))
+        as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
   }
+
+  /// Cập nhật phiếu nháp (nhập tiếp). [hoanThanh]=true thì chốt.
+  Future<String> capNhatPhieu({
+    required int id,
+    required int bieuMauId,
+    DateTime? ngay,
+    String? ca,
+    String? khuVuc,
+    String? ghiChu,
+    required List<Map<String, dynamic>> dong,
+    bool hoanThanh = true,
+  }) async {
+    final j = await _api.put('/api/v1/phieu-ghi-nhan/$id',
+        than: _than(bieuMauId, ngay, ca, khuVuc, ghiChu, dong, hoanThanh)) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
+  }
+
+  Map<String, dynamic> _than(int bieuMauId, DateTime? ngay, String? ca, String? khuVuc, String? ghiChu,
+          List<Map<String, dynamic>> dong, bool hoanThanh) =>
+      {
+        'bieuMauId': bieuMauId,
+        'ngay': ngay == null ? null : _chuoiNgay(ngay),
+        'ca': ca,
+        'khuVuc': khuVuc,
+        'ghiChu': ghiChu,
+        'dong': dong,
+        'hoanThanh': hoanThanh,
+      };
 
   // ---- Danh mục để chọn trong trường "Chọn..." ----
   Future<List<MucChon>> nhanSu() => _dm('nhan-su', (j) => MucChon(j['maNhanSu'] as String? ?? '', j['hoTen'] as String? ?? ''));

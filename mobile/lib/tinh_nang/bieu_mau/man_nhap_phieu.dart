@@ -28,12 +28,56 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   final _khuVuc = TextEditingController();
   final _ghiChu = TextEditingController();
   late List<_DongNhap> _dong;
+  int? _phieuId; // phiếu nháp đang nhập tiếp (null = tạo mới)
   bool _dangLuu = false;
 
   @override
   void initState() {
     super.initState();
     _dong = _dungDongBanDau();
+    Future.microtask(_napNhap);
+  }
+
+  /// Nạp phiếu nháp của ngày đang chọn (nếu có) để nhập tiếp.
+  Future<void> _napNhap() async {
+    try {
+      final nhap = await ref.read(khoBieuMauProvider).phieuNhap(widget.mau.id, _ngay);
+      if (!mounted) return;
+      setState(() {
+        _phieuId = nhap?.id;
+        _dong = _dungDongBanDau();
+        _ca.text = nhap?.ca ?? '';
+        _khuVuc.text = nhap?.khuVuc ?? '';
+        _ghiChu.text = nhap?.ghiChu ?? '';
+        if (nhap != null) _apDungNhap(nhap);
+      });
+    } catch (_) {
+      // Lỗi tải nháp -> coi như phiếu mới.
+    }
+  }
+
+  void _apDungNhap(PhieuGhiNhan nhap) {
+    if (widget.mau.laChecklist) {
+      final theoHangMuc = {for (final d in nhap.dong) d.hangMucId: d};
+      for (final o in _dong) {
+        final d = theoHangMuc[o.hangMuc?.id];
+        if (d != null) { o.giaTri.addAll(d.giaTri); o.ghiChu = d.ghiChu; }
+      }
+    } else if (widget.mau.laNhieuDong) {
+      _dong = nhap.dong.map((d) {
+        final o = _DongNhap();
+        o.giaTri.addAll(d.giaTri);
+        o.ghiChu = d.ghiChu;
+        return o;
+      }).toList();
+      if (_dong.isEmpty) _dong = [_DongNhap()];
+    } else {
+      // Theo ngày: một dòng.
+      if (nhap.dong.isNotEmpty) {
+        _dong.first.giaTri.addAll(nhap.dong.first.giaTri);
+        _dong.first.ghiChu = nhap.dong.first.ghiChu;
+      }
+    }
   }
 
   List<_DongNhap> _dungDongBanDau() {
@@ -65,6 +109,21 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         children: [
           Text(m.maHieu, style: Theme.of(context).textTheme.bodySmall),
+          if (_phieuId != null)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                const Icon(Icons.edit_note, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Đang nhập tiếp phiếu nháp của ngày này. Bấm "Hoàn thành" khi xong.',
+                    style: Theme.of(context).textTheme.bodySmall)),
+              ]),
+            ),
           const SizedBox(height: 12),
           // Ngày + ca + khu vực
           Row(children: [
@@ -113,15 +172,26 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       ),
       bottomNavigationBar: Padding(
         padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 12),
-        child: SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: _dangLuu ? null : _luu,
-            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-            child: _dangLuu
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Lưu phiếu'),
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _dangLuu ? null : () => _luu(false),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: const Text('Lưu nháp'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: _dangLuu ? null : () => _luu(true),
+                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: _dangLuu
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Hoàn thành'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -333,7 +403,10 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
                   firstDate: DateTime(2020),
                   lastDate: DateTime(2100),
                 );
-                if (chon != null) setState(() => _ngay = chon);
+                if (chon != null && chon != _ngay) {
+                  setState(() => _ngay = chon);
+                  await _napNhap(); // nạp nháp của ngày mới (nếu có)
+                }
               },
         child: InputDecorator(
           decoration: const InputDecoration(labelText: 'Ngày', border: OutlineInputBorder(), isDense: true,
@@ -350,44 +423,74 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
 
   // ---------- Lưu ----------
 
-  Future<void> _luu() async {
-    // Kiểm tra trường bắt buộc từng dòng.
-    final batBuoc = widget.mau.truong.where((t) => t.batBuoc).toList();
-    for (final d in _dong) {
-      for (final t in batBuoc) {
-        if ((d.giaTri[t.ma] ?? '').trim().isEmpty) {
-          final o = d.hangMuc != null ? ' (${d.hangMuc!.ten})' : '';
-          _bao('Thiếu "${t.ten}"$o.');
-          return;
+  Future<void> _luu(bool hoanThanh) async {
+    // Trường bắt buộc chỉ bắt khi Hoàn thành (Lưu nháp cho phép thiếu).
+    if (hoanThanh) {
+      final batBuoc = widget.mau.truong.where((t) => t.batBuoc).toList();
+      for (final d in _dong) {
+        for (final t in batBuoc) {
+          if ((d.giaTri[t.ma] ?? '').trim().isEmpty) {
+            final o = d.hangMuc != null ? ' (${d.hangMuc!.ten})' : '';
+            _bao('Thiếu "${t.ten}"$o.');
+            return;
+          }
         }
       }
     }
 
-    // Với checklist/nhiều dòng, bỏ dòng hoàn toàn trống để khỏi gửi rác.
+    // Với checklist giữ mọi hạng mục; nhiều dòng/theo ngày bỏ dòng hoàn toàn trống.
     final guiDong = _dong.where((d) => d.hangMuc != null || d.giaTri.values.any((v) => v.trim().isNotEmpty)).toList();
     if (guiDong.isEmpty) {
       _bao('Chưa nhập dữ liệu nào.');
       return;
     }
 
+    final than = {
+      'bieuMauId': widget.mau.id,
+      'ngay': _ngay,
+      'ca': _ca.text.trim().isEmpty ? null : _ca.text.trim(),
+      'khuVuc': _khuVuc.text.trim().isEmpty ? null : _khuVuc.text.trim(),
+      'ghiChu': _ghiChu.text.trim().isEmpty ? null : _ghiChu.text.trim(),
+      'dong': guiDong
+          .map((d) => {'hangMucBieuMauId': d.hangMuc?.id, 'giaTri': d.giaTri, 'ghiChu': d.ghiChu})
+          .toList(),
+    };
+
     setState(() => _dangLuu = true);
     try {
-      final tb = await ref.read(khoBieuMauProvider).taoPhieu(
-            bieuMauId: widget.mau.id,
-            ngay: _ngay,
-            ca: _ca.text.trim().isEmpty ? null : _ca.text.trim(),
-            khuVuc: _khuVuc.text.trim().isEmpty ? null : _khuVuc.text.trim(),
-            ghiChu: _ghiChu.text.trim().isEmpty ? null : _ghiChu.text.trim(),
-            dong: guiDong
-                .map((d) => {
-                      'hangMucBieuMauId': d.hangMuc?.id,
-                      'giaTri': d.giaTri,
-                      'ghiChu': d.ghiChu,
-                    })
-                .toList(),
-          );
+      final kho = ref.read(khoBieuMauProvider);
+      final String tb;
+      if (_phieuId != null) {
+        tb = await kho.capNhatPhieu(
+            id: _phieuId!,
+            bieuMauId: than['bieuMauId'] as int,
+            ngay: than['ngay'] as DateTime,
+            ca: than['ca'] as String?,
+            khuVuc: than['khuVuc'] as String?,
+            ghiChu: than['ghiChu'] as String?,
+            dong: than['dong'] as List<Map<String, dynamic>>,
+            hoanThanh: hoanThanh);
+      } else {
+        tb = await kho.taoPhieu(
+            bieuMauId: than['bieuMauId'] as int,
+            ngay: than['ngay'] as DateTime,
+            ca: than['ca'] as String?,
+            khuVuc: than['khuVuc'] as String?,
+            ghiChu: than['ghiChu'] as String?,
+            dong: than['dong'] as List<Map<String, dynamic>>,
+            hoanThanh: hoanThanh);
+      }
       if (!mounted) return;
-      Navigator.pop(context, tb);
+      if (hoanThanh) {
+        Navigator.pop(context, tb);
+      } else {
+        _bao(tb);
+        // Lấy lại id nháp để lần lưu sau nhập tiếp đúng phiếu.
+        if (_phieuId == null) {
+          final nhap = await kho.phieuNhap(widget.mau.id, _ngay);
+          if (mounted) setState(() => _phieuId = nhap?.id);
+        }
+      }
     } on LoiApi catch (e) {
       _bao(e.thongBao);
     } finally {

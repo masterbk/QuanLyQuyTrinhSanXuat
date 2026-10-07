@@ -1,5 +1,6 @@
 using System.Text.Json;
 using HCP.Domain.Entities.Business;
+using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.BieuMau;
 using Microsoft.EntityFrameworkCore;
@@ -87,6 +88,68 @@ public class PhieuGhiNhanServiceTests
             Assert.True(kq.ThanhCong, kq.ThongBao);
         }
         using (var db = MoDb()) Assert.Equal(1, await db.PhieuGhiNhans.CountAsync());
+    }
+
+    [Fact]
+    public async Task Luu_Nhap_Cho_Thieu_Bat_Buoc_Roi_Nhap_Tiep_Den_Khi_Hoan_Thanh()
+    {
+        await NapMauAsync();
+        int tuLanhId;
+        using (var db = MoDb()) tuLanhId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-GMP.08-04")).Id;
+        var ngay = new DateOnly(2026, 10, 7);
+
+        // Lưu NHÁP buổi sáng - thiếu trường bắt buộc nhiet_do_dong_sang vẫn lưu được.
+        using (var db = MoDb())
+        {
+            var kq = await new PhieuGhiNhanService(db).TaoPhieuAsync(new PhieuGhiNhan
+            {
+                BieuMauId = tuLanhId, Ngay = ngay, NguoiLap = "NS01",
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("nhiet_do_mat_sang", "5")) } }
+            }, hoanThanh: false);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        // Tìm được phiếu nháp để nhập tiếp.
+        int phieuId;
+        using (var db = MoDb())
+        {
+            var nhap = await new PhieuGhiNhanService(db).LayPhieuNhapAsync(tuLanhId, ngay, "NS01");
+            Assert.NotNull(nhap);
+            Assert.Equal(TrangThaiPhieu.Nhap, nhap!.TrangThai);
+            phieuId = nhap.Id;
+        }
+
+        // Cập nhật + Hoàn thành: giờ phải đủ trường bắt buộc.
+        using (var db = MoDb())
+        {
+            var thieu = await new PhieuGhiNhanService(db).CapNhatPhieuAsync(new PhieuGhiNhan
+            {
+                Id = phieuId, Dong = { new DongGhiNhan { GiaTriJson = Json(("nhiet_do_mat_sang", "5")) } }
+            }, hoanThanh: true);
+            Assert.False(thieu.ThanhCong);
+            Assert.Contains("bắt buộc", thieu.ThongBao);
+        }
+        using (var db = MoDb())
+        {
+            var kq = await new PhieuGhiNhanService(db).CapNhatPhieuAsync(new PhieuGhiNhan
+            {
+                Id = phieuId,
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("nhiet_do_dong_sang", "-18"), ("nhiet_do_dong_chieu", "-17")) } }
+            }, hoanThanh: true);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        // Đã hoàn thành: hết nháp, không sửa tiếp được.
+        using (var db = MoDb())
+        {
+            Assert.Null(await new PhieuGhiNhanService(db).LayPhieuNhapAsync(tuLanhId, ngay, "NS01"));
+            var k = await new PhieuGhiNhanService(db).CapNhatPhieuAsync(new PhieuGhiNhan
+            {
+                Id = phieuId, Dong = { new DongGhiNhan { GiaTriJson = Json(("nhiet_do_dong_sang", "-18")) } }
+            }, hoanThanh: true);
+            Assert.False(k.ThanhCong);
+            Assert.Contains("đã hoàn thành", k.ThongBao);
+        }
     }
 
     [Fact]

@@ -226,7 +226,7 @@ public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string Gia
 
 public sealed record TaoPhieuRequest(
     int BieuMauId, DateOnly? Ngay, string? Ca, string? KhuVuc, string? GhiChu,
-    IReadOnlyList<DongGhiNhanRequest>? Dong);
+    IReadOnlyList<DongGhiNhanRequest>? Dong, bool? HoanThanh);
 
 /// <summary>Một dòng của phiếu: giá trị theo khoá trường (GiaTri["ma_truong"] = giá trị) + hạng mục (checklist).</summary>
 public sealed record DongGhiNhanRequest(
