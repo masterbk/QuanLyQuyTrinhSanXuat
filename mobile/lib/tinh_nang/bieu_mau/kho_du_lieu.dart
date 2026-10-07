@@ -95,6 +95,10 @@ final khoBieuMauProvider = Provider<KhoBieuMau>((ref) => KhoBieuMau(ref.watch(ap
 /// Danh sách biểu mẫu người đang đăng nhập được phép điền.
 final bieuMauProvider = FutureProvider<List<BieuMau>>((ref) => ref.watch(khoBieuMauProvider).bieuMau());
 
+/// Phiếu đã ghi trong NGÀY HÔM NAY (mọi biểu mẫu) - để hiện trạng thái "đã nhập/chưa nhập hôm nay".
+final phieuHomNayProvider = FutureProvider.autoDispose<List<PhieuGhiNhan>>(
+    (ref) => ref.watch(khoBieuMauProvider).phieu(ngay: DateTime.now()));
+
 /// Danh mục dùng chung cho các trường chọn (tải một lần).
 final nhanSuBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).nhanSu());
 final coSoBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).coSo());
