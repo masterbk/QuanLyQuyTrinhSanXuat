@@ -133,6 +133,7 @@ else
         <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto">
             <thead>
                 <tr>
+                    <th style="width:76px">Sắp xếp</th>
                     <th style="min-width:160px">Tên</th>
                     <th style="min-width:140px">Kiểu</th>
                     <th style="width:90px">Đơn vị</th>
@@ -147,7 +148,14 @@ else
             <tbody>
                 @foreach (var t in _input.Truong)
                 {
+                    var iT = _input.Truong.IndexOf(t);
                     <tr>
+                        <td style="white-space:nowrap">
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="@(iT == 0)"
+                                           Title="Lên" OnClick="@(() => DoiCho(_input.Truong, iT, iT - 1))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="@(iT == _input.Truong.Count - 1)"
+                                           Title="Xuống" OnClick="@(() => DoiCho(_input.Truong, iT, iT + 1))" />
+                        </td>
                         <td><MudTextField @bind-Value="t.Ten" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
                         <td>
                             <MudSelect T="KieuTruongBieuMau" @bind-Value="t.Kieu" Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -184,6 +192,7 @@ else
             <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto">
                 <thead>
                     <tr>
+                        <th style="width:76px">Sắp xếp</th>
                         <th style="min-width:200px">Hạng mục</th>
                         <th style="min-width:260px">Diễn giải</th>
                         <th style="min-width:150px">Tần suất</th>
@@ -193,7 +202,14 @@ else
                 <tbody>
                     @foreach (var h in _input.HangMuc)
                     {
+                        var iH = _input.HangMuc.IndexOf(h);
                         <tr>
+                            <td style="white-space:nowrap">
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="@(iH == 0)"
+                                               Title="Lên" OnClick="@(() => DoiCho(_input.HangMuc, iH, iH - 1))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="@(iH == _input.HangMuc.Count - 1)"
+                                               Title="Xuống" OnClick="@(() => DoiCho(_input.HangMuc, iH, iH + 1))" />
+                            </td>
                             <td><MudTextField @bind-Value="h.Ten" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
                             <td><MudTextField @bind-Value="h.DienGiai" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
                             <td><MudTextField @bind-Value="h.TanSuat" Variant="Variant.Outlined" Margin="Margin.Dense" /></td>
@@ -264,6 +280,13 @@ else
         KieuTruongBieuMau.LuaChon => "Lựa chọn",
         _ => k.ToString()
     };
+
+    /// <summary>Đổi chỗ hai phần tử để sắp xếp lại thứ tự (thứ tự khi lưu bám theo vị trí trong danh sách).</summary>
+    private static void DoiCho<T>(List<T> ds, int i, int j)
+    {
+        if (i < 0 || j < 0 || i >= ds.Count || j >= ds.Count) return;
+        (ds[i], ds[j]) = (ds[j], ds[i]);
+    }
 
     private void MoForm(BieuMauEntity? mau)
     {
