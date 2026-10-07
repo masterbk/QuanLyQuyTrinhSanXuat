@@ -74,6 +74,39 @@ public class PhieuPdfServiceTests
     }
 
     [Fact]
+    public async Task Sinh_Bao_Cao_Thang_Ra_Dung_Dinh_Dang()
+    {
+        using (var db = MoDb()) await new BieuMauService(db).NapMauMacDinhAsync();
+        int tuLanhId;
+        using (var db = MoDb()) tuLanhId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-GMP.08-04")).Id;
+
+        // Hai phiếu khác ngày trong tháng 10/2026.
+        foreach (var ngay in new[] { new DateOnly(2026, 10, 7), new DateOnly(2026, 10, 8) })
+        {
+            using var db = MoDb();
+            var p = new PhieuGhiNhan
+            {
+                BieuMauId = tuLanhId, Ngay = ngay,
+                Dong = { new DongGhiNhan { GiaTriJson = "{\"nhiet_do_dong_sang\":\"-18\"}" } }
+            };
+            Assert.True((await new PhieuGhiNhanService(db).TaoPhieuAsync(p)).ThanhCong);
+        }
+
+        using (var db = MoDb())
+        {
+            var bytes = await Pdf(db).TaoBaoCaoThangAsync(tuLanhId, 2026, 10);
+            Assert.NotNull(bytes);
+            Assert.True(bytes!.Length > 1000);
+            Assert.Equal(new byte[] { 0x25, 0x50, 0x44, 0x46 }, bytes.Take(4).ToArray());
+        }
+
+        // Tháng không có phiếu vẫn ra PDF (bảng rỗng), không lỗi.
+        using (var db = MoDb()) Assert.NotNull(await Pdf(db).TaoBaoCaoThangAsync(tuLanhId, 2026, 1));
+        // Biểu mẫu không tồn tại -> null.
+        using (var db = MoDb()) Assert.Null(await Pdf(db).TaoBaoCaoThangAsync(999999, 2026, 10));
+    }
+
+    [Fact]
     public async Task Sinh_Pdf_Checklist_Khong_Loi()
     {
         using (var db = MoDb()) await new BieuMauService(db).NapMauMacDinhAsync();

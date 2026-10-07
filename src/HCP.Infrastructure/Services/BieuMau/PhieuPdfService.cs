@@ -14,6 +14,9 @@ public interface IPhieuPdfService
 {
     /// <summary>Trả về PDF của phiếu, hoặc null nếu không tìm thấy.</summary>
     Task<byte[]?> TaoPdfAsync(int phieuId, CancellationToken ct = default);
+
+    /// <summary>PDF báo cáo tháng của một biểu mẫu "theo ngày": mỗi phiếu một dòng, sắp theo ngày. Null nếu không có mẫu.</summary>
+    Task<byte[]?> TaoBaoCaoThangAsync(int bieuMauId, int nam, int thang, CancellationToken ct = default);
 }
 
 public sealed class PhieuPdfService : IPhieuPdfService
@@ -133,6 +136,99 @@ public sealed class PhieuPdfService : IPhieuPdfService
                             table.Cell().Element(O).Text(dong.HangMucBieuMauId is { } hm ? hangMucTen.GetValueOrDefault(hm, "") : "");
                         foreach (var t in truong)
                             table.Cell().Element(O).Text(Resolve(t, giaTri.GetValueOrDefault(t.Ma)));
+                    }
+                });
+
+                page.Footer().Column(col =>
+                {
+                    if (!string.IsNullOrWhiteSpace(mau.GhiChuChan))
+                        col.Item().PaddingTop(4).Text(mau.GhiChuChan).Italic().FontSize(8);
+                    col.Item().PaddingTop(10).Row(r =>
+                    {
+                        r.RelativeItem().Text("");
+                        r.ConstantItem(300).Text("QC thẩm tra: ………………  Ngày: …………  [ ] Đạt   [ ] Không đạt").FontSize(9);
+                    });
+                });
+            });
+        });
+
+        return doc.GeneratePdf();
+    }
+
+    public async Task<byte[]?> TaoBaoCaoThangAsync(int bieuMauId, int nam, int thang, CancellationToken ct = default)
+    {
+        var mau = await _phieu.LayBieuMauAsync(bieuMauId, ct);
+        if (mau is null) return null;
+        var dsPhieu = await _phieu.LayPhieuThangAsync(bieuMauId, nam, thang, ct);
+
+        var nhanSu = (await _nhanSu.LayTatCaAsync(ct)).GroupBy(n => n.MaNhanSu).ToDictionary(g => g.Key, g => g.First().HoTen);
+        var sanPham = (await _sanPham.LayTatCaAsync(ct)).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
+        var ncc = (await _ncc.LayTatCaAsync(ct)).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
+        var coSo = (await _coSo.LayTatCaAsync(ct)).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
+        var tenCongTy = _db.TenantInfo?.Name ?? "";
+
+        string Resolve(TruongBieuMau t, string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "";
+            return t.Kieu switch
+            {
+                KieuTruongBieuMau.ChonNhanSu => nhanSu.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.ChonSanPham => sanPham.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.Ngay => DateOnly.TryParse(raw, out var d) ? d.ToString("dd/MM/yyyy") : raw,
+                _ => raw
+            };
+        }
+
+        var truong = mau.Truong.Where(t => !t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList();
+
+        var doc = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(1, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(9));
+
+                page.Header().Column(col =>
+                {
+                    if (!string.IsNullOrWhiteSpace(tenCongTy))
+                        col.Item().Text(tenCongTy).Bold().FontSize(11);
+                    col.Item().Row(r =>
+                    {
+                        r.RelativeItem();
+                        r.ConstantItem(220).AlignRight().Text($"Mã hiệu: {mau.MaHieu}").FontSize(9);
+                    });
+                    col.Item().PaddingTop(2).AlignCenter().Text(mau.Ten).Bold().FontSize(14);
+                    col.Item().AlignCenter().Text($"BÁO CÁO THÁNG {thang:00}/{nam}").SemiBold().FontSize(11);
+                    col.Item().PaddingTop(4);
+                });
+
+                page.Content().Table(table =>
+                {
+                    table.ColumnsDefinition(cols =>
+                    {
+                        cols.ConstantColumn(54); // Ngày
+                        foreach (var _ in truong) cols.RelativeColumn(2);
+                    });
+                    table.Header(h =>
+                    {
+                        h.Cell().Element(Tieu).Text("Ngày");
+                        foreach (var t in truong) h.Cell().Element(Tieu).Text(TieuDeCot(t));
+                    });
+
+                    foreach (var phieu in dsPhieu)
+                    {
+                        var dong = phieu.Dong.OrderBy(d => d.ThuTu).ToList();
+                        if (dong.Count == 0) dong.Add(new DongGhiNhan());
+                        foreach (var d in dong)
+                        {
+                            var giaTri = DocGiaTri(d.GiaTriJson);
+                            table.Cell().Element(O).Text(phieu.Ngay.ToString("dd/MM"));
+                            foreach (var t in truong)
+                                table.Cell().Element(O).Text(Resolve(t, giaTri.GetValueOrDefault(t.Ma)));
+                        }
                     }
                 });
 

@@ -1,6 +1,7 @@
 @page "/app/phieu-ghi-nhan"
 @using HCP.Domain.Constants
 @using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
 @using HCP.Infrastructure.Services.BieuMau
 @using HCP.Infrastructure.Services.DanhMuc
 @using Microsoft.AspNetCore.Authorization
@@ -31,6 +32,30 @@
                    DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
                    Style="min-width:180px" />
 </div>
+
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <div class="d-flex flex-wrap gap-2 align-center">
+        <MudText Typo="Typo.subtitle2" Class="mr-2">Báo cáo tháng (biểu mẫu theo ngày):</MudText>
+        <MudSelect T="int?" @bind-Value="_bcMauId" Label="Biểu mẫu" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   Style="min-width:260px">
+            @foreach (var m in _bieuMau.Where(b => b.BoCuc == BoCucBieuMau.TheoNgay))
+            {
+                <MudSelectItem T="int?" Value="@m.Id">@m.Ten (@m.MaHieu)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" @bind-Value="_bcThang" Label="Tháng" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:110px">
+            @for (var t = 1; t <= 12; t++)
+            {
+                var th = t;
+                <MudSelectItem T="int" Value="@th">Tháng @th</MudSelectItem>
+            }
+        </MudSelect>
+        <MudNumericField T="int" @bind-Value="_bcNam" Label="Năm" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         Min="2020" Max="2100" Style="width:110px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                   Disabled="@(_bcMauId is null)" Href="@BaoCaoUrl" Target="_blank">Xem báo cáo PDF</MudButton>
+    </div>
+</MudPaper>
 
 @if (_dangTai)
 {
@@ -81,6 +106,12 @@ else
 
     private int? _locMauId;
     private DateTime? _locNgay;
+
+    // Báo cáo tháng
+    private int? _bcMauId;
+    private int _bcThang = GioVietNam.Nay.Month;
+    private int _bcNam = GioVietNam.Nay.Year;
+    private string BaoCaoUrl => _bcMauId is { } id ? $"/app/phieu/bao-cao-thang?bieuMauId={id}&nam={_bcNam}&thang={_bcThang}" : "#";
 
     protected override async Task OnInitializedAsync()
     {

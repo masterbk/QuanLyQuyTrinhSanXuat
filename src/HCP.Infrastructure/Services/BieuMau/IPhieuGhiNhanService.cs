@@ -16,6 +16,10 @@ public interface IPhieuGhiNhanService
     Task<IReadOnlyList<PhieuGhiNhan>> LayPhieuAsync(DateOnly? ngay, string? nguoiLap, int? bieuMauId,
                                                     CancellationToken ct = default);
 
+    /// <summary>Phiếu của một biểu mẫu trong một tháng (sắp theo ngày) - cho báo cáo tháng.</summary>
+    Task<IReadOnlyList<PhieuGhiNhan>> LayPhieuThangAsync(int bieuMauId, int nam, int thang,
+                                                        CancellationToken ct = default);
+
     Task<PhieuGhiNhan?> LayPhieuTheoIdAsync(int id, CancellationToken ct = default);
 
     /// <summary>Phiếu NHÁP (chưa hoàn thành) của một biểu mẫu cho một ngày/người lập - để mở nhập tiếp. Null nếu chưa có.</summary>

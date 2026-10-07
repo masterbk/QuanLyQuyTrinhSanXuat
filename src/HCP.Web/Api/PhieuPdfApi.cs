@@ -20,5 +20,16 @@ public static class PhieuPdfApi
                 ? Results.File(pdf, "application/pdf", $"Phieu-{id}.pdf")
                 : Results.File(pdf, "application/pdf");
         });
+
+        // Báo cáo tháng (biểu mẫu theo ngày): /app/phieu/bao-cao-thang?bieuMauId=&nam=&thang=[&tai=true]
+        g.MapGet("/bao-cao-thang", async (int bieuMauId, int nam, int thang, bool? tai,
+                                          IPhieuPdfService svc, CancellationToken ct) =>
+        {
+            var pdf = await svc.TaoBaoCaoThangAsync(bieuMauId, nam, thang, ct);
+            if (pdf is null) return Results.NotFound();
+            return tai == true
+                ? Results.File(pdf, "application/pdf", $"BaoCao-{bieuMauId}-{thang:00}{nam}.pdf")
+                : Results.File(pdf, "application/pdf");
+        });
     }
 }

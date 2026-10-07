@@ -49,6 +49,17 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
     public Task<PhieuGhiNhan?> LayPhieuTheoIdAsync(int id, CancellationToken ct = default) =>
         _db.PhieuGhiNhans.AsNoTracking().Include(p => p.Dong).FirstOrDefaultAsync(p => p.Id == id, ct);
 
+    public async Task<IReadOnlyList<PhieuGhiNhan>> LayPhieuThangAsync(int bieuMauId, int nam, int thang,
+                                                                     CancellationToken ct = default)
+    {
+        var dau = new DateOnly(nam, thang, 1);
+        var cuoi = dau.AddMonths(1);
+        return await _db.PhieuGhiNhans.AsNoTracking().Include(p => p.Dong).AsSplitQuery()
+            .Where(p => p.BieuMauId == bieuMauId && p.Ngay >= dau && p.Ngay < cuoi)
+            .OrderBy(p => p.Ngay).ThenBy(p => p.Id)
+            .ToListAsync(ct);
+    }
+
     public Task<PhieuGhiNhan?> LayPhieuNhapAsync(int bieuMauId, DateOnly ngay, string? nguoiLap,
                                                  CancellationToken ct = default) =>
         _db.PhieuGhiNhans.AsNoTracking().Include(p => p.Dong).OrderByDescending(p => p.Id)
