@@ -189,6 +189,7 @@ builder.Services.AddScoped<IDinhMucService, DinhMucService>();
 builder.Services.AddScoped<ILenhSanXuatService, LenhSanXuatService>();
 builder.Services.AddScoped<IMaTuSinhService, MaTuSinhService>();
 builder.Services.AddScoped<ILuuTruAnhService, LuuTruAnhService>();
+builder.Services.AddScoped<HCP.Infrastructure.Services.BieuMau.IDocAnhPhieu, HCP.Web.Services.DocAnhPhieu>();
 builder.Services.AddScoped<IKiemTraApiHnCService, KiemTraApiHnCService>();
 builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IBieuMauService, BieuMauService>();

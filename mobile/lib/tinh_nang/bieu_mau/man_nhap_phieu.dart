@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../loi/api.dart';
 import 'kho_du_lieu.dart';
@@ -401,8 +402,81 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         return _oChon(dong, t, nhan, ref.watch(nccBmProvider));
       case 'LuaChon':
         return _oLuaChon(dong, t, nhan);
-      default: // Text, Anh (chưa hỗ trợ ảnh ở GĐ này)
+      case 'Anh':
+        return _oAnh(dong, t, nhan);
+      default: // Text
         return _oNhap(dong, t, nhan, chuan);
+    }
+  }
+
+  Widget _oAnh(_DongNhap dong, TruongBieuMau t, String nhan) {
+    final url = dong.giaTri[t.ma];
+    final coAnh = url != null && url.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(nhan, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 4),
+        if (coAnh)
+          Stack(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(url, height: 120, width: 120, fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                      height: 120, width: 120, color: Colors.black12, child: const Icon(Icons.broken_image))),
+            ),
+            if (!_choXem)
+              Positioned(
+                right: -8, top: -8,
+                child: IconButton(
+                  icon: const Icon(Icons.cancel, color: Colors.red),
+                  onPressed: _khoaNhap ? null : () => setState(() => dong.giaTri.remove(t.ma)),
+                ),
+              ),
+          ])
+        else if (_choXem)
+          Text('(không có ảnh)', style: Theme.of(context).textTheme.bodySmall)
+        else
+          OutlinedButton.icon(
+            onPressed: _khoaNhap ? null : () => _chonAnh(dong, t),
+            icon: const Icon(Icons.add_a_photo, size: 18),
+            label: const Text('Chụp / chọn ảnh'),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _chonAnh(_DongNhap dong, TruongBieuMau t) async {
+    final nguon = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Chụp ảnh'),
+              onTap: () => Navigator.pop(c, ImageSource.camera)),
+          ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Chọn từ thư viện'),
+              onTap: () => Navigator.pop(c, ImageSource.gallery)),
+        ]),
+      ),
+    );
+    if (nguon == null) return;
+    final x = await ImagePicker().pickImage(source: nguon, imageQuality: 85, maxWidth: 1600);
+    if (x == null) return;
+    setState(() => _dangLuu = true); // tạm khóa trong lúc tải ảnh
+    try {
+      final bytes = await x.readAsBytes();
+      final url = await ref.read(khoBieuMauProvider).taiAnh(bytes, x.name);
+      if (!mounted) return;
+      setState(() => dong.giaTri[t.ma] = url);
+    } on LoiApi catch (e) {
+      _bao(e.thongBao);
+    } catch (_) {
+      _bao('Không tải được ảnh. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _dangLuu = false);
     }
   }
 

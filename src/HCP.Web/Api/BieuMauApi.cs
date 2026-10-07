@@ -4,6 +4,7 @@ using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.BieuMau;
+using HCP.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
 
@@ -85,6 +86,28 @@ public static class BieuMauApi
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         });
+
+        // Tải một ảnh cho trường kiểu Ảnh của phiếu; trả đường dẫn để lưu vào giá trị trường.
+        nhom.MapPost("/phieu-ghi-nhan/anh", async (HttpRequest http, ILuuTruAnhService luuAnh, CancellationToken ct) =>
+        {
+            if (!http.HasFormContentType)
+                return Results.BadRequest(new LoiDto("Cần gửi dạng multipart/form-data kèm ảnh."));
+            IFormCollection form;
+            try { form = await http.ReadFormAsync(ct); }
+            catch (Exception ex) when (ex is InvalidDataException or IOException)
+            {
+                return Results.BadRequest(new LoiDto("Dữ liệu ảnh gửi lên không đọc được. Vui lòng thử lại."));
+            }
+            var f = form.Files.FirstOrDefault(x => x.Length > 0);
+            if (f is null) return Results.BadRequest(new LoiDto("Chưa chọn ảnh."));
+            try
+            {
+                await using var luong = f.OpenReadStream();
+                var anh = await luuAnh.LuuAsync(luong, f.FileName, f.ContentType, f.Length, ct);
+                return Results.Ok(new AnhPhieuDto(anh.TenFile, anh.DuongDan));
+            }
+            catch (InvalidOperationException ex) { return Results.BadRequest(new LoiDto(ex.Message)); }
+        }).DisableAntiforgery();
     }
 
     private static PhieuGhiNhan TuRequest(TaoPhieuRequest req, string? nguoiLap) => new()

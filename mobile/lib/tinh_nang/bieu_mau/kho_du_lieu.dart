@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../loi/api.dart';
@@ -26,6 +27,14 @@ class KhoBieuMau {
     final r = await _api.get('/api/v1/phieu-ghi-nhan/nhap',
         thamSo: {'bieuMauId': bieuMauId, 'ngay': _chuoiNgay(ngay)});
     return r is Map<String, dynamic> ? PhieuGhiNhan.tuJson(r) : null;
+  }
+
+  /// Tải một ảnh cho trường kiểu Ảnh; trả đường dẫn đã lưu (để gán vào giá trị trường).
+  Future<String> taiAnh(List<int> bytes, String ten) async {
+    final form = FormData();
+    form.files.add(MapEntry('anh', MultipartFile.fromBytes(bytes, filename: ten)));
+    final j = await _api.postFile('/api/v1/phieu-ghi-nhan/anh', form) as Map<String, dynamic>;
+    return j['duongDan'] as String? ?? '';
   }
 
   /// Phiếu của biểu mẫu trong một NGÀY (mọi trạng thái) - cho biểu mẫu "1 phiếu/ngày". Null nếu chưa có.

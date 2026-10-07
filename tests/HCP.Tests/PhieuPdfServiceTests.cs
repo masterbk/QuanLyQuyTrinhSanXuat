@@ -1,7 +1,9 @@
 using HCP.Domain.Entities.Business;
+using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services;
 using HCP.Infrastructure.Services.BieuMau;
+using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
 using HCP.Infrastructure.Services.DanhMuc;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
@@ -132,6 +134,46 @@ public class PhieuPdfServiceTests
             var bytes = await Pdf(db).TaoPdfAsync(phieuId);
             Assert.NotNull(bytes);
             Assert.True(bytes!.Length > 1000);
+        }
+    }
+
+    [Fact]
+    public async Task Sinh_Pdf_Co_Truong_Anh_Khong_Loi()
+    {
+        int mauId;
+        using (var db = MoDb())
+        {
+            var mau = new BieuMauEntity
+            {
+                MaHieu = "BM-ANH", Ten = "Mẫu có ảnh", BoCuc = BoCucBieuMau.NhieuDongTuDo,
+                Truong =
+                {
+                    new TruongBieuMau { Ten = "Ghi chú", Ma = "ghi_chu", Kieu = KieuTruongBieuMau.Text },
+                    new TruongBieuMau { Ten = "Ảnh minh chứng", Ma = "anh", Kieu = KieuTruongBieuMau.Anh }
+                }
+            };
+            Assert.True((await new BieuMauService(db).LuuAsync(mau)).ThanhCong);
+            mauId = mau.Id;
+        }
+
+        int phieuId;
+        using (var db = MoDb())
+        {
+            var phieu = new PhieuGhiNhan
+            {
+                BieuMauId = mauId, Ngay = new DateOnly(2026, 10, 7),
+                Dong = { new DongGhiNhan { GiaTriJson = "{\"ghi_chu\":\"ok\",\"anh\":\"/uploads/x/2026/10/abc.jpg\"}" } }
+            };
+            Assert.True((await new PhieuGhiNhanService(db).TaoPhieuAsync(phieu)).ThanhCong);
+            phieuId = phieu.Id;
+        }
+
+        // docAnh = null -> ô Ảnh in "Có ảnh", không có mục ảnh; vẫn ra PDF hợp lệ.
+        using (var db = MoDb())
+        {
+            var bytes = await Pdf(db).TaoPdfAsync(phieuId);
+            Assert.NotNull(bytes);
+            Assert.Equal(new byte[] { 0x25, 0x50, 0x44, 0x46 }, bytes!.Take(4).ToArray());
         }
     }
 }

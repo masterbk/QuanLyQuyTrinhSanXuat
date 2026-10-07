@@ -27,10 +27,12 @@ public sealed class PhieuPdfService : IPhieuPdfService
     private readonly IDanhMucService<Product> _sanPham;
     private readonly IDanhMucService<SubSupplier> _ncc;
     private readonly IDanhMucService<Facility> _coSo;
+    private readonly IDocAnhPhieu? _docAnh;
 
     public PhieuPdfService(IPhieuGhiNhanService phieu, AppDbContext db,
                            IDanhMucService<Staff> nhanSu, IDanhMucService<Product> sanPham,
-                           IDanhMucService<SubSupplier> ncc, IDanhMucService<Facility> coSo)
+                           IDanhMucService<SubSupplier> ncc, IDanhMucService<Facility> coSo,
+                           IDocAnhPhieu? docAnh = null)
     {
         _phieu = phieu;
         _db = db;
@@ -38,6 +40,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
         _sanPham = sanPham;
         _ncc = ncc;
         _coSo = coSo;
+        _docAnh = docAnh;
     }
 
     public async Task<byte[]?> TaoPdfAsync(int phieuId, CancellationToken ct = default)
@@ -63,6 +66,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(raw, out var d) ? d.ToString("dd/MM/yyyy") : raw,
+                KieuTruongBieuMau.Anh => "Có ảnh",
                 _ => raw
             };
         }
@@ -72,6 +76,32 @@ public sealed class PhieuPdfService : IPhieuPdfService
         var giaTriDau = DocGiaTri(phieu.GiaTriDauJson);
         var hangMucTen = mau.HangMuc.ToDictionary(h => h.Id, h => h.Ten);
         var laChecklist = mau.BoCuc == BoCucBieuMau.Checklist;
+
+        // Gom ảnh (trường kiểu Ảnh) để nhúng ở cuối PDF - chỉ khi đọc được file.
+        var dsAnh = new List<(string Caption, byte[] Bytes)>();
+        if (_docAnh is not null)
+        {
+            foreach (var t in mau.Truong.Where(t => t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.Anh))
+            {
+                var b = _docAnh.Doc(giaTriDau.GetValueOrDefault(t.Ma));
+                if (b is not null) dsAnh.Add((t.Ten, b));
+            }
+            var anhDong = mau.Truong.Where(t => !t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.Anh).ToList();
+            if (anhDong.Count > 0)
+            {
+                var sttAnh = 1;
+                foreach (var dong in phieu.Dong.OrderBy(d => d.ThuTu))
+                {
+                    var gt = DocGiaTri(dong.GiaTriJson);
+                    foreach (var t in anhDong)
+                    {
+                        var b = _docAnh.Doc(gt.GetValueOrDefault(t.Ma));
+                        if (b is not null) dsAnh.Add(($"Dòng {sttAnh} - {t.Ten}", b));
+                    }
+                    sttAnh++;
+                }
+            }
+        }
 
         var doc = Document.Create(container =>
         {
@@ -111,31 +141,53 @@ public sealed class PhieuPdfService : IPhieuPdfService
                     col.Item().PaddingTop(4);
                 });
 
-                page.Content().Table(table =>
+                page.Content().Column(noiDung =>
                 {
-                    table.ColumnsDefinition(cols =>
+                    noiDung.Item().Table(table =>
                     {
-                        cols.ConstantColumn(28);                 // STT
-                        if (laChecklist) cols.RelativeColumn(3); // Hạng mục
-                        foreach (var _ in truong) cols.RelativeColumn(2);
+                        table.ColumnsDefinition(cols =>
+                        {
+                            cols.ConstantColumn(28);                 // STT
+                            if (laChecklist) cols.RelativeColumn(3); // Hạng mục
+                            foreach (var _ in truong) cols.RelativeColumn(2);
+                        });
+
+                        table.Header(h =>
+                        {
+                            h.Cell().Element(Tieu).Text("STT");
+                            if (laChecklist) h.Cell().Element(Tieu).Text("Hạng mục");
+                            foreach (var t in truong) h.Cell().Element(Tieu).Text(TieuDeCot(t));
+                        });
+
+                        var stt = 1;
+                        foreach (var dong in phieu.Dong.OrderBy(d => d.ThuTu))
+                        {
+                            var giaTri = DocGiaTri(dong.GiaTriJson);
+                            table.Cell().Element(O).Text(stt++.ToString());
+                            if (laChecklist)
+                                table.Cell().Element(O).Text(dong.HangMucBieuMauId is { } hm ? hangMucTen.GetValueOrDefault(hm, "") : "");
+                            foreach (var t in truong)
+                                table.Cell().Element(O).Text(Resolve(t, giaTri.GetValueOrDefault(t.Ma)));
+                        }
                     });
 
-                    table.Header(h =>
+                    // Ảnh đính kèm (trường kiểu Ảnh) - mỗi hàng tối đa 3 ảnh.
+                    if (dsAnh.Count > 0)
                     {
-                        h.Cell().Element(Tieu).Text("STT");
-                        if (laChecklist) h.Cell().Element(Tieu).Text("Hạng mục");
-                        foreach (var t in truong) h.Cell().Element(Tieu).Text(TieuDeCot(t));
-                    });
-
-                    var stt = 1;
-                    foreach (var dong in phieu.Dong.OrderBy(d => d.ThuTu))
-                    {
-                        var giaTri = DocGiaTri(dong.GiaTriJson);
-                        table.Cell().Element(O).Text(stt++.ToString());
-                        if (laChecklist)
-                            table.Cell().Element(O).Text(dong.HangMucBieuMauId is { } hm ? hangMucTen.GetValueOrDefault(hm, "") : "");
-                        foreach (var t in truong)
-                            table.Cell().Element(O).Text(Resolve(t, giaTri.GetValueOrDefault(t.Ma)));
+                        noiDung.Item().PaddingTop(8).Text("Ảnh đính kèm").Bold().FontSize(10);
+                        foreach (var hang in dsAnh.Chunk(3))
+                        {
+                            noiDung.Item().PaddingTop(4).Row(r =>
+                            {
+                                foreach (var (caption, bytes) in hang)
+                                    r.RelativeItem().Padding(2).Column(ic =>
+                                    {
+                                        ic.Item().Text(caption).FontSize(8).SemiBold();
+                                        ic.Item().PaddingTop(2).Height(120).Image(bytes).FitArea();
+                                    });
+                                for (var k = hang.Length; k < 3; k++) r.RelativeItem();
+                            });
+                        }
                     }
                 });
 
@@ -177,6 +229,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(raw, out var d) ? d.ToString("dd/MM/yyyy") : raw,
+                KieuTruongBieuMau.Anh => "Có ảnh",
                 _ => raw
             };
         }

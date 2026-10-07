@@ -224,6 +224,9 @@ public sealed record PhieuGhiNhanDto(
 
 public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string GiaTriJson, string? GhiChu);
 
+/// <summary>Kết quả tải một ảnh cho trường kiểu Ảnh của phiếu ghi nhận.</summary>
+public sealed record AnhPhieuDto(string TenGoc, string DuongDan);
+
 public sealed record TaoPhieuRequest(
     int BieuMauId, DateOnly? Ngay, IReadOnlyDictionary<string, string?>? GiaTriDau, string? GhiChu,
     IReadOnlyList<DongGhiNhanRequest>? Dong, bool? HoanThanh);
