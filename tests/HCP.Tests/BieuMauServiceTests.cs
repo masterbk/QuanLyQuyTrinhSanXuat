@@ -109,4 +109,52 @@ public class BieuMauServiceTests
         }
         using (var db = MoDb()) Assert.True(await db.BieuMaus.AnyAsync(b => b.Id == id));
     }
+
+    [Fact]
+    public async Task Sua_Mau_Checklist_Giu_Id_Hang_Muc_Cho_Phieu_Cu()
+    {
+        int mauId, hm1Id;
+        using (var db = MoDb())
+        {
+            var mau = new BieuMauEntity
+            {
+                MaHieu = "BM-CL", Ten = "Checklist X", BoCuc = BoCucBieuMau.Checklist,
+                Truong = { new TruongBieuMau { Ten = "Kết quả", Kieu = KieuTruongBieuMau.DatKhongDat } },
+                HangMuc = { new HangMucBieuMau { Ten = "Sàn nhà" }, new HangMucBieuMau { Ten = "Tường" } }
+            };
+            Assert.True((await Svc(db).LuuAsync(mau)).ThanhCong);
+            mauId = mau.Id;
+        }
+        using (var db = MoDb())
+            hm1Id = (await db.HangMucBieuMaus.Where(h => h.BieuMauId == mauId).OrderBy(h => h.ThuTu).FirstAsync()).Id;
+
+        // Phiếu cũ gắn hạng mục 1.
+        using (var db = MoDb())
+        {
+            db.PhieuGhiNhans.Add(new PhieuGhiNhan
+            {
+                BieuMauId = mauId, Ngay = new DateOnly(2026, 10, 7),
+                Dong = { new DongGhiNhan { HangMucBieuMauId = hm1Id, GiaTriJson = "{}" } }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Sửa mẫu: đổi tên hạng mục 1, thêm hạng mục mới -> phải GIỮ Id cũ.
+        // Load và lưu ở 2 context khác nhau (giống web dựng bản sao detached rồi mới gọi LuuAsync).
+        BieuMauEntity sua;
+        using (var db = MoDb()) sua = (await Svc(db).LayTheoIdAsync(mauId))!;
+        sua.HangMuc[0].Ten = "Sàn nhà (đã đổi)";
+        sua.HangMuc.Add(new HangMucBieuMau { Ten = "Trần" });
+        using (var db = MoDb()) Assert.True((await Svc(db).LuuAsync(sua)).ThanhCong);
+
+        using (var db = MoDb())
+        {
+            var hm1 = await db.HangMucBieuMaus.FirstOrDefaultAsync(h => h.Id == hm1Id);
+            Assert.NotNull(hm1);                                   // Id cũ còn nguyên
+            Assert.Equal("Sàn nhà (đã đổi)", hm1!.Ten);           // nội dung đã cập nhật
+            var phieu = await db.PhieuGhiNhans.Include(p => p.Dong).SingleAsync();
+            Assert.Equal(hm1Id, phieu.Dong.Single().HangMucBieuMauId); // phiếu cũ vẫn liên kết đúng
+            Assert.Equal(3, await db.HangMucBieuMaus.CountAsync(h => h.BieuMauId == mauId)); // 2 cũ + 1 mới
+        }
+    }
 }

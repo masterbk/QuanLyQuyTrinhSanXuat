@@ -327,7 +327,7 @@ else
             }).ToList(),
             HangMuc = mau.HangMuc.OrderBy(h => h.ThuTu).Select(h => new HangMucBieuMau
             {
-                Ten = h.Ten, DienGiai = h.DienGiai, TanSuat = h.TanSuat
+                Id = h.Id, Ten = h.Ten, DienGiai = h.DienGiai, TanSuat = h.TanSuat
             }).ToList()
         };
         _hienForm = true;

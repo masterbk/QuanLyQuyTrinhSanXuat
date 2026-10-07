@@ -22,7 +22,7 @@ public sealed class BieuMauService : IBieuMauService
             .OrderBy(b => b.ThuTu).ThenBy(b => b.Ten).ToListAsync(ct);
 
     public Task<BieuMauEntity?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
-        QueryDayDu().AsSplitQuery().FirstOrDefaultAsync(b => b.Id == id, ct);
+        QueryDayDu().AsNoTracking().AsSplitQuery().FirstOrDefaultAsync(b => b.Id == id, ct);
 
     public async Task<KetQuaThaoTac> LuuAsync(BieuMauEntity mau, CancellationToken ct = default)
     {
@@ -56,15 +56,39 @@ public sealed class BieuMauService : IBieuMauService
             goc.KichHoat = mau.KichHoat;
             goc.MotPhieuMoiNgay = mau.MotPhieuMoiNgay;
             goc.ThuTu = mau.ThuTu;
-            // Thay toàn bộ trường và hạng mục (mẫu chưa có phiếu hoặc chấp nhận định nghĩa mới).
+            // Trường: thay toàn bộ (dữ liệu phiếu bám theo khóa Ma nên không ảnh hưởng).
             _db.TruongBieuMaus.RemoveRange(goc.Truong);
-            _db.HangMucBieuMaus.RemoveRange(goc.HangMuc);
             goc.Truong = mau.Truong;
-            goc.HangMuc = mau.HangMuc;
+            // Hạng mục checklist: GIỮ Id khi sửa (upsert) để phiếu cũ không mồ côi tên hạng mục.
+            CapNhatHangMuc(goc, mau.HangMuc);
         }
 
         await _db.SaveChangesAsync(ct);
         return KetQuaThaoTac.Ok($"Đã lưu biểu mẫu \"{mau.Ten}\".");
+    }
+
+    /// <summary>Upsert hạng mục theo Id: giữ hạng mục cũ (phiếu cũ còn liên kết), cập nhật nội dung, thêm mới,
+    /// xoá hạng mục đã bỏ khỏi danh sách.</summary>
+    private void CapNhatHangMuc(BieuMauEntity goc, List<HangMucBieuMau> moi)
+    {
+        var giuId = moi.Where(h => h.Id != 0).Select(h => h.Id).ToHashSet();
+        _db.HangMucBieuMaus.RemoveRange(goc.HangMuc.Where(h => !giuId.Contains(h.Id)).ToList());
+        var theoId = goc.HangMuc.ToDictionary(h => h.Id);
+        foreach (var h in moi)
+        {
+            if (h.Id != 0 && theoId.TryGetValue(h.Id, out var cu))
+            {
+                cu.Ten = h.Ten;
+                cu.DienGiai = h.DienGiai;
+                cu.TanSuat = h.TanSuat;
+                cu.ThuTu = h.ThuTu;
+            }
+            else
+            {
+                h.Id = 0;
+                goc.HangMuc.Add(h);
+            }
+        }
     }
 
     /// <summary>Chuẩn hoá + kiểm tra danh sách trường. Trả thông báo lỗi hoặc null.</summary>
@@ -87,7 +111,7 @@ public sealed class BieuMauService : IBieuMauService
         thuTu = 0;
         foreach (var h in mau.HangMuc)
         {
-            h.Id = 0;
+            // GIỮ Id (nếu có) để khi sửa mẫu, phiếu cũ không mất liên kết hạng mục.
             h.Ten = h.Ten?.Trim() ?? "";
             if (h.Ten.Length == 0) return "Có hạng mục chưa đặt tên.";
             h.ThuTu = thuTu++;
