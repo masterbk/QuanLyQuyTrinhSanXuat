@@ -20,6 +20,9 @@ appsettings.*.Local.json
 # Key service account Firebase (thông báo đẩy) - xem Firebase:CredentialsPath
 /secrets/
 
+# Cấu hình hạ tầng VPS cho deploy (IP/user/đường dẫn) - KHÔNG commit
+deploy/deploy.local.ps1
+
 # Uploads (giấy tờ, hình ảnh minh chứng của các cơ sở)
 src/HCP.Web/wwwroot/uploads/
 

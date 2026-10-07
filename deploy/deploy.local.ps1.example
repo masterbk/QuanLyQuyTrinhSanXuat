@@ -1,0 +1,14 @@
+# deploy.local.ps1.example — MẪU cấu hình hạ tầng VPS cho deploy.
+#
+# Cách dùng: sao chép file này thành  deploy\deploy.local.ps1  rồi điền thông tin thật.
+#   deploy.local.ps1 ĐÃ được gitignore -> KHÔNG commit thông tin server.
+#
+# File phải TRẢ VỀ một hashtable (để dòng @{...} ở cuối, không có lệnh nào sau nó).
+
+@{
+    VpsHost = "x.x.x.x"                                   # IP hoặc tên miền VPS
+    VpsUser = "administrator"                             # user SSH
+    Port    = 22                                          # cổng SSH
+    Key     = "$env:USERPROFILE\.ssh\tuannghia_deploy"   # đường dẫn private key (chỉ ở máy local)
+    AppDir  = "C:\www\ten-site"                           # thư mục app trên IIS của VPS
+}
