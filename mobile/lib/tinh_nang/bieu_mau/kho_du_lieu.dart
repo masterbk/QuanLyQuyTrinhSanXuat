@@ -29,6 +29,11 @@ class KhoBieuMau {
     return r is Map<String, dynamic> ? PhieuGhiNhan.tuJson(r) : null;
   }
 
+  /// Danh sách thiết bị/dòng đến hoặc quá hạn trong [soNgay] ngày tới (gồm quá hạn).
+  Future<List<NhacHan>> nhacHan({int soNgay = 30}) async =>
+      ((await _api.get('/api/v1/bieu-mau/nhac-han', thamSo: {'soNgay': soNgay})) as List)
+          .map((e) => NhacHan.tuJson(e as Map<String, dynamic>)).toList();
+
   /// Tải một ảnh cho trường kiểu Ảnh; trả đường dẫn đã lưu (để gán vào giá trị trường).
   Future<String> taiAnh(List<int> bytes, String ten) async {
     final form = FormData();
@@ -107,6 +112,10 @@ final bieuMauProvider = FutureProvider<List<BieuMau>>((ref) => ref.watch(khoBieu
 /// Phiếu đã ghi trong NGÀY HÔM NAY (mọi biểu mẫu) - để hiện trạng thái "đã nhập/chưa nhập hôm nay".
 final phieuHomNayProvider = FutureProvider.autoDispose<List<PhieuGhiNhan>>(
     (ref) => ref.watch(khoBieuMauProvider).phieu(ngay: DateTime.now()));
+
+/// Danh sách nhắc hạn trong [soNgay] ngày tới.
+final nhacHanProvider = FutureProvider.autoDispose.family<List<NhacHan>, int>(
+    (ref, soNgay) => ref.watch(khoBieuMauProvider).nhacHan(soNgay: soNgay));
 
 /// Danh mục dùng chung cho các trường chọn (tải một lần).
 final nhanSuBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).nhanSu());

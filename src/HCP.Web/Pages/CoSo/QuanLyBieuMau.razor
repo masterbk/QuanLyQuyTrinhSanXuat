@@ -150,6 +150,7 @@ else
                     <th style="min-width:120px">Nhóm cột</th>
                     <th style="min-width:170px">Tùy chọn (Lựa chọn)</th>
                     <th style="width:75px">Đầu phiếu</th>
+                    <th style="width:70px">Hạn nhắc</th>
                     <th style="width:70px">Bắt buộc</th>
                     <th style="width:40px"></th>
                 </tr>
@@ -183,6 +184,10 @@ else
                                           Placeholder="@(t.Kieu == KieuTruongBieuMau.LuaChon ? "vd Đạt, Không đạt, Chờ xử lý" : "")" />
                         </td>
                         <td style="text-align:center"><MudCheckBox @bind-Value="t.LaDauPhieu" Color="Color.Secondary" /></td>
+                        <td style="text-align:center">
+                            <MudCheckBox @bind-Value="t.LaHanNhac" Color="Color.Warning"
+                                         Disabled="@(t.Kieu != KieuTruongBieuMau.Ngay)" />
+                        </td>
                         <td style="text-align:center"><MudCheckBox @bind-Value="t.BatBuoc" Color="Color.Primary" /></td>
                         <td><MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
                                            OnClick="@(() => _input.Truong.Remove(t))" /></td>
@@ -323,7 +328,7 @@ else
             Truong = mau.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMau
             {
                 Ten = t.Ten, Ma = t.Ma, Kieu = t.Kieu, LaDauPhieu = t.LaDauPhieu, BatBuoc = t.BatBuoc, DonVi = t.DonVi,
-                GiaTriChuan = t.GiaTriChuan, TuyChonCsv = t.TuyChonCsv, Nhom = t.Nhom
+                GiaTriChuan = t.GiaTriChuan, TuyChonCsv = t.TuyChonCsv, Nhom = t.Nhom, LaHanNhac = t.LaHanNhac
             }).ToList(),
             HangMuc = mau.HangMuc.OrderBy(h => h.ThuTu).Select(h => new HangMucBieuMau
             {

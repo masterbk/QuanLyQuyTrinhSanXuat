@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../loi/api.dart';
 import 'kho_du_lieu.dart';
+import 'man_nhac_han.dart';
 import 'man_nhap_phieu.dart';
 import 'mo_hinh.dart';
 
@@ -28,6 +29,7 @@ class _ManDanhSachBieuMauState extends ConsumerState<ManDanhSachBieuMau> {
   Widget build(BuildContext context) {
     final ds = ref.watch(bieuMauProvider);
     final homNay = ref.watch(phieuHomNayProvider).value ?? const <PhieuGhiNhan>[];
+    final nhac = ref.watch(nhacHanProvider(30)).value ?? const <NhacHan>[];
 
     return Scaffold(
       body: ds.when(
@@ -49,6 +51,10 @@ class _ManDanhSachBieuMauState extends ConsumerState<ManDanhSachBieuMau> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
               children: [
+                if (nhac.isNotEmpty) ...[
+                  _BangNhacHan(soMuc: nhac.length, soQuaHan: nhac.where((n) => n.quaHan).length),
+                  const SizedBox(height: 8),
+                ],
                 _ThanhLoc(
                   chiChuaNhap: _chiChuaNhap,
                   soChuaXong: soChuaXong,
@@ -112,6 +118,26 @@ class _ThanhLoc extends StatelessWidget {
           title: const Text('Chỉ hiện chưa nhập hôm nay'),
           subtitle: Text('Còn $soChuaXong biểu mẫu chưa nhập hôm nay'),
           secondary: const Icon(Icons.today),
+        ),
+      );
+}
+
+class _BangNhacHan extends StatelessWidget {
+  final int soMuc;
+  final int soQuaHan;
+  const _BangNhacHan({required this.soMuc, required this.soQuaHan});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        margin: EdgeInsets.zero,
+        color: Colors.red.shade50,
+        child: ListTile(
+          leading: Icon(Icons.notifications_active, color: Colors.red.shade700),
+          title: Text('$soMuc thiết bị đến/quá hạn',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900)),
+          subtitle: Text(soQuaHan > 0 ? 'Trong đó $soQuaHan đã quá hạn' : 'Trong 30 ngày tới'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManNhacHan())),
         ),
       );
 }

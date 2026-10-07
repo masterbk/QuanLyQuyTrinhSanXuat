@@ -1,3 +1,5 @@
+using System.Text.Json;
+using HCP.Domain;
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
@@ -157,12 +159,60 @@ public sealed class BieuMauService : IBieuMauService
         return KetQuaThaoTac.Ok($"Đã nạp {them.Count} biểu mẫu mẫu: {string.Join(", ", them.Select(m => m.MaHieu))}.");
     }
 
+    public async Task<IReadOnlyList<NhacHan>> LayNhacHanAsync(int soNgay, CancellationToken ct = default)
+    {
+        var homNay = GioVietNam.HomNay;
+        var moc = homNay.AddDays(Math.Max(0, soNgay));
+
+        // Chỉ xét mẫu có trường "hạn nhắc".
+        var mauCoHan = await _db.BieuMaus.AsNoTracking()
+            .Include(b => b.Truong)
+            .Where(b => b.Truong.Any(t => t.LaHanNhac))
+            .ToListAsync(ct);
+        if (mauCoHan.Count == 0) return Array.Empty<NhacHan>();
+
+        var tenMau = mauCoHan.ToDictionary(b => b.Id, b => b.Ten);
+        var truongHan = mauCoHan.ToDictionary(b => b.Id, b => b.Truong.Where(t => t.LaHanNhac).ToList());
+        // Trường để lấy "nhãn" cho dòng (tên thiết bị...): các trường dòng, không phải đầu phiếu/hạn.
+        var truongNhan = mauCoHan.ToDictionary(b => b.Id,
+            b => b.Truong.Where(t => !t.LaDauPhieu && !t.LaHanNhac).OrderBy(t => t.ThuTu).ToList());
+
+        var idMau = mauCoHan.Select(b => b.Id).ToHashSet();
+        var phieu = await _db.PhieuGhiNhans.AsNoTracking().Include(p => p.Dong)
+            .Where(p => idMau.Contains(p.BieuMauId)).ToListAsync(ct);
+
+        var kq = new List<NhacHan>();
+        foreach (var p in phieu)
+        {
+            foreach (var d in p.Dong)
+            {
+                Dictionary<string, string?> gt;
+                try { gt = JsonSerializer.Deserialize<Dictionary<string, string?>>(d.GiaTriJson) ?? new(); }
+                catch (JsonException) { continue; }
+
+                foreach (var th in truongHan[p.BieuMauId])
+                {
+                    if (!gt.TryGetValue(th.Ma, out var v) || !DateOnly.TryParse(v, out var han)) continue;
+                    if (han > moc) continue; // chưa tới ngưỡng nhắc
+
+                    var nhan = truongNhan[p.BieuMauId]
+                        .Select(t => gt.GetValueOrDefault(t.Ma))
+                        .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? "(không tên)";
+                    kq.Add(new NhacHan(p.BieuMauId, tenMau[p.BieuMauId], p.Id, p.Ngay, nhan!,
+                                       th.Ten, han, han.DayNumber - homNay.DayNumber));
+                }
+            }
+        }
+        return kq.OrderBy(x => x.Han).ToList();
+    }
+
     // ==================== Dữ liệu biểu mẫu mẫu (nhóm A + B) ====================
 
     private static TruongBieuMau T(string ma, string ten, KieuTruongBieuMau kieu,
-        string? donVi = null, string? chuan = null, string? nhom = null, bool batBuoc = false, bool dauPhieu = false) =>
+        string? donVi = null, string? chuan = null, string? nhom = null, bool batBuoc = false, bool dauPhieu = false,
+        bool hanNhac = false, string? tuyChon = null) =>
         new() { Ma = ma, Ten = ten, Kieu = kieu, DonVi = donVi, GiaTriChuan = chuan, Nhom = nhom,
-                BatBuoc = batBuoc, LaDauPhieu = dauPhieu };
+                BatBuoc = batBuoc, LaDauPhieu = dauPhieu, LaHanNhac = hanNhac, TuyChonCsv = tuyChon };
 
     private static HangMucBieuMau H(string ten, string? dienGiai = null, string? tanSuat = null) =>
         new() { Ten = ten, DienGiai = dienGiai, TanSuat = tanSuat };
@@ -297,6 +347,43 @@ public sealed class BieuMauService : IBieuMauService
                 T("nguyen_nhan", "Nguyên nhân", KieuTruongBieuMau.Text),
                 T("huong_xu_ly", "Hướng xử lý", KieuTruongBieuMau.Text),
                 T("nguoi", "Người ghi nhận", KieuTruongBieuMau.ChonNhanSu),
+            }
+        };
+
+        // ----- Nhóm D: danh mục + sổ theo dõi định kỳ (nhắc hạn) -----
+        yield return new BieuMauEntity
+        {
+            MaHieu = "BM-TB-01", Ten = "Danh mục thiết bị đo & hiệu chuẩn", BoCuc = BoCucBieuMau.NhieuDongTuDo,
+            TanSuat = "Rà soát định kỳ; nhắc theo hạn hiệu chuẩn", NhomQuyen = AppRoles.QuyenNhapLieu, ThuTu = 8,
+            MotPhieuMoiNgay = false,
+            GhiChuChan = "Mỗi thiết bị một dòng. Hệ thống nhắc khi đến/quá hạn hiệu chuẩn kế tiếp.",
+            Truong =
+            {
+                T("ten_thiet_bi", "Tên thiết bị", KieuTruongBieuMau.Text, batBuoc: true),
+                T("ma_thiet_bi", "Mã thiết bị", KieuTruongBieuMau.Text),
+                T("vi_tri", "Vị trí/khu vực", KieuTruongBieuMau.Text),
+                T("ngay_hieu_chuan", "Ngày hiệu chuẩn gần nhất", KieuTruongBieuMau.Ngay),
+                T("chu_ky_thang", "Chu kỳ (tháng)", KieuTruongBieuMau.So, donVi: "tháng"),
+                T("han_ke_tiep", "Hạn hiệu chuẩn kế tiếp", KieuTruongBieuMau.Ngay, hanNhac: true),
+                T("ket_qua", "Kết quả", KieuTruongBieuMau.LuaChon, tuyChon: "Đạt, Không đạt, Chờ hiệu chuẩn"),
+                T("ghi_chu", "Ghi chú", KieuTruongBieuMau.Text),
+            }
+        };
+
+        yield return new BieuMauEntity
+        {
+            MaHieu = "BM-BD-01", Ten = "Sổ theo dõi bảo dưỡng thiết bị", BoCuc = BoCucBieuMau.NhieuDongTuDo,
+            TanSuat = "Khi bảo dưỡng; nhắc theo hạn bảo dưỡng kế tiếp", NhomQuyen = AppRoles.QuyenNhapLieu, ThuTu = 9,
+            MotPhieuMoiNgay = false,
+            GhiChuChan = "Ghi mỗi lần bảo dưỡng. Hệ thống nhắc khi đến/quá hạn bảo dưỡng kế tiếp.",
+            Truong =
+            {
+                T("thiet_bi", "Thiết bị", KieuTruongBieuMau.Text, batBuoc: true),
+                T("noi_dung", "Nội dung bảo dưỡng", KieuTruongBieuMau.Text, batBuoc: true),
+                T("ngay_bao_duong", "Ngày bảo dưỡng", KieuTruongBieuMau.Ngay),
+                T("han_ke_tiep", "Hạn bảo dưỡng kế tiếp", KieuTruongBieuMau.Ngay, hanNhac: true),
+                T("nguoi", "Người thực hiện", KieuTruongBieuMau.ChonNhanSu),
+                T("ghi_chu", "Ghi chú", KieuTruongBieuMau.Text),
             }
         };
     }

@@ -36,5 +36,9 @@ public class TruongBieuMau : TenantEntity
     /// <summary>Tên nhóm cột để gộp hiển thị, vd "Buổi sáng", "Nhiệt độ".</summary>
     public string? Nhom { get; set; }
 
+    /// <summary>True = trường Ngày này là "hạn kế tiếp" cần NHẮC (vd ngày hiệu chuẩn/bảo dưỡng kế tiếp của thiết bị):
+    /// hệ thống quét các dòng để nhắc khi đến/quá hạn.</summary>
+    public bool LaHanNhac { get; set; }
+
     public int ThuTu { get; set; }
 }

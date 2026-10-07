@@ -30,7 +30,7 @@ public class BieuMauServiceTests
 
         using (var db = MoDb())
         {
-            Assert.Equal(7, await db.BieuMaus.CountAsync());                 // 3 nhóm A + 1 checklist + 3 nhóm C
+            Assert.Equal(9, await db.BieuMaus.CountAsync());                 // 3 A + 1 checklist + 3 C + 2 D
             Assert.Equal(20, await db.HangMucBieuMaus.CountAsync());         // check list vệ sinh 20 hạng mục
             var checklist = await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-KT.KCS-01");
             Assert.Equal(BoCucBieuMau.Checklist, checklist.BoCuc);
@@ -45,7 +45,56 @@ public class BieuMauServiceTests
             Assert.True(kq.ThanhCong);
             Assert.Contains("đã có sẵn", kq.ThongBao);
         }
-        using (var db = MoDb()) Assert.Equal(7, await db.BieuMaus.CountAsync());
+        using (var db = MoDb()) Assert.Equal(9, await db.BieuMaus.CountAsync());
+    }
+
+    [Fact]
+    public async Task Nhac_Han_Liet_Ke_Dung_Dong_Den_Han()
+    {
+        var homNay = HCP.Domain.GioVietNam.HomNay;
+        int mauId;
+        using (var db = MoDb())
+        {
+            var mau = new BieuMauEntity
+            {
+                MaHieu = "BM-TB", Ten = "Thiết bị", BoCuc = BoCucBieuMau.NhieuDongTuDo, MotPhieuMoiNgay = false,
+                Truong =
+                {
+                    new TruongBieuMau { Ten = "Tên thiết bị", Ma = "ten", Kieu = KieuTruongBieuMau.Text },
+                    new TruongBieuMau { Ten = "Hạn kế tiếp", Ma = "han", Kieu = KieuTruongBieuMau.Ngay, LaHanNhac = true }
+                }
+            };
+            Assert.True((await Svc(db).LuuAsync(mau)).ThanhCong);
+            mauId = mau.Id;
+        }
+
+        // 3 dòng: quá hạn 5 ngày, đến hạn sau 10 ngày, đến hạn sau 100 ngày.
+        string J(string ten, DateOnly han) => $"{{\"ten\":\"{ten}\",\"han\":\"{han:yyyy-MM-dd}\"}}";
+        using (var db = MoDb())
+        {
+            db.PhieuGhiNhans.Add(new PhieuGhiNhan
+            {
+                BieuMauId = mauId, Ngay = homNay,
+                Dong =
+                {
+                    new DongGhiNhan { ThuTu = 0, GiaTriJson = J("Cân A", homNay.AddDays(-5)) },
+                    new DongGhiNhan { ThuTu = 1, GiaTriJson = J("Nhiệt kế B", homNay.AddDays(10)) },
+                    new DongGhiNhan { ThuTu = 2, GiaTriJson = J("Cân C", homNay.AddDays(100)) },
+                }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using (var db = MoDb())
+        {
+            var ds = await Svc(db).LayNhacHanAsync(30);
+            Assert.Equal(2, ds.Count);                                  // chỉ 2 dòng trong 30 ngày (gồm quá hạn)
+            Assert.Equal("Cân A", ds[0].Nhan);                          // quá hạn lên đầu (hạn sớm nhất)
+            Assert.Equal(-5, ds[0].SoNgayConLai);
+            Assert.Equal("Nhiệt kế B", ds[1].Nhan);
+            Assert.Equal(10, ds[1].SoNgayConLai);
+            Assert.DoesNotContain(ds, x => x.Nhan == "Cân C");          // 100 ngày: ngoài ngưỡng
+        }
     }
 
     [Fact]

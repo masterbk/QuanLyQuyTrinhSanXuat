@@ -22,4 +22,14 @@ public interface IBieuMauService
     /// Bỏ qua mẫu đã có cùng mã hiệu (idempotent) - gọi lại nhiều lần an toàn.
     /// </summary>
     Task<KetQuaThaoTac> NapMauMacDinhAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Danh sách các dòng (thiết bị...) đến hoặc quá hạn: quét mọi phiếu có trường "hạn nhắc" (LaHanNhac),
+    /// lấy dòng có hạn &lt;= hôm nay + <paramref name="soNgay"/>. Sắp theo hạn tăng dần (quá hạn lên trước).
+    /// </summary>
+    Task<IReadOnlyList<NhacHan>> LayNhacHanAsync(int soNgay, CancellationToken ct = default);
 }
+
+/// <summary>Một mục nhắc hạn (thiết bị/dòng sắp hoặc đã đến hạn hiệu chuẩn/bảo dưỡng).</summary>
+public sealed record NhacHan(int BieuMauId, string TenBieuMau, int PhieuId, DateOnly NgayPhieu,
+                             string Nhan, string TenTruong, DateOnly Han, int SoNgayConLai);

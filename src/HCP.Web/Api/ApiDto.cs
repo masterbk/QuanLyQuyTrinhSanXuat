@@ -214,7 +214,7 @@ public sealed record BieuMauDto(
 
 public sealed record TruongBieuMauDto(
     string Ma, string Ten, string Kieu, bool LaDauPhieu, bool BatBuoc, string? DonVi, string? GiaTriChuan,
-    string? TuyChonCsv, string? Nhom);
+    string? TuyChonCsv, string? Nhom, bool LaHanNhac);
 
 public sealed record HangMucBieuMauDto(int Id, string Ten, string? DienGiai, string? TanSuat);
 
@@ -226,6 +226,10 @@ public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string Gia
 
 /// <summary>Kết quả tải một ảnh cho trường kiểu Ảnh của phiếu ghi nhận.</summary>
 public sealed record AnhPhieuDto(string TenGoc, string DuongDan);
+
+/// <summary>Một mục nhắc hạn (thiết bị đến/quá hạn hiệu chuẩn/bảo dưỡng).</summary>
+public sealed record NhacHanDto(int BieuMauId, string TenBieuMau, int PhieuId, DateOnly NgayPhieu, string Nhan,
+                                string TenTruong, DateOnly Han, int SoNgayConLai);
 
 public sealed record TaoPhieuRequest(
     int BieuMauId, DateOnly? Ngay, IReadOnlyDictionary<string, string?>? GiaTriDau, string? GhiChu,

@@ -34,6 +34,14 @@ public static class BieuMauApi
             return mau is null ? Results.NotFound(new LoiDto("Không tìm thấy biểu mẫu.")) : Results.Ok(Map(mau));
         });
 
+        // Danh sách thiết bị/dòng đến hoặc quá hạn (hiệu chuẩn, bảo dưỡng) trong soNgay ngày tới (mặc định 30).
+        nhom.MapGet("/bieu-mau/nhac-han", async (IBieuMauService bmSvc, int? soNgay) =>
+        {
+            var ds = await bmSvc.LayNhacHanAsync(soNgay ?? 30);
+            return Results.Ok(ds.Select(x => new NhacHanDto(
+                x.BieuMauId, x.TenBieuMau, x.PhieuId, x.NgayPhieu, x.Nhan, x.TenTruong, x.Han, x.SoNgayConLai)).ToList());
+        });
+
         // Danh sách phiếu đã ghi; cuaToi=true thì chỉ của người đang đăng nhập.
         nhom.MapGet("/phieu-ghi-nhan", async (IPhieuGhiNhanService svc, ClaimsPrincipal user, AppDbContext db,
                                               DateOnly? ngay, int? bieuMauId, bool cuaToi = false) =>
@@ -128,7 +136,8 @@ public static class BieuMauApi
     private static BieuMauDto Map(BieuMauEntity b) => new(
         b.Id, b.MaHieu, b.Ten, b.BoCuc.ToString(), b.TanSuat, b.GhiChuChan, b.MotPhieuMoiNgay,
         b.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMauDto(
-            t.Ma, t.Ten, t.Kieu.ToString(), t.LaDauPhieu, t.BatBuoc, t.DonVi, t.GiaTriChuan, t.TuyChonCsv, t.Nhom)).ToList(),
+            t.Ma, t.Ten, t.Kieu.ToString(), t.LaDauPhieu, t.BatBuoc, t.DonVi, t.GiaTriChuan, t.TuyChonCsv, t.Nhom,
+            t.LaHanNhac)).ToList(),
         b.HangMuc.OrderBy(h => h.ThuTu).Select(h => new HangMucBieuMauDto(
             h.Id, h.Ten, h.DienGiai, h.TanSuat)).ToList());
 

@@ -180,3 +180,36 @@ class MucChon {
   final String ten;
   const MucChon(this.ma, this.ten);
 }
+
+/// Một mục nhắc hạn (thiết bị đến/quá hạn hiệu chuẩn/bảo dưỡng).
+class NhacHan {
+  final int bieuMauId;
+  final String tenBieuMau;
+  final int phieuId;
+  final String nhan; // nhãn dòng (tên thiết bị...)
+  final String tenTruong; // tên trường hạn (vd "Hạn hiệu chuẩn kế tiếp")
+  final DateTime han;
+  final int soNgayConLai; // < 0 = quá hạn
+
+  const NhacHan({
+    required this.bieuMauId,
+    required this.tenBieuMau,
+    required this.phieuId,
+    required this.nhan,
+    required this.tenTruong,
+    required this.han,
+    required this.soNgayConLai,
+  });
+
+  bool get quaHan => soNgayConLai < 0;
+
+  factory NhacHan.tuJson(Map<String, dynamic> j) => NhacHan(
+        bieuMauId: j['bieuMauId'] as int? ?? 0,
+        tenBieuMau: j['tenBieuMau'] as String? ?? '',
+        phieuId: j['phieuId'] as int? ?? 0,
+        nhan: j['nhan'] as String? ?? '',
+        tenTruong: j['tenTruong'] as String? ?? '',
+        han: DateTime.tryParse(j['han'] as String? ?? '') ?? DateTime.now(),
+        soNgayConLai: j['soNgayConLai'] as int? ?? 0,
+      );
+}
