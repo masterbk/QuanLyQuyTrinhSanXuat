@@ -27,7 +27,7 @@ public static class BieuMauApi
     }
 
     /// <summary>Họ tên nhân sự (nếu tài khoản gắn nhân sự), không thì họ tên / tên đăng nhập của tài khoản.</summary>
-    private static async Task<string?> TenNguoiLapAsync(AppDbContext db, string? maNhanSu, string? userId)
+    internal static async Task<string?> TenNguoiLapAsync(AppDbContext db, string? maNhanSu, string? userId)
     {
         if (maNhanSu is not null)
         {
@@ -194,7 +194,10 @@ public static class BieuMauApi
             if (!(await MauDuocNhapAsync(svc, user, ma)).Any(b => b.Id == cu.BieuMauId)) return KhongDuocNhap();
             var phieu = TuRequest(req, ma);
             phieu.Id = id;
-            var kq = await svc.CapNhatPhieuAsync(phieu, req.HoanThanh ?? true);
+            // Mốc lưu của phiếu lúc app mở ra -> chống ghi đè khi hai người cùng nhập (app cũ không gửi = không kiểm).
+            phieu.TenNguoiCapNhat = await TenNguoiLapAsync(db, ma, user.FindFirstValue(ClaimTypes.NameIdentifier));
+            var kq = await svc.CapNhatPhieuAsync(phieu, req.HoanThanh ?? true, req.ThoiGianUtcGoc);
+            if (kq.XungDot) return Results.Conflict(new LoiDto(kq.ThongBao));
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
                                 : Results.BadRequest(new LoiDto(kq.ThongBao));
         });

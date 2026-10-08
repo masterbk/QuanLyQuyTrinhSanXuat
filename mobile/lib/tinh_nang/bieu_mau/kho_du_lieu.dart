@@ -94,8 +94,10 @@ class KhoBieuMau {
     return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
   }
 
-  /// Cập nhật phiếu nháp (nhập tiếp). [hoanThanh]=true thì chốt.
+  /// Cập nhật phiếu nháp (nhập tiếp). [hoanThanh]=true thì chốt. [mocLuu] = mốc lưu của phiếu lúc mở ra: phiếu đã
+  /// bị người khác lưu sau mốc này thì máy chủ trả 409 (không ghi đè).
   Future<String> capNhatPhieu({
+    DateTime? mocLuu,
     required int id,
     required int bieuMauId,
     DateTime? ngay,
@@ -104,8 +106,10 @@ class KhoBieuMau {
     required List<Map<String, dynamic>> dong,
     bool hoanThanh = true,
   }) async {
-    final j = await _api.put('/api/v1/phieu-ghi-nhan/$id',
-        than: _than(bieuMauId, ngay, giaTriDau, ghiChu, dong, hoanThanh)) as Map<String, dynamic>;
+    final j = await _api.put('/api/v1/phieu-ghi-nhan/$id', than: {
+      ..._than(bieuMauId, ngay, giaTriDau, ghiChu, dong, hoanThanh),
+      if (mocLuu != null) 'thoiGianUtcGoc': mocLuu.toUtc().toIso8601String(),
+    }) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
   }
 

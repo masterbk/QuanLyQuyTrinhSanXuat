@@ -1,0 +1,518 @@
+@page "/app/nhap-phieu"
+@using System.Security.Claims
+@using System.Text.Json
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Domain.Enums
+@using HCP.Infrastructure.Persistence
+@using HCP.Infrastructure.Services
+@using HCP.Infrastructure.Services.BieuMau
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau
+@attribute [Authorize(Roles = AppRoles.QuyenBieuMau)]
+@inject IPhieuGhiNhanService PhieuService
+@inject IDanhMucService<Staff> NhanSuService
+@inject IDanhMucService<Product> SanPhamService
+@inject IDanhMucService<SubSupplier> NccService
+@inject IDanhMucService<Facility> CoSoService
+@inject ILuuTruAnhService LuuTruAnh
+@inject AppDbContext Db
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Nhập phiếu biểu mẫu</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Nhập phiếu biểu mẫu</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+    Chọn biểu mẫu và ngày. Ngày đã có phiếu nháp thì nhập tiếp; phiếu đã hoàn thành chỉ xem.
+</MudText>
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_dsMau.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Bạn chưa được giao biểu mẫu nào - liên hệ quản trị cơ sở.</MudAlert>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 align-center mb-3">
+        <MudSelect T="int" Value="_mauId" ValueChanged="DoiMauAsync" Label="Biểu mẫu" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Style="min-width:320px">
+            @foreach (var m in _dsMau)
+            {
+                <MudSelectItem T="int" Value="@m.Id">@m.Ten (@m.MaHieu)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudDatePicker Date="_ngay" DateChanged="DoiNgayAsync" Label="Ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Style="max-width:180px" />
+    </div>
+
+    @if (_mau is not null)
+    {
+        @* Mẫu nhiều phiếu/ngày: danh sách phiếu trong ngày + phiếu mới. *@
+        @if (!_mau.MotPhieuMoiNgay)
+        {
+            <div class="d-flex flex-wrap gap-2 align-center mb-3">
+                <MudText Typo="Typo.body2">Phiếu trong ngày:</MudText>
+                @foreach (var p in _dsNgay)
+                {
+                    var p1 = p;
+                    <MudChip T="string" Size="Size.Small" OnClick="@(() => ApDung(p1))"
+                             Color="@(p.Id == _phieuId ? Color.Primary : Color.Default)"
+                             Variant="@(p.Id == _phieuId ? Variant.Filled : Variant.Outlined)">
+                        #@p.Id · @(p.TrangThai == TrangThaiPhieu.Nhap ? "Nháp" : "Đã ghi nhận") · @(p.TenNguoiLap ?? p.NguoiLap) · @GioVietNam.TuUtc(p.ThoiGianUtc).ToString("HH:mm")
+                    </MudChip>
+                }
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="@(() => ApDung(null))">Phiếu mới</MudButton>
+            </div>
+        }
+
+        @if (_choXem)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                Phiếu đã hoàn thành (@_tenNguoiLuu, @_gioLuu) - chỉ xem, không sửa được.
+            </MudAlert>
+        }
+        else if (_phieuId is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                Đang nhập tiếp phiếu nháp - lưu gần nhất bởi @_tenNguoiLuu lúc @_gioLuu.
+            </MudAlert>
+        }
+
+        @* Trường đầu phiếu *@
+        @if (TruongDau.Count > 0)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudGrid Spacing="2">
+                    @foreach (var t in TruongDau)
+                    {
+                        <MudItem xs="12" sm="6" md="3">@O(t, _dau, nhan: true)</MudItem>
+                    }
+                </MudGrid>
+            </MudPaper>
+        }
+
+        @if (_mau.BoCuc == BoCucBieuMau.TheoNgay)
+        {
+            @* Theo ngày: một dòng, gom các trường theo Nhóm cột (vd Buổi sáng / Buổi chiều). *@
+            @foreach (var nhom in TruongDong.GroupBy(t => t.Nhom ?? ""))
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-3">
+                    @if (nhom.Key.Length > 0)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">@nhom.Key</MudText>
+                    }
+                    <MudGrid Spacing="2">
+                        @foreach (var t in nhom)
+                        {
+                            <MudItem xs="12" sm="6" md="3">@O(t, _dong[0].GiaTri, nhan: true)</MudItem>
+                        }
+                    </MudGrid>
+                </MudPaper>
+            }
+        }
+        else
+        {
+            @* Checklist / nhiều dòng: dạng bảng như biểu mẫu giấy. *@
+            <MudPaper Outlined="true" Class="mb-3" Style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Bordered="true" Style="min-width:700px">
+                    <thead>
+                        <tr>
+                            <th style="width:40px">STT</th>
+                            @if (LaChecklist)
+                            {
+                                <th style="min-width:200px">Hạng mục</th>
+                            }
+                            @foreach (var t in TruongDong)
+                            {
+                                <th style="min-width:130px">
+                                    @TieuDe(t)
+                                    @if (LaChecklist && t.Kieu == KieuTruongBieuMau.DatKhongDat && !_choXem)
+                                    {
+                                        <div>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success"
+                                                       OnClick="@(() => DatHetOTrong(t))">Đạt các ô trống</MudButton>
+                                        </div>
+                                    }
+                                </th>
+                            }
+                            @if (!LaChecklist && !_choXem)
+                            {
+                                <th style="width:40px"></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < _dong.Count; i++)
+                        {
+                            var d = _dong[i];
+                            <tr>
+                                <td>@(i + 1)</td>
+                                @if (LaChecklist)
+                                {
+                                    <td>@d.TenHangMuc</td>
+                                }
+                                @foreach (var t in TruongDong)
+                                {
+                                    <td>@O(t, d.GiaTri, nhan: false)</td>
+                                }
+                                @if (!LaChecklist && !_choXem)
+                                {
+                                    <td>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                                       Disabled="@(_dong.Count == 1)" OnClick="@(() => _dong.Remove(d))" />
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+            @if (!LaChecklist && !_choXem)
+            {
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" Class="mb-3"
+                           OnClick="@(() => _dong.Add(new DongNhap()))">Thêm dòng</MudButton>
+            }
+        }
+
+        <MudTextField @bind-Value="_ghiChu" Label="Ghi chú phiếu" Variant="Variant.Outlined" Lines="2" Class="mb-3"
+                      ReadOnly="_choXem" />
+
+        @if (!string.IsNullOrWhiteSpace(_mau.GhiChuChan))
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-3"><i>@_mau.GhiChuChan</i></MudText>
+        }
+
+        <div class="d-flex flex-wrap gap-2">
+            @if (!_choXem)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_dangLuu"
+                           StartIcon="@Icons.Material.Filled.Save" OnClick="@(() => LuuAsync(false))">Lưu nháp</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangLuu"
+                           StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="@(() => LuuAsync(true))">Hoàn thành</MudButton>
+            }
+            @if (_phieuId is { } pid)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                           Href="@($"/app/phieu/{pid}/pdf")" Target="_blank">Xem PDF</MudButton>
+            }
+        </div>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery] public int? BieuMauId { get; set; }
+    [SupplyParameterFromQuery] public string? Ngay { get; set; }
+    [SupplyParameterFromQuery] public int? PhieuId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    /// <summary>Một dòng đang nhập: giá trị theo khoá trường (+ hạng mục với checklist).</summary>
+    private sealed class DongNhap
+    {
+        public int? HangMucId { get; init; }
+        public string? TenHangMuc { get; init; }
+        public Dictionary<string, string?> GiaTri { get; set; } = new();
+        public string? GhiChu { get; set; }
+    }
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+    private List<BieuMauEntity> _dsMau = new();
+    private BieuMauEntity? _mau;
+    private int _mauId;
+    private DateTime? _ngay = GioVietNam.HomNay.ToDateTime(TimeOnly.MinValue);
+
+    private List<PhieuGhiNhan> _dsNgay = new();
+    private int? _phieuId;
+    private DateTime? _mocLuu;          // mốc lưu của phiếu lúc mở - chống ghi đè người khác
+    private bool _choXem;
+    private string? _tenNguoiLuu;
+    private string? _gioLuu;
+    private Dictionary<string, string?> _dau = new();
+    private List<DongNhap> _dong = new();
+    private string? _ghiChu;
+
+    private string? _maNhanSu;          // nhân sự của tài khoản đăng nhập (tự điền ô "Chọn nhân sự")
+    private string? _userId;
+    private Dictionary<string, string> _nhanSu = new(), _sanPham = new(), _ncc = new(), _coSo = new();
+
+    private bool LaChecklist => _mau?.BoCuc == BoCucBieuMau.Checklist;
+    private List<TruongBieuMau> TruongDau => _mau?.Truong.Where(t => t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList() ?? new();
+    private List<TruongBieuMau> TruongDong => _mau?.Truong.Where(t => !t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList() ?? new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = AuthState is null ? new ClaimsPrincipal() : (await AuthState).User;
+        _userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        _maNhanSu = await HCP.Web.Api.LenhSanXuatApi.MaNhanSuHienTaiAsync(user, Db);
+        _dsMau = (await PhieuService.LayBieuMauChoNhapAsync(AppRoles.VaiTroCoSo.Where(user.IsInRole).ToList(), _maNhanSu)).ToList();
+
+        _nhanSu = (await NhanSuService.LayTatCaAsync()).Where(n => n.TrangThai)
+            .GroupBy(n => n.MaNhanSu).ToDictionary(g => g.Key, g => g.First().HoTen);
+        _sanPham = (await SanPhamService.LayTatCaAsync()).Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham)
+            .GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
+        _ncc = (await NccService.LayTatCaAsync()).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
+        _coSo = (await CoSoService.LayTatCaAsync()).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
+
+        if (DateOnly.TryParse(Ngay, out var n)) _ngay = n.ToDateTime(TimeOnly.MinValue);
+        _mauId = _dsMau.Any(m => m.Id == BieuMauId) ? BieuMauId!.Value : _dsMau.FirstOrDefault()?.Id ?? 0;
+        if (_mauId != 0) await NapAsync(PhieuId);
+        _dangTai = false;
+    }
+
+    private async Task DoiMauAsync(int id) { _mauId = id; await NapAsync(null); }
+    private async Task DoiNgayAsync(DateTime? d) { _ngay = d ?? GioVietNam.HomNay.ToDateTime(TimeOnly.MinValue); await NapAsync(null); }
+
+    private DateOnly NgayChon => DateOnly.FromDateTime(_ngay ?? GioVietNam.HomNay.ToDateTime(TimeOnly.MinValue));
+
+    /// <summary>Nạp phiếu theo mẫu + ngày: 1 phiếu/ngày thì mở phiếu của ngày; nhiều phiếu/ngày thì liệt kê, mở phiếu chỉ định.</summary>
+    private async Task NapAsync(int? moPhieuId)
+    {
+        _mau = _dsMau.FirstOrDefault(m => m.Id == _mauId);
+        _dsNgay = new();
+        if (_mau is null) return;
+        if (_mau.MotPhieuMoiNgay)
+        {
+            ApDung(await PhieuService.LayPhieuTheoNgayAsync(_mau.Id, NgayChon));
+        }
+        else
+        {
+            _dsNgay = (await PhieuService.LayPhieuAsync(NgayChon, null, _mau.Id)).OrderBy(p => p.Id).ToList();
+            ApDung(_dsNgay.FirstOrDefault(p => p.Id == moPhieuId));
+        }
+    }
+
+    /// <summary>Đưa một phiếu vào form (null = phiếu mới).</summary>
+    private void ApDung(PhieuGhiNhan? p)
+    {
+        _phieuId = p?.Id;
+        _mocLuu = p?.ThoiGianUtc;
+        _choXem = p is not null && p.TrangThai != TrangThaiPhieu.Nhap;
+        _tenNguoiLuu = p?.TenNguoiCapNhat ?? p?.TenNguoiLap ?? p?.NguoiLap;
+        _gioLuu = p is null ? null : GioVietNam.TuUtc(p.ThoiGianUtc).ToString("HH:mm dd/MM");
+        _dau = DocJson(p?.GiaTriDauJson);
+        _ghiChu = p?.GhiChu;
+
+        var dongCu = p?.Dong.OrderBy(d => d.ThuTu).ToList() ?? new();
+        if (LaChecklist)
+        {
+            var theoHm = dongCu.Where(d => d.HangMucBieuMauId is not null).GroupBy(d => d.HangMucBieuMauId!.Value)
+                               .ToDictionary(g => g.Key, g => g.First());
+            _dong = _mau!.HangMuc.OrderBy(h => h.ThuTu).Select(h => new DongNhap
+            {
+                HangMucId = h.Id, TenHangMuc = h.Ten,
+                GiaTri = DocJson(theoHm.GetValueOrDefault(h.Id)?.GiaTriJson), GhiChu = theoHm.GetValueOrDefault(h.Id)?.GhiChu
+            }).ToList();
+        }
+        else
+        {
+            _dong = dongCu.Select(d => new DongNhap { GiaTri = DocJson(d.GiaTriJson), GhiChu = d.GhiChu }).ToList();
+            if (_dong.Count == 0) _dong.Add(new DongNhap());
+        }
+    }
+
+    // ---------------- Ô nhập theo kiểu trường ----------------
+
+    private static string TieuDe(TruongBieuMau t)
+    {
+        var s = string.IsNullOrWhiteSpace(t.Nhom) ? t.Ten : $"{t.Nhom} - {t.Ten}";
+        if (!string.IsNullOrWhiteSpace(t.DonVi)) s += $" ({t.DonVi})";
+        return t.BatBuoc ? s + " *" : s;
+    }
+
+    private RenderFragment O(TruongBieuMau t, Dictionary<string, string?> gt, bool nhan) => __builder =>
+    {
+        var v = gt.GetValueOrDefault(t.Ma);
+        var label = nhan ? TieuDe(t) : null;
+        var goiY = string.IsNullOrWhiteSpace(t.GiaTriChuan) ? null : $"Chuẩn: {t.GiaTriChuan}";
+        switch (t.Kieu)
+        {
+            case KieuTruongBieuMau.DatKhongDat:
+                @if (nhan) { <MudText Typo="Typo.caption" Class="d-block">@label</MudText> }
+                @if (_choXem)
+                {
+                    @* Chỉ xem: hiện kết quả bằng chip màu (nút bị khoá thì xám hết, không phân biệt được). *@
+                    @if (!string.IsNullOrEmpty(v))
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="@(v == "Đạt" ? Color.Success : Color.Error)">@v</MudChip>
+                    }
+                    else
+                    {
+                        <span class="mud-text-secondary">—</span>
+                    }
+                    break;
+                }
+                <MudButtonGroup Size="Size.Small" OverrideStyles="false">
+                    <MudButton Size="Size.Small" Disabled="_choXem" Color="@(v == "Đạt" ? Color.Success : Color.Default)"
+                               Variant="@(v == "Đạt" ? Variant.Filled : Variant.Outlined)"
+                               OnClick="@(() => Dat(gt, t, v == "Đạt" ? null : "Đạt"))">Đ</MudButton>
+                    <MudButton Size="Size.Small" Disabled="_choXem" Color="@(v == "Không đạt" ? Color.Error : Color.Default)"
+                               Variant="@(v == "Không đạt" ? Variant.Filled : Variant.Outlined)"
+                               OnClick="@(() => Dat(gt, t, v == "Không đạt" ? null : "Không đạt"))">KĐ</MudButton>
+                </MudButtonGroup>
+                break;
+            case KieuTruongBieuMau.ChonNhanSu:
+            case KieuTruongBieuMau.ChonSanPham:
+            case KieuTruongBieuMau.ChonNcc:
+            case KieuTruongBieuMau.ChonCoSo:
+            case KieuTruongBieuMau.LuaChon:
+                var ds = DanhSachChon(t);
+                <MudSelect T="string" Value="@v" ValueChanged="@(x => Dat(gt, t, x))" Label="@label" Dense="true"
+                           Margin="Margin.Dense" Variant="Variant.Outlined" Clearable="@(!_choXem)" ReadOnly="_choXem">
+                    @foreach (var (ma, ten) in ds)
+                    {
+                        <MudSelectItem T="string" Value="@ma">@ten</MudSelectItem>
+                    }
+                    @if (!string.IsNullOrEmpty(v) && ds.All(x => x.Ma != v))
+                    {
+                        <MudSelectItem T="string" Value="@v">@v</MudSelectItem>
+                    }
+                </MudSelect>
+                break;
+            case KieuTruongBieuMau.Anh:
+                @if (nhan) { <MudText Typo="Typo.caption" Class="d-block">@label</MudText> }
+                <div class="d-flex align-center gap-1">
+                    @if (!string.IsNullOrEmpty(v))
+                    {
+                        <a href="@v" target="_blank"><img src="@v" style="height:48px;width:48px;object-fit:cover;border-radius:4px" /></a>
+                        @if (!_choXem)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => Dat(gt, t, null))" />
+                        }
+                    }
+                    else if (!_choXem)
+                    {
+                        <MudFileUpload T="IBrowserFile" FilesChanged="@(f => TaiAnhAsync(gt, t, f))" Accept="image/*">
+                            <ActivatorContent>
+                                <MudIconButton Icon="@Icons.Material.Filled.AddAPhoto" Size="Size.Small" />
+                            </ActivatorContent>
+                        </MudFileUpload>
+                    }
+                </div>
+                break;
+            default:
+                var kieuNhap = t.Kieu switch
+                {
+                    KieuTruongBieuMau.So => InputType.Number,
+                    KieuTruongBieuMau.Gio => InputType.Time,
+                    KieuTruongBieuMau.Ngay => InputType.Date,
+                    _ => InputType.Text
+                };
+                <MudTextField T="string" Value="@v" ValueChanged="@(x => Dat(gt, t, x))" Label="@label" HelperText="@goiY"
+                              InputType="kieuNhap" Margin="Margin.Dense" Variant="Variant.Outlined" ReadOnly="_choXem" />
+                break;
+        }
+    };
+
+    private IReadOnlyList<(string Ma, string Ten)> DanhSachChon(TruongBieuMau t) => t.Kieu switch
+    {
+        KieuTruongBieuMau.ChonNhanSu => _nhanSu.Select(x => (x.Key, x.Value)).ToList(),
+        KieuTruongBieuMau.ChonSanPham => _sanPham.Select(x => (x.Key, x.Value)).ToList(),
+        KieuTruongBieuMau.ChonNcc => _ncc.Select(x => (x.Key, x.Value)).ToList(),
+        KieuTruongBieuMau.ChonCoSo => _coSo.Select(x => (x.Key, x.Value)).ToList(),
+        _ => (t.TuyChonCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => (x, x)).ToList()
+    };
+
+    /// <summary>
+    /// Ghi giá trị một ô. Nhập dữ liệu (không phải ô chọn nhân sự) thì tự điền người đang đăng nhập vào các ô
+    /// "Chọn nhân sự" còn trống cùng dòng và cùng nhóm cột - giống app.
+    /// </summary>
+    private void Dat(Dictionary<string, string?> gt, TruongBieuMau t, string? v)
+    {
+        if (_choXem) return;
+        gt[t.Ma] = string.IsNullOrWhiteSpace(v) ? null : v;
+        if (t.Kieu == KieuTruongBieuMau.ChonNhanSu || string.IsNullOrWhiteSpace(v) || string.IsNullOrEmpty(_maNhanSu)) return;
+        var pham = ReferenceEquals(gt, _dau) ? TruongDau : TruongDong;
+        foreach (var f in pham.Where(f => f.Kieu == KieuTruongBieuMau.ChonNhanSu && (f.Nhom ?? "") == (t.Nhom ?? "")))
+            if (string.IsNullOrWhiteSpace(gt.GetValueOrDefault(f.Ma))) gt[f.Ma] = _maNhanSu;
+    }
+
+    /// <summary>Checklist: đánh "Đạt" cho mọi ô còn trống của cột (không đè ô đã chọn Không đạt).</summary>
+    private void DatHetOTrong(TruongBieuMau t)
+    {
+        foreach (var d in _dong)
+            if (string.IsNullOrWhiteSpace(d.GiaTri.GetValueOrDefault(t.Ma))) Dat(d.GiaTri, t, "Đạt");
+    }
+
+    private async Task TaiAnhAsync(Dictionary<string, string?> gt, TruongBieuMau t, IBrowserFile? f)
+    {
+        if (f is null) return;
+        try { Dat(gt, t, (await LuuTruAnh.LuuAsync(f)).DuongDan); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    // ---------------- Lưu ----------------
+
+    private async Task LuuAsync(bool hoanThanh)
+    {
+        if (_mau is null || _choXem) return;
+        static bool CoGiaTri(Dictionary<string, string?> gt) => gt.Values.Any(x => !string.IsNullOrWhiteSpace(x));
+        // Checklist giữ mọi hạng mục; nhiều dòng / theo ngày bỏ dòng trống hoàn toàn.
+        var gui = LaChecklist ? _dong : _dong.Where(d => CoGiaTri(d.GiaTri) || !string.IsNullOrWhiteSpace(d.GhiChu)).ToList();
+        if (gui.Count == 0) { Snackbar.Add("Chưa nhập dữ liệu nào.", Severity.Warning); return; }
+
+        if (hoanThanh)
+        {
+            var dongY = await DialogService.ShowMessageBox("Hoàn thành phiếu?",
+                "Sau khi hoàn thành, phiếu được chốt và chỉ xem lại được (không sửa tiếp). Tiếp tục?",
+                yesText: "Hoàn thành", cancelText: "Huỷ");
+            if (dongY != true) return;
+        }
+
+        static string Json(Dictionary<string, string?> gt) =>
+            JsonSerializer.Serialize(gt.Where(x => !string.IsNullOrWhiteSpace(x.Value)).ToDictionary(x => x.Key, x => x.Value));
+
+        var phieu = new PhieuGhiNhan
+        {
+            Id = _phieuId ?? 0, BieuMauId = _mau.Id, Ngay = NgayChon, GiaTriDauJson = Json(_dau),
+            GhiChu = string.IsNullOrWhiteSpace(_ghiChu) ? null : _ghiChu.Trim(),
+            Dong = gui.Select(d => new DongGhiNhan { HangMucBieuMauId = d.HangMucId, GiaTriJson = Json(d.GiaTri), GhiChu = d.GhiChu }).ToList()
+        };
+        var ten = await HCP.Web.Api.BieuMauApi.TenNguoiLapAsync(Db, _maNhanSu, _userId);
+
+        _dangLuu = true;
+        KetQuaThaoTac kq;
+        if (_phieuId is null)
+        {
+            phieu.NguoiLap = _maNhanSu;
+            phieu.NguoiLapUserId = _userId;
+            phieu.TenNguoiLap = ten;
+            kq = await PhieuService.TaoPhieuAsync(phieu, hoanThanh);
+        }
+        else
+        {
+            phieu.TenNguoiCapNhat = ten;
+            kq = await PhieuService.CapNhatPhieuAsync(phieu, hoanThanh, _mocLuu);
+        }
+        _dangLuu = false;
+
+        if (kq.XungDot)
+        {
+            var taiLai = await DialogService.ShowMessageBox("Phiếu đã thay đổi",
+                kq.ThongBao + " Tải lại sẽ bỏ phần bạn vừa nhập để hiện bản mới nhất.",
+                yesText: "Tải lại", cancelText: "Để sau");
+            if (taiLai == true) await NapAsync(_phieuId);
+            return;
+        }
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (!kq.ThanhCong) return;
+
+        // Nạp lại để có id + mốc lưu mới; mẫu nhiều phiếu/ngày đã hoàn thành thì mở phiếu mới để nhập tiếp.
+        var id = phieu.Id != 0 ? phieu.Id : _phieuId;
+        await NapAsync(!_mau.MotPhieuMoiNgay && hoanThanh ? null : id);
+    }
+
+    private static Dictionary<string, string?> DocJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return JsonSerializer.Deserialize<Dictionary<string, string?>>(json) ?? new(); }
+        catch (JsonException) { return new(); }
+    }
+}

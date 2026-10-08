@@ -38,6 +38,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
   final _DongNhap _dauPhieu = _DongNhap(); // giá trị các trường đầu phiếu
   late List<_DongNhap> _dong;
   int? _phieuId; // phiếu đang mở (null = phiếu mới)
+  DateTime? _mocLuu; // mốc lưu của phiếu lúc mở - gửi kèm khi cập nhật để không ghi đè người khác
   bool _choXem = false; // true = phiếu đã hoàn thành -> chỉ xem, khóa nhập
   List<PhieuGhiNhan> _dsNgay = []; // phiếu trong ngày (biểu mẫu nhiều phiếu/ngày)
   int _napLan = 0; // tăng mỗi lần nạp lại (đổi ngày/đổi phiếu) để ép các ô initialValue dựng lại
@@ -87,6 +88,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     _napLan++;
     _dong = _dungDongBanDau();
     _dauPhieu.giaTri.clear();
+    _mocLuu = p?.thoiGianUtc;
     if (p == null) {
       _phieuId = null;
       _choXem = false;
@@ -686,7 +688,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       final kho = ref.read(khoBieuMauProvider);
       final String tb;
       if (_phieuId != null) {
-        tb = await kho.capNhatPhieu(id: _phieuId!, bieuMauId: widget.mau.id, ngay: _ngay,
+        tb = await kho.capNhatPhieu(id: _phieuId!, mocLuu: _mocLuu, bieuMauId: widget.mau.id, ngay: _ngay,
             giaTriDau: giaTriDau, ghiChu: ghiChu, dong: dongGui, hoanThanh: hoanThanh);
       } else {
         tb = await kho.taoPhieu(bieuMauId: widget.mau.id, ngay: _ngay,
@@ -704,21 +706,52 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       } else {
         _bao(tb);
         // Đảm bảo có id để lần lưu sau nhập tiếp đúng phiếu.
+        // Đảm bảo có id + mốc lưu MỚI để lần lưu sau nhập tiếp đúng phiếu và không bị coi là ghi đè.
         if (_motPhieuNgay) {
-          if (_phieuId == null) {
-            final p = await kho.phieuTheoNgay(widget.mau.id, _ngay);
-            if (mounted) setState(() => _phieuId = p?.id);
-          }
+          final p = await kho.phieuTheoNgay(widget.mau.id, _ngay);
+          if (mounted) setState(() { _phieuId = p?.id; _mocLuu = p?.thoiGianUtc; });
         } else {
           final ds = await kho.phieu(ngay: _ngay, bieuMauId: widget.mau.id);
-          if (mounted) setState(() { _dsNgay = ds; _phieuId ??= ds.isNotEmpty ? ds.first.id : null; });
+          if (mounted) {
+            setState(() {
+              _dsNgay = ds;
+              _phieuId ??= ds.isNotEmpty ? ds.first.id : null;
+              _mocLuu = ds.where((x) => x.id == _phieuId).firstOrNull?.thoiGianUtc;
+            });
+          }
         }
       }
     } on LoiApi catch (e) {
-      _bao(e.thongBao);
+      if (e.maHttp == 409) {
+        await _baoXungDot(e.thongBao);
+      } else {
+        _bao(e.thongBao);
+      }
     } finally {
       if (mounted) setState(() => _dangLuu = false);
     }
+  }
+
+  /// Phiếu vừa bị người khác lưu: không ghi đè; cho tải lại bản mới nhất (bỏ phần vừa nhập trên máy này).
+  Future<void> _baoXungDot(String thongBao) async {
+    final taiLai = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Phiếu đã thay đổi'),
+        content: Text('$thongBao\n\nTải lại sẽ bỏ phần bạn vừa nhập trên máy này để hiện bản mới nhất.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Để sau')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Tải lại')),
+        ],
+      ),
+    );
+    if (taiLai != true || !mounted) return;
+    final id = _phieuId;
+    _daMoPhieuChiDinh = false;
+    await _napTheoNgay();
+    // Mẫu nhiều phiếu/ngày: mở lại đúng phiếu đang sửa.
+    final p = _dsNgay.where((x) => x.id == id).firstOrNull;
+    if (!_motPhieuNgay && p != null && mounted) setState(() => _apDungPhieu(p));
   }
 
   /// Hỏi xác nhận trước khi chốt phiếu. Trả true nếu người dùng đồng ý.

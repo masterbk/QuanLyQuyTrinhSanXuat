@@ -28,6 +28,9 @@ public class PhieuGhiNhan : TenantEntity
     /// <summary>Tên người lập lúc tạo phiếu (họ tên nhân sự hoặc tên tài khoản) - để hiển thị.</summary>
     public string? TenNguoiLap { get; set; }
 
+    /// <summary>Tên người lưu phiếu gần nhất - để báo "phiếu vừa được X cập nhật" khi hai người cùng sửa.</summary>
+    public string? TenNguoiCapNhat { get; set; }
+
     public TrangThaiPhieu TrangThai { get; set; } = TrangThaiPhieu.DaGhiNhan;
 
     public string? GhiChu { get; set; }

@@ -133,6 +133,7 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
 
         phieu.TrangThai = hoanThanh ? TrangThaiPhieu.DaGhiNhan : TrangThaiPhieu.Nhap;
         phieu.ThoiGianUtc = DateTime.UtcNow;
+        phieu.TenNguoiCapNhat ??= phieu.TenNguoiLap;
         phieu.NguoiThamTra = null;
         phieu.ThoiGianThamTraUtc = null;
         phieu.KetQuaThamTra = null;
@@ -142,10 +143,26 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
     }
 
     public async Task<KetQuaThaoTac> CapNhatPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true,
-                                                       CancellationToken ct = default)
+                                                       DateTime? mocLuuLucMo = null, CancellationToken ct = default)
     {
+        // Web (Blazor) giữ một DbContext suốt phiên: bản phiếu/dòng đã nạp trước đó vẫn được "theo dõi" và EF trả lại
+        // bản CŨ đó thay vì đọc CSDL -> không phát hiện người khác vừa lưu, ghi thì lỗi. Bỏ theo dõi để đọc bản mới nhất.
+        foreach (var e in _db.ChangeTracker.Entries<DongGhiNhan>().Where(e => e.Entity.PhieuGhiNhanId == phieu.Id).ToList())
+            e.State = EntityState.Detached;
+        foreach (var e in _db.ChangeTracker.Entries<PhieuGhiNhan>().Where(e => e.Entity.Id == phieu.Id).ToList())
+            e.State = EntityState.Detached;
+
         var goc = await _db.PhieuGhiNhans.Include(p => p.Dong).FirstOrDefaultAsync(p => p.Id == phieu.Id, ct);
         if (goc is null) return KetQuaThaoTac.Loi("Không tìm thấy phiếu.");
+        // Chống ghi đè: phiếu đã được lưu (bởi người/máy khác) sau lúc mình mở ra -> không ghi, báo tải lại.
+        // So lệch > 1 ms vì app (Dart) chỉ giữ độ chính xác micro giây.
+        if (mocLuuLucMo is { } moc && Math.Abs((goc.ThoiGianUtc - moc.ToUniversalTime()).TotalMilliseconds) > 1)
+        {
+            var gio = GioVietNam.TuUtc(goc.ThoiGianUtc);
+            return KetQuaThaoTac.LoiXungDot(
+                $"Phiếu vừa được {goc.TenNguoiCapNhat ?? goc.TenNguoiLap ?? "người khác"} cập nhật lúc {gio:HH:mm} " +
+                (goc.TrangThai == TrangThaiPhieu.Nhap ? "- hãy tải lại phiếu rồi nhập tiếp." : "và đã hoàn thành - hãy tải lại để xem."));
+        }
         if (goc.TrangThai != TrangThaiPhieu.Nhap)
             return KetQuaThaoTac.Loi("Phiếu đã hoàn thành, không sửa tiếp được.");
 
@@ -161,10 +178,21 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         goc.GhiChu = phieu.GhiChu;
         goc.TrangThai = hoanThanh ? TrangThaiPhieu.DaGhiNhan : TrangThaiPhieu.Nhap;
         goc.ThoiGianUtc = DateTime.UtcNow;
+        goc.TenNguoiCapNhat = phieu.TenNguoiCapNhat ?? goc.TenNguoiCapNhat;
         _db.DongGhiNhans.RemoveRange(goc.Dong);
         goc.Dong = dongMoi;
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Hai người lưu sát nhau (lọt qua bước so mốc ở trên): không ghi đè, báo tải lại.
+            foreach (var e in _db.ChangeTracker.Entries().Where(e => e.Entity is PhieuGhiNhan or DongGhiNhan).ToList())
+                e.State = EntityState.Detached;
+            return KetQuaThaoTac.LoiXungDot("Phiếu vừa được người khác cập nhật - hãy tải lại phiếu rồi nhập tiếp.");
+        }
         return KetQuaThaoTac.Ok(ThongBaoLuu(mau.Ten, goc.Ngay, hoanThanh));
     }
 

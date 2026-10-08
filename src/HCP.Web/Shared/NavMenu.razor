@@ -47,16 +47,25 @@
                 Món ăn
             </MudNavLink>
         </MudNavGroup>
+    </AuthorizeView>
+
+    @* Biểu mẫu kiểm soát: nhân viên nhập biểu mẫu chỉ thấy Nhập phiếu + Phiếu ghi nhận (mẫu được giao). *@
+    <AuthorizeView Roles="@AppRoles.QuyenBieuMau" Context="bieuMau">
         <MudNavGroup Title="Kiểm soát ATTP" Icon="@Icons.Material.Filled.Assignment" Expanded="true">
-            <MudNavLink Href="/app/bieu-mau" Icon="@Icons.Material.Filled.EditNote">
-                Biểu mẫu kiểm soát
+            <MudNavLink Href="/app/nhap-phieu" Icon="@Icons.Material.Filled.EditNote">
+                Nhập phiếu
             </MudNavLink>
             <MudNavLink Href="/app/phieu-ghi-nhan" Icon="@Icons.Material.Filled.FactCheck">
                 Phiếu ghi nhận
             </MudNavLink>
-            <MudNavLink Href="/app/nhac-han" Icon="@Icons.Material.Filled.NotificationsActive">
-                Nhắc hạn thiết bị
-            </MudNavLink>
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="cauHinhBm">
+                <MudNavLink Href="/app/bieu-mau" Icon="@Icons.Material.Filled.Assignment">
+                    Biểu mẫu kiểm soát
+                </MudNavLink>
+                <MudNavLink Href="/app/nhac-han" Icon="@Icons.Material.Filled.NotificationsActive">
+                    Nhắc hạn thiết bị
+                </MudNavLink>
+            </AuthorizeView>
         </MudNavGroup>
     </AuthorizeView>
 

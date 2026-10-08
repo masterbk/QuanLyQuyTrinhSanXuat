@@ -107,6 +107,86 @@ public class PhieuGhiNhanServiceTests
     }
 
     [Fact]
+    public async Task Cap_Nhat_Phieu_Chan_Ghi_De_Khi_Nguoi_Khac_Vua_Luu()
+    {
+        await NapMauAsync();
+        int id;
+        DateTime mocMo;
+        using (var db = MoDb())
+        {
+            var uv = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-HD-SX-01-01")).Id;
+            var p = new PhieuGhiNhan
+            {
+                BieuMauId = uv, Ngay = new DateOnly(2026, 10, 8), TenNguoiLap = "Ca sáng",
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "07:00")) } }
+            };
+            Assert.True((await new PhieuGhiNhanService(db).TaoPhieuAsync(p, hoanThanh: false)).ThanhCong);
+            id = p.Id;
+            mocMo = p.ThoiGianUtc;   // hai người cùng mở phiếu ở mốc này
+        }
+
+        PhieuGhiNhan Sua(string gio, string ten) => new()
+        {
+            Id = id, TenNguoiCapNhat = ten,
+            Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", gio)) } }
+        };
+
+        // Người A lưu trước: được.
+        using (var db = MoDb())
+            Assert.True((await new PhieuGhiNhanService(db).CapNhatPhieuAsync(Sua("07:05", "Người A"), false, mocMo)).ThanhCong);
+
+        // Người B vẫn cầm mốc cũ: bị chặn, báo tên người A, dữ liệu A giữ nguyên.
+        using (var db = MoDb())
+        {
+            var kq = await new PhieuGhiNhanService(db).CapNhatPhieuAsync(Sua("09:00", "Người B"), false, mocMo);
+            Assert.False(kq.ThanhCong);
+            Assert.True(kq.XungDot);
+            Assert.Contains("Người A", kq.ThongBao);
+        }
+        using (var db = MoDb())
+        {
+            var p = await db.PhieuGhiNhans.Include(x => x.Dong).FirstAsync(x => x.Id == id);
+            Assert.Contains("07:05", p.Dong.Single().GiaTriJson);
+
+            // B tải lại (mốc mới) rồi lưu: được. Không gửi mốc (app cũ) thì không kiểm.
+            var svc = new PhieuGhiNhanService(db);
+            db.ChangeTracker.Clear();
+            Assert.True((await svc.CapNhatPhieuAsync(Sua("09:00", "Người B"), false, p.ThoiGianUtc)).ThanhCong);
+            db.ChangeTracker.Clear();
+            Assert.True((await svc.CapNhatPhieuAsync(Sua("10:00", "App cũ"), false)).ThanhCong);
+        }
+    }
+
+    [Fact]
+    public async Task Cap_Nhat_Trong_Cung_DbContext_Lau_Dai_Van_Phat_Hien_Nguoi_Khac_Vua_Luu()
+    {
+        await NapMauAsync();
+        // Màn web giữ MỘT DbContext suốt phiên (Blazor): tạo, rồi lưu nháp lần 2 ngay trên context đó.
+        using var web = MoDb();
+        var svcWeb = new PhieuGhiNhanService(web);
+        var uv = (await web.BieuMaus.FirstAsync(b => b.MaHieu == "BM-HD-SX-01-01")).Id;
+        var p = new PhieuGhiNhan { BieuMauId = uv, Ngay = new DateOnly(2026, 10, 9), TenNguoiLap = "Web",
+                                   Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "07:00")) } } };
+        Assert.True((await svcWeb.TaoPhieuAsync(p, false)).ThanhCong);
+        var moc = (await svcWeb.LayPhieuTheoIdAsync(p.Id))!.ThoiGianUtc;
+        Assert.True((await svcWeb.CapNhatPhieuAsync(new PhieuGhiNhan { Id = p.Id,
+            Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "07:01")) } } }, false, moc)).ThanhCong);
+        moc = (await svcWeb.LayPhieuTheoIdAsync(p.Id))!.ThoiGianUtc;
+
+        // Người khác (app, context riêng) lưu chen vào.
+        await Task.Delay(5);
+        using (var app = MoDb())
+            Assert.True((await new PhieuGhiNhanService(app).CapNhatPhieuAsync(new PhieuGhiNhan { Id = p.Id, TenNguoiCapNhat = "App",
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "08:00")) } } }, false, moc)).ThanhCong);
+
+        // Web vẫn cầm mốc cũ: phải báo xung đột (trước đây EF trả bản cũ đang theo dõi -> không phát hiện, ghi thì văng lỗi).
+        var kq = await svcWeb.CapNhatPhieuAsync(new PhieuGhiNhan { Id = p.Id,
+            Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "09:00")) } } }, false, moc);
+        Assert.True(kq.XungDot, kq.ThongBao);
+        Assert.Contains("App", kq.ThongBao);
+    }
+
+    [Fact]
     public async Task Tao_Phieu_Validate_Dong_Va_Truong_Bat_Buoc()
     {
         await NapMauAsync();

@@ -44,7 +44,7 @@
             </MudPaper>
         </AuthorizeView>
 
-        <AuthorizeView Roles="@(AppRoles.TenantSanXuat + "," + AppRoles.TenantGiaoHang)" Context="nhanVienContext">
+        <AuthorizeView Roles="@(AppRoles.TenantSanXuat + "," + AppRoles.TenantGiaoHang + "," + AppRoles.TenantBieuMau)" Context="nhanVienContext">
             <MudPaper Class="pa-5 mb-4" Elevation="1">
                 <MudText Typo="Typo.subtitle1" Class="mb-3">Công việc của bạn</MudText>
                 <AuthorizeView Roles="@AppRoles.TenantSanXuat" Context="sx">
@@ -54,6 +54,12 @@
                 <AuthorizeView Roles="@AppRoles.TenantGiaoHang" Context="gh">
                     <MudButton Href="/app/don-hang-ban" Variant="Variant.Filled" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.LocalShipping" Class="mr-2 mb-2">Đơn hàng cần giao</MudButton>
+                </AuthorizeView>
+                <AuthorizeView Roles="@AppRoles.TenantBieuMau" Context="bm">
+                    <MudButton Href="/app/nhap-phieu" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.EditNote" Class="mr-2 mb-2">Nhập phiếu biểu mẫu</MudButton>
+                    <MudButton Href="/app/phieu-ghi-nhan" Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.FactCheck" Class="mr-2 mb-2">Phiếu ghi nhận</MudButton>
                 </AuthorizeView>
             </MudPaper>
         </AuthorizeView>

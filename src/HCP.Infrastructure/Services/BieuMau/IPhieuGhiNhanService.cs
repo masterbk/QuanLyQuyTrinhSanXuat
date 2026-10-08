@@ -56,6 +56,11 @@ public interface IPhieuGhiNhanService
     /// </summary>
     Task<KetQuaThaoTac> TaoPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true, CancellationToken ct = default);
 
-    /// <summary>Cập nhật một phiếu còn NHÁP (nhập tiếp). <paramref name="hoanThanh"/>=true thì chốt sau khi cập nhật.</summary>
-    Task<KetQuaThaoTac> CapNhatPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true, CancellationToken ct = default);
+    /// <summary>
+    /// Cập nhật một phiếu còn NHÁP (nhập tiếp). <paramref name="hoanThanh"/>=true thì chốt sau khi cập nhật.
+    /// Chống ghi đè: <paramref name="mocLuuLucMo"/> = mốc lưu (ThoiGianUtc) của phiếu lúc người dùng mở ra (null =
+    /// không kiểm); nếu phiếu đã được lưu sau mốc đó thì trả lỗi <see cref="KetQuaThaoTac.XungDot"/>, không ghi.
+    /// </summary>
+    Task<KetQuaThaoTac> CapNhatPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true, DateTime? mocLuuLucMo = null,
+                                          CancellationToken ct = default);
 }
