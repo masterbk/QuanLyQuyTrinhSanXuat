@@ -48,7 +48,7 @@ else
             }
         </MudSelect>
         <MudDatePicker Date="_ngay" DateChanged="DoiNgayAsync" Label="Ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
-                       DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Style="max-width:180px" />
+                       DateFormat="dd/MM/yyyy" Culture="@VN" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Style="max-width:180px" />
     </div>
 
     @if (_mau is not null)
@@ -242,6 +242,9 @@ else
     private string? _userId;
     private Dictionary<string, string> _nhanSu = new(), _sanPham = new(), _ncc = new(), _coSo = new();
 
+    /// <summary>Đọc/hiển thị ngày theo dd/MM/yyyy bất kể ngôn ngữ trình duyệt/máy chủ.</summary>
+    private static readonly System.Globalization.CultureInfo VN = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+
     private bool LaChecklist => _mau?.BoCuc == BoCucBieuMau.Checklist;
     private List<TruongBieuMau> TruongDau => _mau?.Truong.Where(t => t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList() ?? new();
     private List<TruongBieuMau> TruongDong => _mau?.Truong.Where(t => !t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList() ?? new();
@@ -391,14 +394,22 @@ else
                     }
                 </div>
                 break;
+            case KieuTruongBieuMau.Ngay:
+                @* Cố định dd/MM/yyyy (ô ngày của trình duyệt hiện theo ngôn ngữ máy, vd mm/dd/yyyy); vẫn lưu yyyy-MM-dd. *@
+                <MudDatePicker Date="@(DateOnly.TryParse(v, out var ngayV) ? ngayV.ToDateTime(TimeOnly.MinValue) : (DateTime?)null)"
+                               DateChanged="@(d => Dat(gt, t, d?.ToString("yyyy-MM-dd")))" Label="@label" HelperText="@goiY"
+                               DateFormat="dd/MM/yyyy" Culture="@VN" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))"
+                               Clearable="@(!_choXem)" Margin="Margin.Dense" Variant="Variant.Outlined" ReadOnly="_choXem" />
+                break;
+            case KieuTruongBieuMau.Gio:
+                @* Cố định 24 giờ HH:mm (ô giờ của trình duyệt có thể hiện 05:00 PM). *@
+                <MudTimePicker Time="@(TimeSpan.TryParse(v, out var gioV) ? gioV : (TimeSpan?)null)"
+                               TimeChanged="@(x => Dat(gt, t, x?.ToString(@"hh\:mm")))" Label="@label" HelperText="@goiY"
+                               AmPm="false" TimeFormat="HH:mm" Editable="true" Clearable="@(!_choXem)"
+                               Margin="Margin.Dense" Variant="Variant.Outlined" ReadOnly="_choXem" />
+                break;
             default:
-                var kieuNhap = t.Kieu switch
-                {
-                    KieuTruongBieuMau.So => InputType.Number,
-                    KieuTruongBieuMau.Gio => InputType.Time,
-                    KieuTruongBieuMau.Ngay => InputType.Date,
-                    _ => InputType.Text
-                };
+                var kieuNhap = t.Kieu == KieuTruongBieuMau.So ? InputType.Number : InputType.Text;
                 <MudTextField T="string" Value="@v" ValueChanged="@(x => Dat(gt, t, x))" Label="@label" HelperText="@goiY"
                               InputType="kieuNhap" Margin="Margin.Dense" Variant="Variant.Outlined" ReadOnly="_choXem" />
                 break;

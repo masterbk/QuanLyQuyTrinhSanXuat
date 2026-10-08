@@ -8,6 +8,13 @@ import 'kho_du_lieu.dart';
 import 'mo_hinh.dart';
 import 'o_chon_tim_kiem.dart';
 
+/// Giá trị trường Ngày lưu dạng yyyy-MM-dd -> hiển thị cố định dd/MM/yyyy (giá trị lạ thì để nguyên).
+String? hienThiNgay(String? v) {
+  final d = DateTime.tryParse(v ?? '');
+  if (d == null) return v;
+  return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+}
+
 /// Một dòng đang nhập: giá trị theo khoá trường + hạng mục (checklist) + ghi chú.
 class _DongNhap {
   final HangMucBieuMau? hangMuc;
@@ -565,12 +572,12 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
 
   Widget _oNgayTruong(_DongNhap dong, TruongBieuMau t, String nhan) => _oBam(
         nhan: nhan,
-        giaTri: dong.giaTri[t.ma],
+        giaTri: hienThiNgay(dong.giaTri[t.ma]),
         icon: Icons.calendar_today,
         onTap: () async {
           final chon = await showDatePicker(
             context: context,
-            initialDate: DateTime.now(),
+            initialDate: DateTime.tryParse(dong.giaTri[t.ma] ?? '') ?? DateTime.now(),
             firstDate: DateTime(2020),
             lastDate: DateTime(2100),
           );

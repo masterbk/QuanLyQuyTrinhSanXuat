@@ -27,6 +27,13 @@ const _mau = BieuMau(id: 1, maHieu: 'BM-TU', ten: 'Nhiệt độ tủ', boCuc: '
 ]);
 
 void main() {
+  test('Trường Ngày luôn hiển thị dd/MM/yyyy (dữ liệu lưu yyyy-MM-dd)', () {
+    expect(hienThiNgay('2026-12-25'), '25/12/2026');
+    expect(hienThiNgay('2026-01-05'), '05/01/2026');
+    expect(hienThiNgay(null), isNull);
+    expect(hienThiNgay('không phải ngày'), 'không phải ngày');
+  });
+
   testWidgets('Nhập dữ liệu thì ô nhân sự cùng nhóm tự điền người đăng nhập, nhóm khác để trống', (t) async {
     await t.pumpWidget(ProviderScope(
       overrides: [
