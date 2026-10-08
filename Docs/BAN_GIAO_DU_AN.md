@@ -1,7 +1,7 @@
 # Bàn giao dự án HanoiCheckPlatform — để Claude (phiên/tài khoản khác) làm tiếp
 
 > Tài liệu này gói đủ ngữ cảnh để một phiên Claude mới tiếp tục phát triển mà không cần trí nhớ cũ.
-> Cập nhật lần cuối: 08/10/2026.
+> Cập nhật lần cuối: 08/10/2026 (chiều - sau đợt biểu mẫu: role nhập biểu mẫu, nhập phiếu web, chống ghi đè).
 
 ## 1. Tổng quan
 - **Sản phẩm:** phần mềm quản lý quy trình sản xuất cho **tiệm bánh Tuấn Nghĩa**: quy trình sản xuất,
@@ -13,9 +13,9 @@
 - **Web/API:** .NET 8, Blazor Server + MudBlazor, EF Core (SqlServer), Finbuckle MultiTenant, QuestPDF (PDF).
   - `src/HCP.Domain` (entity + enum + helper), `src/HCP.Infrastructure` (service + EF + migration),
     `src/HCP.Web` (Blazor pages `Pages/CoSo/`, minimal API `Api/`, `Program.cs` DI ~dòng 189, `Shared/NavMenu.razor`).
-  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **250 test** pass.
+  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **257 test** pass.
 - **App mobile:** Flutter ở `mobile/` (package `hcp_mobile`), Riverpod + dio (`lib/loi/api.dart`).
-  Tính năng theo `lib/tinh_nang/<ten>/`. **33 test** pass.
+  Tính năng theo `lib/tinh_nang/<ten>/`. **38 test** pass.
 
 ## 3. Quy ước BẮT BUỘC (hay sai)
 - **Đa cơ sở (multitenant):** entity nghiệp vụ kế thừa `TenantEntity : AuditableEntity`, cấu hình
@@ -23,11 +23,15 @@
   `HCP.Domain.Entities.Business`, enum `HCP.Domain.Enums`.
 - **Giờ Việt Nam:** DB lưu **UTC**. Mọi "hôm nay/hiển thị/gửi đi" dùng `HCP.Domain.GioVietNam` (`.Nay`, `.HomNay`).
   **CẤM** `DateTime.Now` / `ToLocalTime`. App có `lib/loi/gio_viet_nam.dart`.
-- **Service trả `KetQuaThaoTac`** (record Ok/Loi, `.ThanhCong`, `.ThongBao`). DI đăng ký ở `Program.cs`.
+- **Service trả `KetQuaThaoTac`** (record Ok/Loi, `.ThanhCong`, `.ThongBao`; `.XungDot` = dữ liệu vừa bị người
+  khác sửa → API trả 409). DI đăng ký ở `Program.cs`.
 - **Migration:** `dotnet ef migrations add <Tên> --project src/HCP.Infrastructure --startup-project src/HCP.Web --context AppDbContext --output-dir Persistence/Migrations` (ĐỪNG dùng `--no-build`: dễ sinh migration rỗng/xoá nhầm migration cũ). Migration **tự áp khi app khởi động** (`Database.MigrateAsync`).
-- **Quyền (AppRoles):** `TenantAdmin, TenantStaff, TenantSanXuat, TenantGiaoHang`. Chuỗi gộp:
-  `QuyenNhapLieu`=Admin+Staff, `QuyenSanXuat`=+SanXuat, `QuyenGiaoHang`=+GiaoHang, `MoiNguoiDungCoSo`=cả 4.
-  Nhân viên đăng nhập bằng **số điện thoại** (hoặc email).
+- **Quyền (AppRoles):** `TenantAdmin, TenantStaff, TenantSanXuat, TenantGiaoHang, TenantBieuMau`. Chuỗi gộp:
+  `QuyenNhapLieu`=Admin+Staff, `QuyenSanXuat`=+SanXuat, `QuyenGiaoHang`=+GiaoHang, `QuyenBieuMau`=+BieuMau,
+  `MoiNguoiDungCoSo`=cả 5. Nhân viên đăng nhập bằng **số điện thoại** (hoặc email).
+- **Nhân sự của tài khoản:** dùng `LenhSanXuatApi.MaNhanSuTaiKhoanAsync`/`MaNhanSuHienTaiAsync` (đừng tự query).
+  Tài khoản quản trị cơ sở KHÔNG gắn hồ sơ nhân sự → được hiểu là nhân sự `LaChuCoSo` (khi có đúng 1 người).
+  **Đừng gắn NhanSuId cho tài khoản quản trị** (màn Nhân sự sẽ đổi UserName sang SĐT).
 - **Namespace bẫy:** namespace `HCP.*.Services.BieuMau` TRÙNG tên type `BieuMau` → dùng alias
   `using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;`.
 - **Ngôn ngữ:** làm việc bằng **tiếng Việt**, tài liệu gọn, **kiểm chứng bằng chạy thật** (build/test/deploy), không nói suông.
@@ -47,6 +51,9 @@
   khoá → **robocopy KHÔNG /PURGE** (giữ config+uploads) → gỡ app_offline; có backup DLL ở `C:\deploy\backup`.
 - **App mobile deploy:** build **APK trên GitHub Actions CI** (`.github/workflows/mobile-android.yml`,
   tự chạy khi push `master` đổi `mobile/**`). KHÔNG qua `deploy.ps1`. Thay đổi app chỉ tới điện thoại khi cài APK mới.
+- **SQL production:** chạy được qua SSH: `ssh -i ~/.ssh/tuannghia_deploy <user>@<VPS> "sqlcmd -E -S <instance>
+  -d HanoiCheckPlatform -W -s \"|\" -Q \"...\""` (thông tin VPS/instance ở `deploy/deploy.local.ps1` + memory).
+  Luôn SELECT xem trước, UPDATE/DELETE kèm `Id` + `TenantId`, chỉ ghi khi người dùng yêu cầu.
 - **An toàn:** production là hệ thật của khách → **xác nhận trước khi ghi/deploy**. Không bỏ private key/mật khẩu
   vào chat hay repo. Người dùng cũng **tự deploy thủ công** đôi khi, và **đôi khi xử lý đơn thẳng trên cổng
   HanoiCheck** → trạng thái đơn nội bộ lệch là BÌNH THƯỜNG.
@@ -75,18 +82,29 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
   cột thẩm tra để trống sẵn) → `DongGhiNhan`(HangMucBieuMauId?, **GiaTriJson** {ma_truong: giá trị}).
 - **Giá trị phiếu lưu theo khoá `Ma`** của trường (không theo định nghĩa hiện tại) → sửa mẫu không mất dữ liệu.
   Hạng mục Checklist liên kết bằng Id thật → `LuuAsync` **upsert giữ Id** (đừng xoá-tạo lại).
-- **ĐÃ XONG:** định nghĩa mẫu (web `QuanLyBieuMau.razor`), seed 9 mẫu mặc định (nhóm A/B/C/D) idempotent theo
-  MaHieu (`NapMauMacDinhAsync`, KHÔNG seed ở DbSeeder vì multitenant), app nhập phiếu form động
-  (`mobile/lib/tinh_nang/bieu_mau/`), lưu nháp/nhập tiếp, trường đầu phiếu động, sắp xếp trường (nút ▲▼),
-  **khóa phiếu theo ngày** (MotPhieuMoiNgay: 1 phiếu/ngày → sửa nháp/xem khi hoàn thành/chặn trùng;
-  nhiều phiếu/ngày → danh sách+tạo mới), xác nhận trước khi Hoàn thành, **trường Ảnh** (API
-  `/api/v1/phieu-ghi-nhan/anh`, app chụp/tải/xem, PDF nhúng ảnh qua `IDocAnhPhieu`), in **PDF** phiếu +
-  báo cáo tháng nhóm A (QuestPDF), **nhắc hạn** thiết bị (LaHanNhac → `LayNhacHanAsync` + API
-  `/api/v1/bieu-mau/nhac-han` + web `/app/nhac-han` + app màn Nhắc hạn & banner).
-- **CÒN LẠI (chỉ 1):** **QC thẩm tra** (duyệt/ký phiếu) — đã để sẵn cột/trạng thái, **người dùng chủ động
-  tạm BỎ**, làm sau nếu cần.
-- **Việc thủ công trên prod sau deploy:** bấm "Nạp biểu mẫu mẫu" để thêm 2 mẫu nhóm D mới; (tuỳ) đổi mẫu
-  KPH sang "Nhiều phiếu/ngày".
+- **ĐÃ XONG:** định nghĩa mẫu (web `QuanLyBieuMau.razor`, có Ngày/Lần ban hành), seed **10 mẫu** mặc định (nhóm
+  A/B/C/D + bẫy côn trùng `BM-GMP-ISO-02-04`) idempotent theo MaHieu (`NapMauMacDinhAsync`, KHÔNG seed ở DbSeeder;
+  mẫu đã có KHÔNG bị cập nhật khi nạp lại), app nhập phiếu form động (`mobile/lib/tinh_nang/bieu_mau/`), lưu nháp/
+  nhập tiếp, trường đầu phiếu, **khóa phiếu theo ngày** (MotPhieuMoiNgay), **trường Ảnh**, **nhắc hạn** thiết bị.
+- **PDF (QuestPDF, `PhieuPdfService`):** header giống bản giấy `KhungHeader` = [logo | TÊN CÔNG TY + Đ/c | Mã hiệu /
+  Ngày BH / Lần BH]; logo+tên+địa chỉ ở entity `CaiDatInBieuMau` (1 dòng/cơ sở, sửa ở màn Biểu mẫu kiểm soát →
+  "Thông tin in"). **Báo cáo tháng mọi mẫu**: mẫu thường = bảng phẳng; Checklist = **ma trận hạng mục × ngày**
+  (mỗi trường Đạt/KĐ là 1 cột con X/O, >62 cột con thì tách nửa tháng) + bảng ghi chú/không đạt.
+- **Quyền nhập biểu mẫu:** CHỈ role `TenantBieuMau` (+ quản trị, nhập liệu) được nhập; giao mẫu theo người ở màn
+  Nhân sự (bảng `PhanQuyenBieuMau`: TatCa / danh sách Id). Lọc ở `PhieuGhiNhanService.LayBieuMauChoNhapAsync` /
+  `LayMauDuocXemAsync`; API + PDF trả 403 với mẫu không được giao. `BieuMau.NhomQuyen` ("Ai được điền") KHÔNG còn dùng.
+- **Xem lại phiếu:** app tab "Phiếu đã nhập" (`man_lich_su.dart`, `man_chi_tiet_phieu.dart`; API
+  `GET /api/v1/phieu-ghi-nhan/lich-su` phân trang + tóm tắt Đạt/KĐ, `/{id}/pdf`); web `/app/phieu-ghi-nhan`.
+- **Nhập phiếu trên web** `/app/nhap-phieu` (`NhapPhieu.razor`): checklist/nhiều dòng dạng bảng, "Đạt các ô trống".
+- **Tự điền người:** nhập dữ liệu ô nào thì ô "Chọn nhân sự" CÒN TRỐNG cùng dòng + cùng `Nhom` tự = người đăng nhập
+  (cố ý KHÔNG điền sẵn lúc mở phiếu để không lẫn ca sáng/chiều) - app `_dat`, web `Dat`.
+- **Người lập:** phiếu lưu `NguoiLap` (mã NS), `NguoiLapUserId`, `TenNguoiLap`, `TenNguoiCapNhat`; "Do tôi lập"
+  khớp mã NS HOẶC tài khoản.
+- **Chống ghi đè:** `CapNhatPhieuAsync(phieu, hoanThanh, mocLuuLucMo)` so `ThoiGianUtc` lúc mở (lệch >1ms) → XungDot
+  (API 409; app/web hộp thoại "Tải lại"). App gửi `thoiGianUtcGoc` khi PUT.
+- **CÒN LẠI:** **QC thẩm tra** (duyệt/ký phiếu) — đã để sẵn cột/trạng thái, **người dùng chủ động tạm BỎ**.
+- **Việc thủ công trên prod:** gán role "Nhân viên nhập biểu mẫu" cho nhân viên (màn Nhân sự); tải logo + kiểm tên/
+  địa chỉ ở "Thông tin in"; nhập Ngày/Lần ban hành cho mẫu cũ (cột "Ban hành" báo "Chưa khai"); cài APK mới.
 
 ### Các module khác (xem memory nếu cần chi tiết)
 - **Kho + sản xuất nội bộ:** tồn theo lô, lệnh SX trừ định mức, khách hàng. GĐ1 xong.
@@ -107,5 +125,13 @@ Thư mục `C:\Users\thuyb\.claude\projects\E--TuanNghia\memory\` có các file 
 - EF "another instance with same key": khi sửa entity có con mang Id cũ, ép `Id=0` cho con mới trước khi gán,
   hoặc upsert theo Id (xem `BieuMauService.CapNhatHangMuc`, `LenhSanXuatService.CapNhatAsync`).
 - Blazor: `MudDialogInstance` (không phải `IMudDialogInstance`). Build MSB3027 file bị khoá → tắt app/preview đang chạy.
+- **Blazor giữ 1 DbContext suốt phiên** → EF trả bản entity CŨ đang tracked thay vì đọc DB (không thấy người khác
+  vừa sửa, ghi thì `DbUpdateConcurrencyException` làm treo màn). Trước khi đọc-để-cập-nhật phải Detach bản cũ
+  (xem `PhieuGhiNhanService.CapNhatPhieuAsync`).
+- Razor: không đặt biến tên `helper` (`@helper` là directive). Entity `PhieuGhiNhan.ThoiGianUtc` có mặc định = now,
+  đừng dùng nó làm "không có giá trị".
+- `sqlcmd` chạy file .sql: thêm `-I` (QUOTED_IDENTIFIER, bảng có filtered index) và `-f 65001` (chữ tiếng Việt).
+- Kiểm UI web thật: Playwright cài ở `E:\pwlib` (`PYTHONPATH=/e/pwlib`), `chromium.launch(channel='msedge')` dùng
+  Edge sẵn có (không tải trình duyệt vì ổ C gần đầy). Tài khoản dev thử: `coso-sx@example.vn` (mật khẩu hỏi người dùng/xem memory máy này).
 - Flutter: `TextFormField/DropdownButtonFormField.initialValue` chỉ áp lần đầu → đổi dữ liệu phải đổi `Key`
   để dựng lại ô (xem `_napLan`/`_khoaO` trong `man_nhap_phieu.dart`). Riverpod 3 dùng `asyncValue.value`.
