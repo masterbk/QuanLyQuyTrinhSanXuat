@@ -26,6 +26,22 @@ public static class AuthApi
                 : Results.Json(new LoiDto(kq.ThongBao!), statusCode: StatusCodes.Status401Unauthorized);
         });
 
+        // Tự đổi mật khẩu: thành công thì mọi phiên app cũ bị thu hồi và trả PHIÊN MỚI cho thiết bị đang dùng
+        // (giữ đăng nhập ở máy này, máy khác phải đăng nhập lại bằng mật khẩu mới).
+        nhom.MapPost("/doi-mat-khau", async (DoiMatKhauRequest req, ClaimsPrincipal user, IDoiMatKhauService svc,
+                                             IMobileTokenService tokens, AppDbContext db, CancellationToken ct) =>
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+            var kq = await svc.DoiMatKhauAsync(userId, req.MatKhauHienTai, req.MatKhauMoi, ct);
+            if (!kq.ThanhCong) return Results.BadRequest(new LoiDto(kq.ThongBao));
+
+            var tenDangNhap = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.UserName).FirstAsync(ct);
+            var phien = await tokens.DangNhapAsync(tenDangNhap!, req.MatKhauMoi, req.ThietBi, ct);
+            return phien.ThanhCong
+                ? Results.Ok(await MapAsync(phien.Phien!, db, ct))
+                : Results.Ok(new KetQuaDto(true, kq.ThongBao + " Vui lòng đăng nhập lại."));
+        }).RequireAuthorization(ApiAuth.ChinhSach);
+
         nhom.MapPost("/lam-moi", async (LamMoiRequest req, IMobileTokenService tokens, AppDbContext db,
                                         CancellationToken ct) =>
         {

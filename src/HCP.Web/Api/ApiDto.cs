@@ -4,6 +4,9 @@ namespace HCP.Web.Api;
 
 public sealed record DangNhapRequest(string Email, string MatKhau, string? ThietBi);
 
+/// <summary>Người dùng tự đổi mật khẩu (app).</summary>
+public sealed record DoiMatKhauRequest(string MatKhauHienTai, string MatKhauMoi, string? ThietBi);
+
 public sealed record LamMoiRequest(string RefreshToken, string? ThietBi);
 
 public sealed record DangXuatRequest(string RefreshToken);

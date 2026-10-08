@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'tinh_nang/bieu_mau/man_danh_sach.dart';
+import 'tinh_nang/xac_thuc/man_doi_mat_khau.dart';
 import 'tinh_nang/danh_muc/man_danh_sach.dart';
 import 'tinh_nang/don_hang/man_danh_sach.dart';
 import 'tinh_nang/kho_noi_bo/man_danh_sach.dart';
@@ -77,6 +78,10 @@ class _ManChinhState extends ConsumerState<ManChinh> {
             tooltip: 'Tài khoản',
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (v) async {
+              if (v == 'doimk') {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManDoiMatKhau()));
+                return;
+              }
               if (v == 'thoat') {
                 final dongY = await showDialog<bool>(
                   context: context,
@@ -105,6 +110,7 @@ class _ManChinhState extends ConsumerState<ManChinh> {
                 ),
               ),
               const PopupMenuDivider(),
+              const PopupMenuItem(value: 'doimk', child: Text('Đổi mật khẩu')),
               const PopupMenuItem(value: 'thoat', child: Text('Đăng xuất')),
             ],
           ),

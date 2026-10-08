@@ -1,0 +1,42 @@
+@page "/doi-mat-khau"
+@model HCP.Web.Pages.Account.DoiMatKhauModel
+@{
+    ViewData["Title"] = "Đổi mật khẩu";
+}
+
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <h5 class="card-title mb-1">Đổi mật khẩu</h5>
+        <p class="text-muted small mb-3">Tài khoản: @User.Identity?.Name</p>
+
+        @if (Model.ThongBao is not null)
+        {
+            <div class="alert alert-success">@Model.ThongBao</div>
+        }
+
+        <form method="post">
+            <div asp-validation-summary="All" class="alert alert-danger @(ViewData.ModelState.IsValid ? "d-none" : "")"></div>
+
+            <div class="mb-3">
+                <label asp-for="Input.MatKhauHienTai" class="form-label">Mật khẩu hiện tại</label>
+                <input asp-for="Input.MatKhauHienTai" class="form-control" type="password" autocomplete="current-password" autofocus />
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Input.MatKhauMoi" class="form-label">Mật khẩu mới</label>
+                <input asp-for="Input.MatKhauMoi" class="form-control" type="password" autocomplete="new-password" />
+                <div class="form-text">Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt (vd @@, #, !).</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Input.NhapLai" class="form-label">Nhập lại mật khẩu mới</label>
+                <input asp-for="Input.NhapLai" class="form-control" type="password" autocomplete="new-password" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Đổi mật khẩu</button>
+        </form>
+
+        <hr class="my-4" />
+        <p class="mb-0 text-center"><a href="/">← Về trang chính</a></p>
+    </div>
+</div>

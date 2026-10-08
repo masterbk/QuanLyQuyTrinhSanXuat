@@ -165,6 +165,24 @@ class XacThucNotifier extends Notifier<TrangThaiXacThuc> {
     state = const TrangThaiXacThuc();
   }
 
+  /// Tự đổi mật khẩu. Máy chủ thu hồi mọi phiên cũ và trả phiên MỚI cho máy này (vẫn giữ đăng nhập; máy khác
+  /// phải đăng nhập lại). Trả thông báo thành công; lỗi (sai mật khẩu hiện tại, mật khẩu yếu...) ném [LoiApi].
+  Future<String> doiMatKhau({required String hienTai, required String moi}) async {
+    final j = await _api.post('/api/v1/auth/doi-mat-khau',
+        than: {'matKhauHienTai': hienTai, 'matKhauMoi': moi}) as Map<String, dynamic>;
+    final access = j['accessToken'] as String?;
+    final refresh = j['refreshToken'] as String?;
+    if (access != null && refresh != null) {
+      await _luuTru.capNhatToken(accessToken: access, refreshToken: refresh);
+      final nd = j['nguoiDung'];
+      if (nd is Map<String, dynamic>) state = TrangThaiXacThuc(nguoiDung: NguoiDung.tuJson(nd));
+      return 'Đã đổi mật khẩu. Các thiết bị khác cần đăng nhập lại bằng mật khẩu mới.';
+    }
+    // Đổi được nhưng máy chủ không cấp phiên mới: đăng nhập lại cho chắc.
+    await datLaiPhien();
+    return j['thongBao'] as String? ?? 'Đã đổi mật khẩu. Vui lòng đăng nhập lại.';
+  }
+
   /// Token hết hiệu lực giữa chừng: đưa app về màn đăng nhập.
   Future<void> datLaiPhien() async {
     await _luuTru.xoaPhien();

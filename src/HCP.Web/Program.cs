@@ -221,6 +221,7 @@ builder.Services.AddScoped<ISyncOutboxWriter, SyncOutboxWriter>();
 builder.Services.AddScoped<IDongBoHnCTongService, DongBoHnCTongService>();
 builder.Services.AddScoped<TrangThaiHnC>();
 builder.Services.AddScoped<ITaiKhoanNhanVienService, TaiKhoanNhanVienService>();
+builder.Services.AddScoped<IDoiMatKhauService, DoiMatKhauService>();
 builder.Services.AddScoped<HCP.Infrastructure.Services.TraCuu.ITraCuuCongKhaiService, HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService>();
 builder.Services.AddScoped<IStandardFoodsSyncJob, StandardFoodsSyncJob>();
 builder.Services.AddScoped<IHanoiCheckOrderQueryClient, HanoiCheckOrderQueryClient>();

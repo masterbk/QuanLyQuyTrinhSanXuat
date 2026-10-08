@@ -25,6 +25,11 @@
                     @context.User.Identity?.Name
                 </MudText>
 
+                <MudTooltip Text="Đổi mật khẩu">
+                    <MudIconButton Href="/doi-mat-khau" Icon="@Icons.Material.Filled.Key" Color="Color.Inherit"
+                                   aria-label="Đổi mật khẩu" />
+                </MudTooltip>
+
                 @* Desktop: nút có chữ. Mobile: chỉ icon để tiết kiệm chỗ. *@
                 <MudButton Href="/dang-xuat" Color="Color.Inherit"
                            StartIcon="@Icons.Material.Filled.Logout" Class="d-none d-sm-flex">
