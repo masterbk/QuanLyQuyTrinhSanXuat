@@ -350,6 +350,29 @@ public sealed class BieuMauService : IBieuMauService
             }
         };
 
+        // Danh sách mã bẫy/vị trí là gợi ý ban đầu - cơ sở sửa theo sơ đồ đặt bẫy thực tế trong màn định nghĩa mẫu.
+        yield return new BieuMauEntity
+        {
+            MaHieu = "BM-GMP-ISO-02-04", Ten = "Kiểm tra và giám sát bẫy côn trùng, động vật gây hại",
+            BoCuc = BoCucBieuMau.NhieuDongTuDo, TanSuat = "Bẫy chuột 2-3 lần/tuần; đèn côn trùng cuối ngày làm việc",
+            NhomQuyen = AppRoles.QuyenSanXuat, ThuTu = 10,
+            GhiChuChan = "Động vật gây hại (chuột…): tuần đặt 2-3 lần. Côn trùng (muỗi, ruồi…): bật đèn khi kết thúc ngày làm việc.",
+            Truong =
+            {
+                T("ma_bay", "Mã số bẫy", KieuTruongBieuMau.LuaChon, batBuoc: true,
+                  tuyChon: "B01, B02, B03, B04, B05, B06, B07, B08, B09, B10, B11"),
+                T("vi_tri", "Vị trí đặt bẫy", KieuTruongBieuMau.LuaChon,
+                  tuyChon: "Cửa ra vào, Kho nguyên liệu, Khu sản xuất, Khu đóng gói, Khu rửa, Khu tập kết rác, Nhà vệ sinh"),
+                T("loai_bay", "Loại bẫy", KieuTruongBieuMau.LuaChon,
+                  tuyChon: "Bẫy chuột, Bẫy keo dính, Đèn diệt côn trùng, Khác"),
+                T("tinh_trang", "Tình trạng", KieuTruongBieuMau.LuaChon,
+                  tuyChon: "Bình thường, Hư hỏng, Cần thay keo/vệ sinh, Mất bẫy"),
+                T("so_luong", "Số lượng bắt được", KieuTruongBieuMau.So, donVi: "con"),
+                T("xu_ly", "Biện pháp xử lý/ghi chú", KieuTruongBieuMau.Text),
+                T("nguoi_kt", "Người kiểm tra", KieuTruongBieuMau.ChonNhanSu),
+            }
+        };
+
         // ----- Nhóm D: danh mục + sổ theo dõi định kỳ (nhắc hạn) -----
         yield return new BieuMauEntity
         {

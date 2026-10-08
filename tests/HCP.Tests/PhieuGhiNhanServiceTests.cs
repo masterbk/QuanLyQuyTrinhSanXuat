@@ -37,10 +37,10 @@ public class PhieuGhiNhanServiceTests
         using var db = MoDb();
         var svc = new PhieuGhiNhanService(db);
 
-        // Nhân viên sản xuất: thấy các mẫu QuyenSanXuat (nhiệt độ tủ, đèn UV, checklist, nướng, KPH),
+        // Nhân viên sản xuất: thấy các mẫu QuyenSanXuat (nhiệt độ tủ, đèn UV, checklist, nướng, KPH, bẫy côn trùng),
         // KHÔNG thấy vệ sinh xe (QuyenGiaoHang) hay tiếp nhận NL (QuyenNhapLieu).
         var cuaSanXuat = await svc.LayBieuMauChoNhapAsync(new[] { "TenantSanXuat" });
-        Assert.Equal(5, cuaSanXuat.Count);
+        Assert.Equal(6, cuaSanXuat.Count);
         Assert.DoesNotContain(cuaSanXuat, b => b.MaHieu == "BM-GMP-ISO-06-01");
         Assert.DoesNotContain(cuaSanXuat, b => b.MaHieu == "BM-GMP-ISO-01-01");
 
