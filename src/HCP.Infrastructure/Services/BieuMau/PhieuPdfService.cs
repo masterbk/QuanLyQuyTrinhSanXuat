@@ -1,7 +1,10 @@
 using System.Text.Json;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
+using HCP.Domain.Entities.Infrastructure;
 using HCP.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
 using HCP.Infrastructure.Services.DanhMuc;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -57,7 +60,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
         var sanPham = (await _sanPham.LayTatCaAsync(ct)).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
         var ncc = (await _ncc.LayTatCaAsync(ct)).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
         var coSo = (await _coSo.LayTatCaAsync(ct)).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
-        var tenCongTy = _db.TenantInfo?.Name ?? "";
+        var thongTinIn = await LayThongTinInAsync(ct);
 
         string Resolve(TruongBieuMau t, string? raw)
         {
@@ -116,14 +119,8 @@ public sealed class PhieuPdfService : IPhieuPdfService
 
                 page.Header().Column(col =>
                 {
-                    if (!string.IsNullOrWhiteSpace(tenCongTy))
-                        col.Item().Text(tenCongTy).Bold().FontSize(11);
-                    col.Item().Row(r =>
-                    {
-                        r.RelativeItem();
-                        r.ConstantItem(220).AlignRight().Text($"Mã hiệu: {mau.MaHieu}").FontSize(9);
-                    });
-                    col.Item().PaddingTop(2).AlignCenter().Text(mau.Ten).Bold().FontSize(14);
+                    col.Item().Element(c => KhungHeader(c, mau, thongTinIn));
+                    col.Item().PaddingTop(6).AlignCenter().Text(mau.Ten.ToUpper()).Bold().FontSize(14);
                     col.Item().PaddingTop(2).Text(t =>
                     {
                         t.Span("Ngày: ").SemiBold();
@@ -220,7 +217,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
         var sanPham = (await _sanPham.LayTatCaAsync(ct)).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
         var ncc = (await _ncc.LayTatCaAsync(ct)).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
         var coSo = (await _coSo.LayTatCaAsync(ct)).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
-        var tenCongTy = _db.TenantInfo?.Name ?? "";
+        var thongTinIn = await LayThongTinInAsync(ct);
 
         string Resolve(TruongBieuMau t, string? raw)
         {
@@ -246,14 +243,8 @@ public sealed class PhieuPdfService : IPhieuPdfService
 
         void TieuDe(IContainer c) => c.Column(col =>
         {
-            if (!string.IsNullOrWhiteSpace(tenCongTy))
-                col.Item().Text(tenCongTy).Bold().FontSize(11);
-            col.Item().Row(r =>
-            {
-                r.RelativeItem();
-                r.ConstantItem(220).AlignRight().Text($"Mã hiệu: {mau.MaHieu}").FontSize(9);
-            });
-            col.Item().PaddingTop(2).AlignCenter().Text(mau.Ten).Bold().FontSize(14);
+            col.Item().Element(x => KhungHeader(x, mau, thongTinIn));
+            col.Item().PaddingTop(6).AlignCenter().Text(mau.Ten.ToUpper()).Bold().FontSize(14);
             col.Item().AlignCenter().Text($"BÁO CÁO THÁNG {thang:00}/{nam}").SemiBold().FontSize(11);
             col.Item().PaddingTop(4);
         });
@@ -487,6 +478,49 @@ public sealed class PhieuPdfService : IPhieuPdfService
             }
         }
         return kq;
+    }
+
+    /// <summary>Thông tin in header: tên công ty, địa chỉ, logo (byte). Chưa cài đặt thì lấy hồ sơ đăng ký cơ sở.</summary>
+    private sealed record ThongTinIn(string TenCongTy, string? DiaChi, byte[]? Logo);
+
+    private async Task<ThongTinIn> LayThongTinInAsync(CancellationToken ct)
+    {
+        var cd = await _db.CaiDatInBieuMaus.AsNoTracking().FirstOrDefaultAsync(ct);
+        var ten = cd?.TenCongTy ?? _db.TenantInfo?.Name ?? "";
+        var diaChi = cd is null ? (_db.TenantInfo as Tenant)?.DiaChi : cd.DiaChi;
+        return new ThongTinIn(ten, diaChi, _docAnh?.Doc(cd?.LogoDuongDan));
+    }
+
+    /// <summary>
+    /// Khung header giống biểu mẫu giấy: [logo] | [TÊN CÔNG TY / Đ/c] | [Mã hiệu / Ngày ban hành / Lần ban hành].
+    /// </summary>
+    private static void KhungHeader(IContainer c, BieuMauEntity mau, ThongTinIn tt)
+    {
+        c.Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                cols.ConstantColumn(75);
+                cols.RelativeColumn();
+                cols.ConstantColumn(190);
+            });
+
+            var logo = table.Cell().RowSpan(3).Border(0.75f).Padding(3).AlignMiddle().AlignCenter();
+            if (tt.Logo is not null) logo.Height(62).Image(tt.Logo).FitArea();
+            else logo.Text("");
+
+            table.Cell().RowSpan(3).Border(0.75f).PaddingHorizontal(6).AlignMiddle().Column(col =>
+            {
+                col.Item().AlignCenter().Text(tt.TenCongTy.ToUpper()).Bold().FontSize(12);
+                if (!string.IsNullOrWhiteSpace(tt.DiaChi))
+                    col.Item().PaddingTop(3).AlignCenter().Text($"Đ/c: {tt.DiaChi}").FontSize(9);
+            });
+
+            static IContainer O(IContainer x) => x.Border(0.75f).PaddingHorizontal(5).PaddingVertical(4).AlignMiddle();
+            table.Cell().Element(O).Text($"Mã hiệu: {mau.MaHieu}").FontSize(9);
+            table.Cell().Element(O).Text($"Ngày ban hành: {mau.NgayBanHanh?.ToString("dd/MM/yyyy")}").FontSize(9);
+            table.Cell().Element(O).Text($"Lần ban hành: {mau.LanBanHanh}").FontSize(9);
+        });
     }
 
     private static string TieuDeCot(TruongBieuMau t)

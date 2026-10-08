@@ -106,6 +106,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<BieuMau> BieuMaus => Set<BieuMau>();
     public DbSet<TruongBieuMau> TruongBieuMaus => Set<TruongBieuMau>();
     public DbSet<HangMucBieuMau> HangMucBieuMaus => Set<HangMucBieuMau>();
+    public DbSet<CaiDatInBieuMau> CaiDatInBieuMaus => Set<CaiDatInBieuMau>();
     public DbSet<PhieuGhiNhan> PhieuGhiNhans => Set<PhieuGhiNhan>();
     public DbSet<DongGhiNhan> DongGhiNhans => Set<DongGhiNhan>();
 
@@ -650,6 +651,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         bieuMau.Property(b => b.TanSuat).HasMaxLength(255);
         bieuMau.Property(b => b.NhomQuyen).HasMaxLength(255).IsRequired();
         bieuMau.Property(b => b.GhiChuChan).HasMaxLength(2000);
+        bieuMau.Property(b => b.LanBanHanh).HasMaxLength(20);
         // Mặc định true: bản ghi cũ (seed trước đây) hiểu là 1 phiếu/ngày.
         bieuMau.Property(b => b.MotPhieuMoiNgay).HasDefaultValue(true);
         bieuMau.HasMany(b => b.Truong).WithOne(t => t.BieuMau!)
@@ -658,6 +660,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
                .HasForeignKey(h => h.BieuMauId).OnDelete(DeleteBehavior.Cascade);
         bieuMau.HasIndex(b => b.MaHieu).IsUnique();
         bieuMau.IsMultiTenant().AdjustUniqueIndexes();
+
+        var caiDatIn = builder.Entity<CaiDatInBieuMau>();
+        caiDatIn.ToTable("CaiDatInBieuMau");
+        caiDatIn.Property(c => c.TenCongTy).HasMaxLength(255);
+        caiDatIn.Property(c => c.DiaChi).HasMaxLength(500);
+        caiDatIn.Property(c => c.LogoDuongDan).HasMaxLength(1000);
+        caiDatIn.IsMultiTenant();
 
         var truong = builder.Entity<TruongBieuMau>();
         truong.ToTable("TruongBieuMau");

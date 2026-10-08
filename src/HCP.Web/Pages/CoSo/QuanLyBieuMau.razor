@@ -9,6 +9,7 @@
 @inject IBieuMauService BieuMauService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject HCP.Web.Services.ILuuTruAnhService LuuTruAnh
 
 <PageTitle>Biểu mẫu kiểm soát</PageTitle>
 
@@ -27,6 +28,45 @@
                    OnClick="@(() => MoForm(null))">Thêm biểu mẫu</MudButton>
     </div>
 </div>
+
+<MudExpansionPanels Class="mb-4" Elevation="1">
+    <MudExpansionPanel Text="Thông tin in ở header biểu mẫu (logo, tên công ty, địa chỉ)">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="3" Class="d-flex flex-column align-center gap-2">
+                @if (!string.IsNullOrWhiteSpace(_caiDatIn.LogoDuongDan))
+                {
+                    <img src="@_caiDatIn.LogoDuongDan" alt="Logo" style="max-width:140px;max-height:110px;object-fit:contain" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Chưa có logo</MudText>
+                }
+                <div class="d-flex gap-1">
+                    <MudFileUpload T="IBrowserFile" FilesChanged="ChonLogoAsync" Accept="image/*">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Image"
+                                       Disabled="_dangLuu">Chọn logo</MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                    @if (!string.IsNullOrWhiteSpace(_caiDatIn.LogoDuongDan))
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => _caiDatIn.LogoDuongDan = null)">Bỏ</MudButton>
+                    }
+                </div>
+            </MudItem>
+            <MudItem xs="12" sm="9">
+                <MudTextField @bind-Value="_caiDatIn.TenCongTy" Label="Tên công ty" Variant="Variant.Outlined" MaxLength="255" Class="mb-2" />
+                <MudTextField @bind-Value="_caiDatIn.DiaChi" Label="Địa chỉ" Variant="Variant.Outlined" MaxLength="500" Class="mb-2" />
+                <div class="d-flex justify-end">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangLuu" OnClick="LuuCaiDatInAsync">
+                        Lưu thông tin in
+                    </MudButton>
+                </div>
+            </MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+</MudExpansionPanels>
 
 @if (_dangTai)
 {
@@ -125,6 +165,15 @@ else
                     <MudSelectItem T="bool" Value="true">1 phiếu/ngày (khóa theo ngày)</MudSelectItem>
                     <MudSelectItem T="bool" Value="false">Nhiều phiếu/ngày (sổ/log)</MudSelectItem>
                 </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudDatePicker Date="@(_input.NgayBanHanh?.ToDateTime(TimeOnly.MinValue))"
+                               DateChanged="@(d => _input.NgayBanHanh = d is { } x ? DateOnly.FromDateTime(x) : null)"
+                               Label="Ngày ban hành" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true"
+                               Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true" />
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudTextField @bind-Value="_input.LanBanHanh" Label="Lần ban hành" Variant="Variant.Outlined" MaxLength="20" />
             </MudItem>
             <MudItem xs="6" sm="3">
                 <MudNumericField @bind-Value="_input.ThuTu" Label="Thứ tự" Variant="Variant.Outlined" Min="0" />
@@ -251,6 +300,7 @@ else
     private bool _hienForm;
     private bool _dangSua;
     private BieuMauEntity _input = new();
+    private CaiDatInBieuMau _caiDatIn = new();
 
     private readonly DialogOptions _dialogLon = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
 
@@ -268,6 +318,7 @@ else
     {
         _dangTai = true;
         _danhSach = (await BieuMauService.LayTatCaAsync()).ToList();
+        _caiDatIn = await BieuMauService.LayCaiDatInAsync();
         _dangTai = false;
     }
 
@@ -325,6 +376,7 @@ else
             Id = mau.Id, MaHieu = mau.MaHieu, Ten = mau.Ten, BoCuc = mau.BoCuc, TanSuat = mau.TanSuat,
             NhomQuyen = mau.NhomQuyen, GhiChuChan = mau.GhiChuChan, KichHoat = mau.KichHoat,
             MotPhieuMoiNgay = mau.MotPhieuMoiNgay, ThuTu = mau.ThuTu,
+            NgayBanHanh = mau.NgayBanHanh, LanBanHanh = mau.LanBanHanh,
             Truong = mau.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMau
             {
                 Ten = t.Ten, Ma = t.Ma, Kieu = t.Kieu, LaDauPhieu = t.LaDauPhieu, BatBuoc = t.BatBuoc, DonVi = t.DonVi,
@@ -355,6 +407,23 @@ else
         var kq = await BieuMauService.XoaAsync(mau.Id);
         Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
         if (kq.ThanhCong) await TaiAsync();
+    }
+
+    private async Task ChonLogoAsync(IBrowserFile? file)
+    {
+        if (file is null) return;
+        _dangLuu = true;
+        try { _caiDatIn.LogoDuongDan = (await LuuTruAnh.LuuAsync(file)).DuongDan; }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        _dangLuu = false;
+    }
+
+    private async Task LuuCaiDatInAsync()
+    {
+        _dangLuu = true;
+        var kq = await BieuMauService.LuuCaiDatInAsync(_caiDatIn);
+        _dangLuu = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
     }
 
     private async Task NapMauMacDinhAsync()

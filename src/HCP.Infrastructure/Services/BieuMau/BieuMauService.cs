@@ -2,6 +2,7 @@ using System.Text.Json;
 using HCP.Domain;
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
+using HCP.Domain.Entities.Infrastructure;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,7 @@ public sealed class BieuMauService : IBieuMauService
     {
         mau.MaHieu = mau.MaHieu?.Trim() ?? "";
         mau.Ten = mau.Ten?.Trim() ?? "";
+        mau.LanBanHanh = string.IsNullOrWhiteSpace(mau.LanBanHanh) ? null : mau.LanBanHanh.Trim();
         mau.NhomQuyen = string.IsNullOrWhiteSpace(mau.NhomQuyen) ? AppRoles.QuyenSanXuat : mau.NhomQuyen.Trim();
         if (mau.MaHieu.Length == 0) return KetQuaThaoTac.Loi("Vui lòng nhập mã hiệu biểu mẫu.");
         if (mau.Ten.Length == 0) return KetQuaThaoTac.Loi("Vui lòng nhập tên biểu mẫu.");
@@ -52,6 +54,8 @@ public sealed class BieuMauService : IBieuMauService
             goc.MaHieu = mau.MaHieu;
             goc.Ten = mau.Ten;
             goc.BoCuc = mau.BoCuc;
+            goc.NgayBanHanh = mau.NgayBanHanh;
+            goc.LanBanHanh = mau.LanBanHanh;
             goc.TanSuat = mau.TanSuat;
             goc.NhomQuyen = mau.NhomQuyen;
             goc.GhiChuChan = mau.GhiChuChan;
@@ -135,6 +139,27 @@ public sealed class BieuMauService : IBieuMauService
         }
         var s = sb.ToString().Replace("đ", "d").Trim('_');
         return s.Length == 0 ? "truong" : s;
+    }
+
+    public async Task<CaiDatInBieuMau> LayCaiDatInAsync(CancellationToken ct = default)
+    {
+        var cd = await _db.CaiDatInBieuMaus.AsNoTracking().FirstOrDefaultAsync(ct);
+        if (cd is not null) return cd;
+        // Chưa cài đặt: lấy tên + địa chỉ cơ sở đã đăng ký.
+        var tenant = _db.TenantInfo as Tenant;
+        return new CaiDatInBieuMau { TenCongTy = _db.TenantInfo?.Name, DiaChi = tenant?.DiaChi };
+    }
+
+    public async Task<KetQuaThaoTac> LuuCaiDatInAsync(CaiDatInBieuMau caiDat, CancellationToken ct = default)
+    {
+        static string? Gon(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        var cd = await _db.CaiDatInBieuMaus.FirstOrDefaultAsync(ct);
+        if (cd is null) _db.CaiDatInBieuMaus.Add(cd = new CaiDatInBieuMau());
+        cd.TenCongTy = Gon(caiDat.TenCongTy);
+        cd.DiaChi = Gon(caiDat.DiaChi);
+        cd.LogoDuongDan = Gon(caiDat.LogoDuongDan);
+        await _db.SaveChangesAsync(ct);
+        return KetQuaThaoTac.Ok("Đã lưu thông tin in biểu mẫu.");
     }
 
     public async Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default)
@@ -241,7 +266,7 @@ public sealed class BieuMauService : IBieuMauService
 
         yield return new BieuMauEntity
         {
-            MaHieu = "BM-HD-SX-01-01", Ten = "Nhật ký vận hành đèn UV", BoCuc = BoCucBieuMau.TheoNgay,
+            MaHieu = "BM-HD-SX-01-01", NgayBanHanh = new DateOnly(2026, 7, 1), LanBanHanh = "01", Ten = "Nhật ký vận hành đèn UV", BoCuc = BoCucBieuMau.TheoNgay,
             TanSuat = "Hàng ngày", NhomQuyen = AppRoles.QuyenSanXuat, ThuTu = 2,
             GhiChuChan = "Bật đèn 1h sau khi vệ sinh phòng; đóng kín cửa, không còn người. Đèn \"Đạt\" khi bóng sáng bình thường, không nhấp nháy, không nứt.",
             Truong =
@@ -258,7 +283,7 @@ public sealed class BieuMauService : IBieuMauService
 
         yield return new BieuMauEntity
         {
-            MaHieu = "BM-GMP-ISO-06-01", Ten = "Giám sát vệ sinh xe chở hàng", BoCuc = BoCucBieuMau.TheoNgay,
+            MaHieu = "BM-GMP-ISO-06-01", NgayBanHanh = new DateOnly(2026, 7, 1), LanBanHanh = "01", Ten = "Giám sát vệ sinh xe chở hàng", BoCuc = BoCucBieuMau.TheoNgay,
             TanSuat = "Trước mỗi lần xếp hàng lên xe", NhomQuyen = AppRoles.QuyenGiaoHang, ThuTu = 3,
             GhiChuChan = "Giới hạn nhiệt độ thùng xe ≤ 28°C. Phát hiện tiêu chí Không đạt phải báo ngay QC/quản lý và ghi vào cột Ghi chú KPH. (Dùng ô Khu vực để ghi biển số xe.)",
             Truong =
@@ -353,7 +378,7 @@ public sealed class BieuMauService : IBieuMauService
         // Danh sách mã bẫy/vị trí là gợi ý ban đầu - cơ sở sửa theo sơ đồ đặt bẫy thực tế trong màn định nghĩa mẫu.
         yield return new BieuMauEntity
         {
-            MaHieu = "BM-GMP-ISO-02-04", Ten = "Kiểm tra và giám sát bẫy côn trùng, động vật gây hại",
+            MaHieu = "BM-GMP-ISO-02-04", NgayBanHanh = new DateOnly(2026, 7, 1), LanBanHanh = "02", Ten = "Kiểm tra và giám sát bẫy côn trùng, động vật gây hại",
             BoCuc = BoCucBieuMau.NhieuDongTuDo, TanSuat = "Bẫy chuột 2-3 lần/tuần; đèn côn trùng cuối ngày làm việc",
             NhomQuyen = AppRoles.QuyenSanXuat, ThuTu = 10,
             GhiChuChan = "Động vật gây hại (chuột…): tuần đặt 2-3 lần. Côn trùng (muỗi, ruồi…): bật đèn khi kết thúc ngày làm việc.",

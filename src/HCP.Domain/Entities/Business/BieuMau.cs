@@ -19,6 +19,12 @@ public class BieuMau : TenantEntity
 
     public BoCucBieuMau BoCuc { get; set; } = BoCucBieuMau.TheoNgay;
 
+    /// <summary>Ngày ban hành biểu mẫu (in ở header PDF, theo hồ sơ tài liệu).</summary>
+    public DateOnly? NgayBanHanh { get; set; }
+
+    /// <summary>Lần ban hành, vd "01", "02" (in ở header PDF).</summary>
+    public string? LanBanHanh { get; set; }
+
     /// <summary>Tần suất thực hiện (mô tả tự do), vd "Hàng ngày", "Mỗi mẻ", "Mỗi lần nhập".</summary>
     public string? TanSuat { get; set; }
 

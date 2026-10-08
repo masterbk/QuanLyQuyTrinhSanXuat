@@ -223,6 +223,69 @@ public class PhieuPdfServiceTests
         }
     }
 
+    /// <summary>Đọc ảnh giả: mọi đường dẫn trả cùng một ảnh (đọc từ biến môi trường LOGO_TEST nếu có).</summary>
+    private sealed class FakeDocAnh : IDocAnhPhieu
+    {
+        private readonly byte[]? _anh;
+        public FakeDocAnh(byte[]? anh) => _anh = anh;
+        public byte[]? Doc(string? duongDan) => string.IsNullOrWhiteSpace(duongDan) ? null : _anh;
+    }
+
+    [Fact]
+    public async Task Header_In_Logo_Ten_Cong_Ty_Va_Ngay_Lan_Ban_Hanh()
+    {
+        using (var db = MoDb())
+        {
+            var svc = new BieuMauService(db);
+            await svc.NapMauMacDinhAsync();
+            // Chưa cài đặt: tên lấy theo cơ sở; lưu rồi thì đọc lại đúng giá trị đã lưu.
+            Assert.Null((await svc.LayCaiDatInAsync()).LogoDuongDan);
+            Assert.True((await svc.LuuCaiDatInAsync(new CaiDatInBieuMau
+            {
+                TenCongTy = " Công ty TNHH Bánh Tuấn Nghĩa ", DiaChi = "Số 107, Minh Khai, Hà Nội",
+                LogoDuongDan = "/uploads/coso-a/logo.jpg"
+            })).ThanhCong);
+        }
+        using (var db = MoDb())
+        {
+            var cd = await new BieuMauService(db).LayCaiDatInAsync();
+            Assert.Equal("Công ty TNHH Bánh Tuấn Nghĩa", cd.TenCongTy);
+            Assert.Equal(1, await db.CaiDatInBieuMaus.CountAsync());
+            var uv = await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-HD-SX-01-01");
+            Assert.Equal(new DateOnly(2026, 7, 1), uv.NgayBanHanh);
+            Assert.Equal("01", uv.LanBanHanh);
+        }
+
+        int uvId, phieuId;
+        using (var db = MoDb())
+        {
+            uvId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-HD-SX-01-01")).Id;
+            var p = new PhieuGhiNhan
+            {
+                BieuMauId = uvId, Ngay = new DateOnly(2026, 10, 8), GiaTriDauJson = "{\"khu_vuc\":\"Phòng đóng gói\"}",
+                Dong = { new DongGhiNhan { GiaTriJson = "{\"gio_bat\":\"17:00\",\"gio_tat\":\"18:00\",\"den_hoat_dong\":\"Đạt\"}" } }
+            };
+            Assert.True((await new PhieuGhiNhanService(db).TaoPhieuAsync(p)).ThanhCong);
+            phieuId = p.Id;
+        }
+
+        var logo = Environment.GetEnvironmentVariable("LOGO_TEST") is { Length: > 0 } f ? await File.ReadAllBytesAsync(f) : null;
+        using (var db = MoDb())
+        {
+            var pdf = new PhieuPdfService(new PhieuGhiNhanService(db), db, new FakeDanhMuc<Staff>(), new FakeDanhMuc<Product>(),
+                                          new FakeDanhMuc<SubSupplier>(), new FakeDanhMuc<Facility>(), new FakeDocAnh(logo));
+            var phieu = await pdf.TaoPdfAsync(phieuId);
+            var thang = await pdf.TaoBaoCaoThangAsync(uvId, 2026, 10);
+            Assert.Equal(new byte[] { 0x25, 0x50, 0x44, 0x46 }, phieu!.Take(4).ToArray());
+            Assert.Equal(new byte[] { 0x25, 0x50, 0x44, 0x46 }, thang!.Take(4).ToArray());
+            if (Environment.GetEnvironmentVariable("PDF_OUT_DIR") is { Length: > 0 } dir)
+            {
+                await File.WriteAllBytesAsync(Path.Combine(dir, "header-phieu.pdf"), phieu);
+                await File.WriteAllBytesAsync(Path.Combine(dir, "header-thang.pdf"), thang);
+            }
+        }
+    }
+
     [Fact]
     public async Task Sinh_Pdf_Co_Truong_Anh_Khong_Loi()
     {

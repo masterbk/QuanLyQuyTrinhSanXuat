@@ -1,3 +1,4 @@
+using HCP.Domain.Entities.Business;
 using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
 
 namespace HCP.Infrastructure.Services.BieuMau;
@@ -28,6 +29,11 @@ public interface IBieuMauService
     /// lấy dòng có hạn &lt;= hôm nay + <paramref name="soNgay"/>. Sắp theo hạn tăng dần (quá hạn lên trước).
     /// </summary>
     Task<IReadOnlyList<NhacHan>> LayNhacHanAsync(int soNgay, CancellationToken ct = default);
+
+    /// <summary>Thông tin in header biểu mẫu (logo, tên công ty, địa chỉ); chưa lưu thì lấy theo hồ sơ đăng ký.</summary>
+    Task<CaiDatInBieuMau> LayCaiDatInAsync(CancellationToken ct = default);
+
+    Task<KetQuaThaoTac> LuuCaiDatInAsync(CaiDatInBieuMau caiDat, CancellationToken ct = default);
 }
 
 /// <summary>Một mục nhắc hạn (thiết bị/dòng sắp hoặc đã đến hạn hiệu chuẩn/bảo dưỡng).</summary>
