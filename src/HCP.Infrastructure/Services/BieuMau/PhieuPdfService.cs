@@ -15,7 +15,10 @@ public interface IPhieuPdfService
     /// <summary>Trả về PDF của phiếu, hoặc null nếu không tìm thấy.</summary>
     Task<byte[]?> TaoPdfAsync(int phieuId, CancellationToken ct = default);
 
-    /// <summary>PDF báo cáo tháng của một biểu mẫu "theo ngày": mỗi phiếu một dòng, sắp theo ngày. Null nếu không có mẫu.</summary>
+    /// <summary>
+    /// PDF báo cáo tháng của một biểu mẫu. Checklist có trường Đạt/Không đạt: ma trận hạng mục × ngày + bảng ghi chú;
+    /// mẫu khác: bảng phẳng mỗi dòng phiếu một hàng (Ngày + trường đầu phiếu + trường dòng). Null nếu không có mẫu.
+    /// </summary>
     Task<byte[]?> TaoBaoCaoThangAsync(int bieuMauId, int nam, int thang, CancellationToken ct = default);
 }
 
@@ -234,71 +237,256 @@ public sealed class PhieuPdfService : IPhieuPdfService
             };
         }
 
+        var truongDau = mau.Truong.Where(t => t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList();
         var truong = mau.Truong.Where(t => !t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList();
+        var hangMucTen = mau.HangMuc.ToDictionary(h => h.Id, h => h.Ten);
+        var laChecklist = mau.BoCuc == BoCucBieuMau.Checklist;
+        // Checklist có trường Đạt/Không đạt -> ma trận hạng mục × ngày (mỗi trường Đạt/KĐ là 1 cột con của ngày).
+        var cot = laChecklist ? truong.Where(t => t.Kieu == KieuTruongBieuMau.DatKhongDat).ToList() : new();
 
-        var doc = Document.Create(container =>
+        void TieuDe(IContainer c) => c.Column(col =>
         {
-            container.Page(page =>
+            if (!string.IsNullOrWhiteSpace(tenCongTy))
+                col.Item().Text(tenCongTy).Bold().FontSize(11);
+            col.Item().Row(r =>
             {
-                page.Size(PageSizes.A4.Landscape());
-                page.Margin(1, Unit.Centimetre);
-                page.DefaultTextStyle(x => x.FontSize(9));
+                r.RelativeItem();
+                r.ConstantItem(220).AlignRight().Text($"Mã hiệu: {mau.MaHieu}").FontSize(9);
+            });
+            col.Item().PaddingTop(2).AlignCenter().Text(mau.Ten).Bold().FontSize(14);
+            col.Item().AlignCenter().Text($"BÁO CÁO THÁNG {thang:00}/{nam}").SemiBold().FontSize(11);
+            col.Item().PaddingTop(4);
+        });
 
-                page.Header().Column(col =>
-                {
-                    if (!string.IsNullOrWhiteSpace(tenCongTy))
-                        col.Item().Text(tenCongTy).Bold().FontSize(11);
-                    col.Item().Row(r =>
-                    {
-                        r.RelativeItem();
-                        r.ConstantItem(220).AlignRight().Text($"Mã hiệu: {mau.MaHieu}").FontSize(9);
-                    });
-                    col.Item().PaddingTop(2).AlignCenter().Text(mau.Ten).Bold().FontSize(14);
-                    col.Item().AlignCenter().Text($"BÁO CÁO THÁNG {thang:00}/{nam}").SemiBold().FontSize(11);
-                    col.Item().PaddingTop(4);
-                });
-
-                page.Content().Table(table =>
-                {
-                    table.ColumnsDefinition(cols =>
-                    {
-                        cols.ConstantColumn(54); // Ngày
-                        foreach (var _ in truong) cols.RelativeColumn(2);
-                    });
-                    table.Header(h =>
-                    {
-                        h.Cell().Element(Tieu).Text("Ngày");
-                        foreach (var t in truong) h.Cell().Element(Tieu).Text(TieuDeCot(t));
-                    });
-
-                    foreach (var phieu in dsPhieu)
-                    {
-                        var dong = phieu.Dong.OrderBy(d => d.ThuTu).ToList();
-                        if (dong.Count == 0) dong.Add(new DongGhiNhan());
-                        foreach (var d in dong)
-                        {
-                            var giaTri = DocGiaTri(d.GiaTriJson);
-                            table.Cell().Element(O).Text(phieu.Ngay.ToString("dd/MM"));
-                            foreach (var t in truong)
-                                table.Cell().Element(O).Text(Resolve(t, giaTri.GetValueOrDefault(t.Ma)));
-                        }
-                    }
-                });
-
-                page.Footer().Column(col =>
-                {
-                    if (!string.IsNullOrWhiteSpace(mau.GhiChuChan))
-                        col.Item().PaddingTop(4).Text(mau.GhiChuChan).Italic().FontSize(8);
-                    col.Item().PaddingTop(10).Row(r =>
-                    {
-                        r.RelativeItem().Text("");
-                        r.ConstantItem(300).Text("QC thẩm tra: ………………  Ngày: …………  [ ] Đạt   [ ] Không đạt").FontSize(9);
-                    });
-                });
+        void ChanTrang(IContainer c) => c.Column(col =>
+        {
+            if (!string.IsNullOrWhiteSpace(mau.GhiChuChan))
+                col.Item().PaddingTop(4).Text(mau.GhiChuChan).Italic().FontSize(8);
+            col.Item().PaddingTop(10).Row(r =>
+            {
+                r.RelativeItem().Text(x => { x.CurrentPageNumber(); x.Span("/"); x.TotalPages(); });
+                r.ConstantItem(300).Text("QC thẩm tra: ………………  Ngày: …………  [ ] Đạt   [ ] Không đạt").FontSize(9);
             });
         });
 
+        Document doc;
+        if (cot.Count > 0)
+        {
+            var maTran = GomMaTranChecklist(dsPhieu, cot);
+            var soNgay = DateTime.DaysInMonth(nam, thang);
+            // Quá số cột con tối đa của 1 trang A4 ngang thì tách nửa tháng.
+            var ngayMoiTrang = cot.Count * soNgay <= SoCotConToiDa ? soNgay : (soNgay + 1) / 2;
+            var cacTrang = Enumerable.Range(1, soNgay).Chunk(ngayMoiTrang).ToList();
+            var ghiChu = GomGhiChuChecklist(dsPhieu, truongDau, truong, hangMucTen, Resolve);
+            var chuGiai = cot.Count > 1
+                ? "Cột con mỗi ngày: " + string.Join(", ", cot.Select((t, k) => $"{k + 1} = {t.Ten}")) + ".  X = Đạt, O = Không đạt, trống = chưa kiểm."
+                : $"{cot[0].Ten}: X = Đạt, O = Không đạt, trống = chưa kiểm.";
+
+            doc = Document.Create(container =>
+            {
+                for (var i = 0; i < cacTrang.Count; i++)
+                {
+                    var ngays = cacTrang[i];
+                    var trangCuoi = i == cacTrang.Count - 1;
+                    container.Page(page =>
+                    {
+                        page.Size(PageSizes.A4.Landscape());
+                        page.Margin(1, Unit.Centimetre);
+                        page.DefaultTextStyle(x => x.FontSize(7));
+                        page.Header().Element(TieuDe);
+                        page.Content().Column(nd =>
+                        {
+                            nd.Item().PaddingBottom(3).Text(chuGiai).FontSize(8);
+                            nd.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(cols =>
+                                {
+                                    cols.ConstantColumn(130);
+                                    foreach (var _ in ngays)
+                                        for (var k = 0; k < cot.Count; k++) cols.RelativeColumn();
+                                });
+                                table.Header(h =>
+                                {
+                                    h.Cell().RowSpan(cot.Count > 1 ? 2u : 1u).Element(TieuNho).AlignMiddle().Text("Hạng mục");
+                                    foreach (var n in ngays)
+                                        h.Cell().ColumnSpan((uint)cot.Count).Element(TieuNho).Text(n.ToString());
+                                    if (cot.Count > 1)
+                                        foreach (var _ in ngays)
+                                            for (var k = 1; k <= cot.Count; k++)
+                                                h.Cell().Element(TieuNho).Text(k.ToString());
+                                });
+                                foreach (var hm in mau.HangMuc.OrderBy(h => h.ThuTu))
+                                {
+                                    table.Cell().Element(ONho).Text(hm.Ten);
+                                    foreach (var n in ngays)
+                                    {
+                                        var kh = maTran.GetValueOrDefault((hm.Id, n));
+                                        for (var k = 0; k < cot.Count; k++)
+                                        {
+                                            var v = kh?[k] ?? "";
+                                            var o = table.Cell().Element(ONho).AlignCenter();
+                                            if (v == "O") o.Text(v).Bold().FontColor(Colors.Red.Darken2);
+                                            else o.Text(v);
+                                        }
+                                    }
+                                }
+                            });
+
+                            if (trangCuoi && ghiChu.Count > 0)
+                            {
+                                nd.Item().PaddingTop(8).Text("Ghi chú / Không đạt trong tháng").Bold().FontSize(9);
+                                nd.Item().PaddingTop(2).Table(table =>
+                                {
+                                    table.ColumnsDefinition(cols =>
+                                    {
+                                        cols.ConstantColumn(45);
+                                        cols.RelativeColumn(2);
+                                        cols.RelativeColumn(5);
+                                    });
+                                    table.Header(h =>
+                                    {
+                                        h.Cell().Element(Tieu).Text("Ngày");
+                                        h.Cell().Element(Tieu).Text("Hạng mục");
+                                        h.Cell().Element(Tieu).Text("Nội dung");
+                                    });
+                                    foreach (var g in ghiChu)
+                                    {
+                                        table.Cell().Element(O).Text(g.Ngay.ToString("dd/MM"));
+                                        table.Cell().Element(O).Text(g.HangMuc);
+                                        table.Cell().Element(O).Text(g.NoiDung);
+                                    }
+                                });
+                            }
+                        });
+                        page.Footer().Element(ChanTrang);
+                    });
+                }
+            });
+        }
+        else
+        {
+            // Bảng phẳng: mỗi dòng phiếu 1 hàng; cột Ngày + [Hạng mục] + trường đầu phiếu + trường dòng.
+            doc = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4.Landscape());
+                    page.Margin(1, Unit.Centimetre);
+                    page.DefaultTextStyle(x => x.FontSize(9));
+                    page.Header().Element(TieuDe);
+                    page.Content().Table(table =>
+                    {
+                        table.ColumnsDefinition(cols =>
+                        {
+                            cols.ConstantColumn(40); // Ngày
+                            if (laChecklist) cols.RelativeColumn(3);
+                            foreach (var _ in truongDau) cols.RelativeColumn(2);
+                            foreach (var _ in truong) cols.RelativeColumn(2);
+                        });
+                        table.Header(h =>
+                        {
+                            h.Cell().Element(Tieu).Text("Ngày");
+                            if (laChecklist) h.Cell().Element(Tieu).Text("Hạng mục");
+                            foreach (var t in truongDau) h.Cell().Element(Tieu).Text(TieuDeCot(t));
+                            foreach (var t in truong) h.Cell().Element(Tieu).Text(TieuDeCot(t));
+                        });
+
+                        foreach (var phieu in dsPhieu)
+                        {
+                            var giaTriDau = DocGiaTri(phieu.GiaTriDauJson);
+                            var dong = phieu.Dong.OrderBy(d => d.ThuTu).ToList();
+                            if (dong.Count == 0) dong.Add(new DongGhiNhan());
+                            foreach (var d in dong)
+                            {
+                                var giaTri = DocGiaTri(d.GiaTriJson);
+                                table.Cell().Element(O).Text(phieu.Ngay.ToString("dd/MM"));
+                                if (laChecklist)
+                                    table.Cell().Element(O).Text(d.HangMucBieuMauId is { } hm ? hangMucTen.GetValueOrDefault(hm, "") : "");
+                                foreach (var t in truongDau)
+                                    table.Cell().Element(O).Text(Resolve(t, giaTriDau.GetValueOrDefault(t.Ma)));
+                                foreach (var t in truong)
+                                    table.Cell().Element(O).Text(Resolve(t, giaTri.GetValueOrDefault(t.Ma)));
+                            }
+                        }
+                    });
+                    page.Footer().Element(ChanTrang);
+                });
+            });
+        }
+
         return doc.GeneratePdf();
+    }
+
+    /// <summary>Số cột con (ngày × trường Đạt/KĐ) tối đa trên một trang A4 ngang trước khi tách nửa tháng.</summary>
+    public const int SoCotConToiDa = 62;
+
+    /// <summary>
+    /// Gom phiếu checklist trong tháng thành ma trận (hạng mục, ngày) → ký hiệu từng cột con:
+    /// "X" = Đạt, "O" = Không đạt, "" = chưa kiểm. Nhiều phiếu cùng ngày: phiếu sau ghi đè ô có nhập.
+    /// </summary>
+    public static Dictionary<(int HangMucId, int Ngay), string[]> GomMaTranChecklist(
+        IEnumerable<PhieuGhiNhan> dsPhieu, IReadOnlyList<TruongBieuMau> cot)
+    {
+        var kq = new Dictionary<(int, int), string[]>();
+        foreach (var p in dsPhieu.OrderBy(p => p.Ngay).ThenBy(p => p.Id))
+            foreach (var d in p.Dong)
+            {
+                if (d.HangMucBieuMauId is not { } hm) continue;
+                var gt = DocGiaTri(d.GiaTriJson);
+                var key = (hm, p.Ngay.Day);
+                if (!kq.TryGetValue(key, out var o)) kq[key] = o = Enumerable.Repeat("", cot.Count).ToArray();
+                for (var k = 0; k < cot.Count; k++)
+                {
+                    var kh = KyHieuDatKhongDat(gt.GetValueOrDefault(cot[k].Ma));
+                    if (kh.Length > 0) o[k] = kh;
+                }
+            }
+        return kq;
+    }
+
+    /// <summary>"Đạt" → "X", giá trị khác (Không đạt) → "O", trống → "".</summary>
+    public static string KyHieuDatKhongDat(string? v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return "";
+        return v.Trim().Equals("Đạt", StringComparison.OrdinalIgnoreCase) ? "X" : "O";
+    }
+
+    private sealed record GhiChuDong(DateOnly Ngay, string HangMuc, string NoiDung);
+
+    /// <summary>Thông tin đầu phiếu + các dòng checklist có Không đạt hoặc có giá trị ở trường khác (ghi chú...).</summary>
+    private static List<GhiChuDong> GomGhiChuChecklist(IEnumerable<PhieuGhiNhan> dsPhieu,
+        IReadOnlyList<TruongBieuMau> truongDau, IReadOnlyList<TruongBieuMau> truong,
+        IReadOnlyDictionary<int, string> hangMucTen, Func<TruongBieuMau, string?, string> resolve)
+    {
+        var kq = new List<GhiChuDong>();
+        var dauTruoc = "";
+        foreach (var p in dsPhieu.OrderBy(p => p.Ngay).ThenBy(p => p.Id))
+        {
+            var dau = DocGiaTri(p.GiaTriDauJson);
+            var thongTinDau = string.Join("; ", truongDau
+                .Select(t => (t.Ten, V: resolve(t, dau.GetValueOrDefault(t.Ma))))
+                .Where(x => x.V.Length > 0).Select(x => $"{x.Ten}: {x.V}"));
+            // Chỉ ghi khi đổi so với phiếu trước - tránh lặp "Khu vực: ..." mỗi ngày.
+            if (thongTinDau.Length > 0 && thongTinDau != dauTruoc) kq.Add(new(p.Ngay, "(Đầu phiếu)", thongTinDau));
+            dauTruoc = thongTinDau;
+
+            foreach (var d in p.Dong.OrderBy(d => d.ThuTu))
+            {
+                var gt = DocGiaTri(d.GiaTriJson);
+                var phan = new List<string>();
+                foreach (var t in truong)
+                {
+                    var v = resolve(t, gt.GetValueOrDefault(t.Ma));
+                    if (v.Length == 0) continue;
+                    if (t.Kieu != KieuTruongBieuMau.DatKhongDat || KyHieuDatKhongDat(v) == "O")
+                        phan.Add($"{t.Ten}: {v}");
+                }
+                if (phan.Count == 0) continue;
+                var ten = d.HangMucBieuMauId is { } hm ? hangMucTen.GetValueOrDefault(hm, "(hạng mục đã xoá)") : "";
+                kq.Add(new(p.Ngay, ten, string.Join("; ", phan)));
+            }
+        }
+        return kq;
     }
 
     private static string TieuDeCot(TruongBieuMau t)
@@ -319,4 +507,10 @@ public sealed class PhieuPdfService : IPhieuPdfService
 
     private static IContainer O(IContainer c) =>
         c.Border(0.5f).Padding(4);
+
+    private static IContainer TieuNho(IContainer c) =>
+        c.Border(0.5f).Background(Colors.Grey.Lighten2).Padding(1).AlignCenter();
+
+    private static IContainer ONho(IContainer c) =>
+        c.Border(0.5f).PaddingVertical(1).PaddingHorizontal(2);
 }

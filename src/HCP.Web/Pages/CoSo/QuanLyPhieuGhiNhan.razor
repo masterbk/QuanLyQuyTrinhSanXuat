@@ -35,10 +35,10 @@
 
 <MudPaper Outlined="true" Class="pa-3 mb-3">
     <div class="d-flex flex-wrap gap-2 align-center">
-        <MudText Typo="Typo.subtitle2" Class="mr-2">Báo cáo tháng (biểu mẫu theo ngày):</MudText>
+        <MudText Typo="Typo.subtitle2" Class="mr-2">Báo cáo tháng:</MudText>
         <MudSelect T="int?" @bind-Value="_bcMauId" Label="Biểu mẫu" Variant="Variant.Outlined" Margin="Margin.Dense"
                    Style="min-width:260px">
-            @foreach (var m in _bieuMau.Where(b => b.BoCuc == BoCucBieuMau.TheoNgay))
+            @foreach (var m in _bieuMau)
             {
                 <MudSelectItem T="int?" Value="@m.Id">@m.Ten (@m.MaHieu)</MudSelectItem>
             }

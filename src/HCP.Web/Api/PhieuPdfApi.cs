@@ -21,7 +21,7 @@ public static class PhieuPdfApi
                 : Results.File(pdf, "application/pdf");
         });
 
-        // Báo cáo tháng (biểu mẫu theo ngày): /app/phieu/bao-cao-thang?bieuMauId=&nam=&thang=[&tai=true]
+        // Báo cáo tháng (mọi biểu mẫu; checklist in dạng ma trận): /app/phieu/bao-cao-thang?bieuMauId=&nam=&thang=[&tai=true]
         g.MapGet("/bao-cao-thang", async (int bieuMauId, int nam, int thang, bool? tai,
                                           IPhieuPdfService svc, CancellationToken ct) =>
         {
