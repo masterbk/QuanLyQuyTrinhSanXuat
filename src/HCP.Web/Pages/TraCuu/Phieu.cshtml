@@ -1,0 +1,103 @@
+@page "/tra-cuu/phieu/{ma}"
+@model HCP.Web.Pages.TraCuu.PhieuModel
+@{
+    Layout = "_LayoutTraCuu";
+    var p = Model.Phieu;
+    ViewData["Title"] = p is null ? "Không tìm thấy phiếu" : $"{p.TenMau} – {p.Ngay:dd/MM/yyyy}";
+}
+
+@if (p is null)
+{
+    <div class="alert alert-warning mt-4">Không tìm thấy phiếu. Mã QR có thể không đúng hoặc phiếu đã bị xoá.</div>
+    return;
+}
+
+<partial name="_CoSoTraCuu" model="p.CoSo" />
+
+@if (p.NoiDungKhop)
+{
+    <div class="alert alert-success">
+        <strong>✓ Nội dung khớp với bản đã ký.</strong>
+        Dữ liệu phiếu không bị thay đổi kể từ lúc ký.
+    </div>
+}
+else if (p.MaBam is null)
+{
+    <div class="alert alert-warning">Phiếu này chưa được ký (đang nhập dở hoặc lập trước khi có chức năng ký).</div>
+}
+else
+{
+    <div class="alert alert-danger">
+        <strong>⚠ Nội dung KHÔNG khớp với bản đã ký.</strong>
+        Dữ liệu phiếu đã bị thay đổi sau khi ký - đề nghị đối chiếu với cơ sở.
+    </div>
+}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="nhan">@p.MaHieu</div>
+        <h5 class="mb-2">@p.TenMau</h5>
+        <div class="row g-2">
+            <div class="col-6"><span class="nhan">Ngày phiếu:</span> @p.Ngay.ToString("dd/MM/yyyy")</div>
+            <div class="col-6"><span class="nhan">Trạng thái:</span> @(p.DaHoanThanh ? "Đã ghi nhận" : "Nháp")</div>
+            @if (!string.IsNullOrWhiteSpace(p.TenNguoiLap))
+            {
+                <div class="col-12"><span class="nhan">Người lập:</span> @p.TenNguoiLap</div>
+            }
+            @foreach (var g in p.DauPhieu)
+            {
+                <div class="col-12"><span class="nhan">@g.Nhan:</span> @g.GiaTri</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(p.GhiChu))
+            {
+                <div class="col-12"><span class="nhan">Ghi chú:</span> @p.GhiChu</div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (p.KyLucUtc is { } kyLuc)
+{
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <div class="nhan">Ký xác nhận</div>
+            <div><strong>@p.TenNguoiKy</strong> – lúc @GioVietNam.TuUtc(kyLuc).ToString("HH:mm dd/MM/yyyy")</div>
+            @if (!string.IsNullOrWhiteSpace(p.ChuKyAnh))
+            {
+                <img src="@p.ChuKyAnh" alt="Chữ ký" style="max-height:90px;max-width:100%;border-bottom:1px solid #ccc" class="mt-2" />
+            }
+            <div class="nhan mt-2" style="word-break:break-all">Mã xác thực: @p.MaBam</div>
+        </div>
+    </div>
+}
+
+<h6 class="mb-2">Nội dung phiếu (@p.Dong.Count dòng)</h6>
+@foreach (var d in p.Dong)
+{
+    <div class="card shadow-sm mb-2">
+        <div class="card-body py-2">
+            @if (d.TieuDe is not null)
+            {
+                <strong>@d.TieuDe</strong>
+            }
+            @if (d.GiaTri.Count == 0)
+            {
+                <div class="nhan fst-italic">Chưa nhập.</div>
+            }
+            @foreach (var g in d.GiaTri)
+            {
+                <div class="small">
+                    <span class="nhan">@g.Nhan:</span>
+                    @if (g.LaAnh)
+                    {
+                        <a href="@g.GiaTri" target="_blank">Xem ảnh</a>
+                    }
+                    else
+                    {
+                        <span class="@(g.GiaTri == "Không đạt" ? "text-danger fw-bold" : "")">@g.GiaTri</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}

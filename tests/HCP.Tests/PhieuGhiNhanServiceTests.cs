@@ -187,6 +187,78 @@ public class PhieuGhiNhanServiceTests
     }
 
     [Fact]
+    public async Task Hoan_Thanh_Ghi_Chu_Ky_Ma_Bam_Va_Tra_Cuu_Phat_Hien_Sua_Sau_Khi_Ky()
+    {
+        await NapMauAsync();
+        int id;
+        using (var db = MoDb())
+        {
+            var uv = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-HD-SX-01-01")).Id;
+            var p = new PhieuGhiNhan { BieuMauId = uv, Ngay = new DateOnly(2026, 10, 8), TenNguoiLap = "Nghĩa",
+                                       GiaTriDauJson = Json(("khu_vuc", "Phòng đóng gói")),
+                                       Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "07:00")) } } };
+            Assert.True((await new PhieuGhiNhanService(db).TaoPhieuAsync(p, hoanThanh: false)).ThanhCong);
+            id = p.Id;
+            Assert.Null(p.KyLucUtc);            // nháp: chưa ký, chưa có mã QR
+            Assert.Null(p.MaTraCuu);
+        }
+
+        // Hoàn thành kèm chữ ký.
+        using (var db = MoDb())
+        {
+            var kq = await new PhieuGhiNhanService(db).CapNhatPhieuAsync(new PhieuGhiNhan
+            {
+                Id = id, GiaTriDauJson = Json(("khu_vuc", "Phòng đóng gói")), ChuKyAnh = "/uploads/coso-a/ky.png",
+                TenNguoiKy = "Nguyễn Thị Nghĩa", NguoiKyUserId = "u-nghia",
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "07:00"), ("den_hoat_dong", "Đạt")) } }
+            }, hoanThanh: true);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        string ma;
+        using (var db = MoDb())
+        {
+            var p = await db.PhieuGhiNhans.Include(x => x.Dong).FirstAsync(x => x.Id == id);
+            Assert.NotNull(p.KyLucUtc);
+            Assert.Equal("Nguyễn Thị Nghĩa", p.TenNguoiKy);
+            Assert.Equal("/uploads/coso-a/ky.png", p.ChuKyAnh);
+            Assert.Matches("^[0-9a-f]{32}$", p.MaTraCuu!);
+            Assert.Equal(PhieuGhiNhanService.TinhMaBam(p), p.MaBamNoiDung);   // đọc lại từ CSDL vẫn khớp
+            ma = p.MaTraCuu!;
+        }
+
+        // Trang tra cứu công khai (quét QR): nội dung khớp, có người ký + giá trị đã đổi ra chữ.
+        using (var db = MoDb())
+        {
+            var tc = await new HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService(db).TraCuuPhieuAsync(ma);
+            Assert.NotNull(tc);
+            Assert.True(tc!.NoiDungKhop);
+            Assert.True(tc.DaHoanThanh);
+            Assert.Equal("Nguyễn Thị Nghĩa", tc.TenNguoiKy);
+            Assert.Contains(tc.DauPhieu, g => g.GiaTri == "Phòng đóng gói");
+            Assert.Contains(tc.Dong.Single().GiaTri, g => g.GiaTri == "07:00");
+        }
+
+        // Ai đó sửa thẳng dữ liệu trong CSDL sau khi ký -> tra cứu báo KHÔNG khớp.
+        using (var db = MoDb())
+        {
+            var d = await db.DongGhiNhans.FirstAsync(x => x.PhieuGhiNhanId == id);
+            d.GiaTriJson = Json(("gio_bat", "09:30"), ("den_hoat_dong", "Đạt"));
+            await db.SaveChangesAsync();
+        }
+        using (var db = MoDb())
+            Assert.False((await new HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService(db).TraCuuPhieuAsync(ma))!.NoiDungKhop);
+
+        // Mã sai định dạng / không tồn tại -> null.
+        using (var db = MoDb())
+        {
+            var svc = new HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService(db);
+            Assert.Null(await svc.TraCuuPhieuAsync("khong-hop-le"));
+            Assert.Null(await svc.TraCuuPhieuAsync(new string('a', 32)));
+        }
+    }
+
+    [Fact]
     public async Task Tao_Phieu_Validate_Dong_Va_Truong_Bat_Buoc()
     {
         await NapMauAsync();

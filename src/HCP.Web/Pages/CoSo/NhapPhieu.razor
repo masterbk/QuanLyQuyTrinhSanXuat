@@ -21,6 +21,7 @@
 @inject AppDbContext Db
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IJSRuntime JS
 
 <PageTitle>Nhập phiếu biểu mẫu</PageTitle>
 
@@ -76,6 +77,20 @@ else
         {
             <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
                 Phiếu đã hoàn thành (@_tenNguoiLuu, @_gioLuu) - chỉ xem, không sửa được.
+                @if (_kyLuc is not null)
+                {
+                    <div class="mt-1">
+                        Ký bởi <b>@_tenNguoiKy</b> lúc @_kyLuc
+                        @if (!string.IsNullOrEmpty(_maTraCuu))
+                        {
+                            <span> · <a href="@($"/tra-cuu/phieu/{_maTraCuu}")" target="_blank">Trang đối chiếu (QR)</a></span>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(_chuKyAnh))
+                    {
+                        <img src="@_chuKyAnh" alt="Chữ ký" style="max-height:60px;margin-top:4px" />
+                    }
+                }
             </MudAlert>
         }
         else if (_phieuId is not null)
@@ -195,7 +210,7 @@ else
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_dangLuu"
                            StartIcon="@Icons.Material.Filled.Save" OnClick="@(() => LuuAsync(false))">Lưu nháp</MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangLuu"
-                           StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="@(() => LuuAsync(true))">Hoàn thành</MudButton>
+                           StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="MoKyAsync">Ký &amp; Hoàn thành</MudButton>
             }
             @if (_phieuId is { } pid)
             {
@@ -205,6 +220,23 @@ else
         </div>
     }
 }
+
+@* Khung ký tay khi Hoàn thành: ký bằng chuột (máy tính) hoặc ngón tay (màn cảm ứng). *@
+<MudDialog @bind-Visible="_hienKy" Options="@(new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false })">
+    <TitleContent><MudText Typo="Typo.h6">Ký xác nhận hoàn thành phiếu</MudText></TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Ký vào khung dưới (giữ chuột trái và kéo). Sau khi ký, phiếu được chốt và chỉ xem lại được.
+        </MudText>
+        <canvas id="khung-ky" style="width:100%;height:180px;border:1px dashed #9e9e9e;border-radius:6px;background:#fff;cursor:crosshair"></canvas>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Người ký: @_tenToi</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => JS.InvokeVoidAsync("chuKy.xoa", "khung-ky"))" StartIcon="@Icons.Material.Filled.Refresh">Ký lại</MudButton>
+        <MudButton OnClick="@(() => _hienKy = false)">Huỷ</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_dangLuu" OnClick="KyVaHoanThanhAsync">Ký &amp; Hoàn thành</MudButton>
+    </DialogActions>
+</MudDialog>
 
 @code {
     [SupplyParameterFromQuery] public int? BieuMauId { get; set; }
@@ -223,6 +255,8 @@ else
 
     private bool _dangTai = true;
     private bool _dangLuu;
+    private bool _hienKy, _canKhoiTaoKy;
+    private string? _tenToi, _tenNguoiKy, _kyLuc, _chuKyAnh, _maTraCuu;
     private List<BieuMauEntity> _dsMau = new();
     private BieuMauEntity? _mau;
     private int _mauId;
@@ -299,6 +333,10 @@ else
         _choXem = p is not null && p.TrangThai != TrangThaiPhieu.Nhap;
         _tenNguoiLuu = p?.TenNguoiCapNhat ?? p?.TenNguoiLap ?? p?.NguoiLap;
         _gioLuu = p is null ? null : GioVietNam.TuUtc(p.ThoiGianUtc).ToString("HH:mm dd/MM");
+        _tenNguoiKy = p?.TenNguoiKy;
+        _kyLuc = p?.KyLucUtc is { } ky ? GioVietNam.TuUtc(ky).ToString("HH:mm dd/MM/yyyy") : null;
+        _chuKyAnh = p?.ChuKyAnh;
+        _maTraCuu = p?.MaTraCuu;
         _dau = DocJson(p?.GiaTriDauJson);
         _ghiChu = p?.GhiChu;
 
@@ -476,21 +514,52 @@ else
 
     // ---------------- Lưu ----------------
 
-    private async Task LuuAsync(bool hoanThanh)
+    private List<DongNhap> DongGui()
+    {
+        static bool CoGiaTri(Dictionary<string, string?> gt) => gt.Values.Any(x => !string.IsNullOrWhiteSpace(x));
+        return LaChecklist ? _dong : _dong.Where(d => CoGiaTri(d.GiaTri) || !string.IsNullOrWhiteSpace(d.GhiChu)).ToList();
+    }
+
+    /// <summary>Mở khung ký (Hoàn thành bắt buộc ký tay).</summary>
+    private async Task MoKyAsync()
     {
         if (_mau is null || _choXem) return;
-        static bool CoGiaTri(Dictionary<string, string?> gt) => gt.Values.Any(x => !string.IsNullOrWhiteSpace(x));
-        // Checklist giữ mọi hạng mục; nhiều dòng / theo ngày bỏ dòng trống hoàn toàn.
-        var gui = LaChecklist ? _dong : _dong.Where(d => CoGiaTri(d.GiaTri) || !string.IsNullOrWhiteSpace(d.GhiChu)).ToList();
-        if (gui.Count == 0) { Snackbar.Add("Chưa nhập dữ liệu nào.", Severity.Warning); return; }
+        if (DongGui().Count == 0) { Snackbar.Add("Chưa nhập dữ liệu nào.", Severity.Warning); return; }
+        _tenToi ??= await HCP.Web.Api.BieuMauApi.TenNguoiLapAsync(Db, _maNhanSu, _userId);
+        _hienKy = true;
+        _canKhoiTaoKy = true;
+    }
 
-        if (hoanThanh)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_canKhoiTaoKy) return;
+        _canKhoiTaoKy = false;
+        await Task.Delay(150);   // chờ hộp thoại vẽ xong khung canvas
+        await JS.InvokeVoidAsync("chuKy.batDau", "khung-ky");
+    }
+
+    private async Task KyVaHoanThanhAsync()
+    {
+        var b64 = await JS.InvokeAsync<string?>("chuKy.layAnh", "khung-ky");
+        if (string.IsNullOrEmpty(b64)) { Snackbar.Add("Vui lòng ký vào khung trước khi hoàn thành.", Severity.Warning); return; }
+        string duongDan;
+        try
         {
-            var dongY = await DialogService.ShowMessageBox("Hoàn thành phiếu?",
-                "Sau khi hoàn thành, phiếu được chốt và chỉ xem lại được (không sửa tiếp). Tiếp tục?",
-                yesText: "Hoàn thành", cancelText: "Huỷ");
-            if (dongY != true) return;
+            var bytes = Convert.FromBase64String(b64);
+            using var ms = new MemoryStream(bytes);
+            duongDan = (await LuuTruAnh.LuuAsync(ms, "chu-ky.png", "image/png", bytes.Length)).DuongDan;
         }
+        catch (Exception ex) { Snackbar.Add("Không lưu được chữ ký: " + ex.Message, Severity.Error); return; }
+        _hienKy = false;
+        await LuuAsync(true, duongDan);
+    }
+
+    private async Task LuuAsync(bool hoanThanh, string? chuKy = null)
+    {
+        if (_mau is null || _choXem) return;
+        // Checklist giữ mọi hạng mục; nhiều dòng / theo ngày bỏ dòng trống hoàn toàn.
+        var gui = DongGui();
+        if (gui.Count == 0) { Snackbar.Add("Chưa nhập dữ liệu nào.", Severity.Warning); return; }
 
         static string Json(Dictionary<string, string?> gt) =>
             JsonSerializer.Serialize(gt.Where(x => !string.IsNullOrWhiteSpace(x.Value)).ToDictionary(x => x.Key, x => x.Value));
@@ -502,6 +571,12 @@ else
             Dong = gui.Select(d => new DongGhiNhan { HangMucBieuMauId = d.HangMucId, GiaTriJson = Json(d.GiaTri), GhiChu = d.GhiChu }).ToList()
         };
         var ten = await HCP.Web.Api.BieuMauApi.TenNguoiLapAsync(Db, _maNhanSu, _userId);
+        if (hoanThanh)
+        {
+            phieu.ChuKyAnh = chuKy;
+            phieu.TenNguoiKy = ten;
+            phieu.NguoiKyUserId = _userId;
+        }
 
         _dangLuu = true;
         KetQuaThaoTac kq;

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../loi/api.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
+import 'man_ky_ten.dart';
 import 'mo_hinh.dart';
 import 'o_chon_tim_kiem.dart';
 
@@ -678,19 +681,25 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         .toList();
     final ghiChu = _ghiChu.text.trim().isEmpty ? null : _ghiChu.text.trim();
 
-    // Xác nhận trước khi chốt (hoàn thành rồi sẽ khóa, không sửa tiếp được).
-    if (hoanThanh && !await _xacNhanHoanThanh()) return;
+    // Hoàn thành = ký tay xác nhận (thay cho hộp thoại hỏi lại); huỷ ký thì không lưu.
+    Uint8List? anhKy;
+    if (hoanThanh) {
+      final ten = ref.read(xacThucProvider).nguoiDung?.tenHienThi ?? '';
+      anhKy = await Navigator.push<Uint8List>(context, MaterialPageRoute(builder: (_) => ManKyTen(tenNguoiKy: ten)));
+      if (anhKy == null || !mounted) return;
+    }
 
     setState(() => _dangLuu = true);
     try {
       final kho = ref.read(khoBieuMauProvider);
+      final chuKy = anhKy == null ? null : await kho.taiAnh(anhKy, 'chu-ky.png');
       final String tb;
       if (_phieuId != null) {
         tb = await kho.capNhatPhieu(id: _phieuId!, mocLuu: _mocLuu, bieuMauId: widget.mau.id, ngay: _ngay,
-            giaTriDau: giaTriDau, ghiChu: ghiChu, dong: dongGui, hoanThanh: hoanThanh);
+            giaTriDau: giaTriDau, ghiChu: ghiChu, dong: dongGui, hoanThanh: hoanThanh, chuKy: chuKy);
       } else {
         tb = await kho.taoPhieu(bieuMauId: widget.mau.id, ngay: _ngay,
-            giaTriDau: giaTriDau, ghiChu: ghiChu, dong: dongGui, hoanThanh: hoanThanh);
+            giaTriDau: giaTriDau, ghiChu: ghiChu, dong: dongGui, hoanThanh: hoanThanh, chuKy: chuKy);
       }
       if (!mounted) return;
       if (hoanThanh) {
@@ -750,24 +759,6 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     // Mẫu nhiều phiếu/ngày: mở lại đúng phiếu đang sửa.
     final p = _dsNgay.where((x) => x.id == id).firstOrNull;
     if (!_motPhieuNgay && p != null && mounted) setState(() => _apDungPhieu(p));
-  }
-
-  /// Hỏi xác nhận trước khi chốt phiếu. Trả true nếu người dùng đồng ý.
-  Future<bool> _xacNhanHoanThanh() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Hoàn thành phiếu?'),
-        content: Text(_motPhieuNgay
-            ? 'Sau khi hoàn thành, phiếu của ngày này sẽ được chốt và chỉ xem lại được (không sửa tiếp). Tiếp tục?'
-            : 'Chốt và lưu phiếu này? Sau khi hoàn thành chỉ xem lại được.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Hoàn thành')),
-        ],
-      ),
-    );
-    return ok ?? false;
   }
 
   void _bao(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));

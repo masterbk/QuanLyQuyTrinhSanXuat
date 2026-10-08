@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
@@ -283,6 +284,37 @@ public class PhieuPdfServiceTests
                 await File.WriteAllBytesAsync(Path.Combine(dir, "header-phieu.pdf"), phieu);
                 await File.WriteAllBytesAsync(Path.Combine(dir, "header-thang.pdf"), thang);
             }
+        }
+    }
+
+    [Fact]
+    public async Task Pdf_Phieu_Da_Ky_Co_Khoi_Ky_Va_Ma_QR()
+    {
+        using (var db = MoDb()) await new BieuMauService(db).NapMauMacDinhAsync();
+        int id;
+        using (var db = MoDb())
+        {
+            var uv = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-HD-SX-01-01")).Id;
+            var p = new PhieuGhiNhan
+            {
+                BieuMauId = uv, Ngay = new DateOnly(2026, 10, 8), ChuKyAnh = "/uploads/coso-a/ky.png",
+                TenNguoiKy = "Nguyễn Thị Nghĩa", GiaTriDauJson = "{\"khu_vuc\":\"Phòng đóng gói\"}",
+                Dong = { new DongGhiNhan { GiaTriJson = "{\"gio_bat\":\"17:00\",\"den_hoat_dong\":\"Đạt\"}" } }
+            };
+            Assert.True((await new PhieuGhiNhanService(db).TaoPhieuAsync(p, hoanThanh: true)).ThanhCong);
+            id = p.Id;
+        }
+        var cauHinh = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Uploads:BaseUrl"] = "https://quanly.vidu.vn" }).Build();
+        var anhKy = Environment.GetEnvironmentVariable("CHU_KY_TEST") is { Length: > 0 } f ? await File.ReadAllBytesAsync(f) : null;
+        using (var db = MoDb())
+        {
+            var pdf = new PhieuPdfService(new PhieuGhiNhanService(db), db, new FakeDanhMuc<Staff>(), new FakeDanhMuc<Product>(),
+                new FakeDanhMuc<SubSupplier>(), new FakeDanhMuc<Facility>(), new FakeDocAnh(anhKy), cauHinh);
+            var bytes = await pdf.TaoPdfAsync(id);
+            Assert.Equal(new byte[] { 0x25, 0x50, 0x44, 0x46 }, bytes!.Take(4).ToArray());
+            if (Environment.GetEnvironmentVariable("PDF_OUT_DIR") is { Length: > 0 } dir)
+                await File.WriteAllBytesAsync(Path.Combine(dir, "phieu-da-ky.pdf"), bytes);
         }
     }
 

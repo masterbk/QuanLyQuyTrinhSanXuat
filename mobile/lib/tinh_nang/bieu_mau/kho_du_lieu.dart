@@ -88,9 +88,12 @@ class KhoBieuMau {
     String? ghiChu,
     required List<Map<String, dynamic>> dong,
     bool hoanThanh = true,
+    String? chuKy,
   }) async {
-    final j = await _api.post('/api/v1/phieu-ghi-nhan',
-        than: _than(bieuMauId, ngay, giaTriDau, ghiChu, dong, hoanThanh)) as Map<String, dynamic>;
+    final j = await _api.post('/api/v1/phieu-ghi-nhan', than: {
+      ..._than(bieuMauId, ngay, giaTriDau, ghiChu, dong, hoanThanh),
+      'chuKy': ?chuKy,
+    }) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã lưu phiếu.';
   }
 
@@ -105,9 +108,11 @@ class KhoBieuMau {
     String? ghiChu,
     required List<Map<String, dynamic>> dong,
     bool hoanThanh = true,
+    String? chuKy,
   }) async {
     final j = await _api.put('/api/v1/phieu-ghi-nhan/$id', than: {
       ..._than(bieuMauId, ngay, giaTriDau, ghiChu, dong, hoanThanh),
+      'chuKy': ?chuKy,
       if (mocLuu != null) 'thoiGianUtcGoc': mocLuu.toUtc().toIso8601String(),
     }) as Map<String, dynamic>;
     return j['thongBao'] as String? ?? 'Đã lưu phiếu.';

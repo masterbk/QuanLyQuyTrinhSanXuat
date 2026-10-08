@@ -39,6 +39,15 @@ public static class BieuMauApi
         return string.IsNullOrWhiteSpace(u?.HoTen) ? u?.UserName : u.HoTen;
     }
 
+    /// <summary>Người bấm Hoàn thành là người ký (ảnh chữ ký gửi kèm request).</summary>
+    private static void GanNguoiKy(PhieuGhiNhan phieu, TaoPhieuRequest req, string? userId, string? ten)
+    {
+        if (req.HoanThanh == false) return;
+        phieu.ChuKyAnh = req.ChuKy;
+        phieu.NguoiKyUserId = userId;
+        phieu.TenNguoiKy = ten;
+    }
+
     private static IResult KhongDuocXem() =>
         Results.Json(new LoiDto("Bạn không được giao biểu mẫu này - liên hệ quản trị cơ sở."), statusCode: 403);
 
@@ -179,6 +188,7 @@ public static class BieuMauApi
             // Ghi tài khoản + tên người lập (tài khoản không gắn nhân sự như chủ cơ sở vẫn lọc "Do tôi lập" được).
             phieu.NguoiLapUserId = user.FindFirstValue(ClaimTypes.NameIdentifier);
             phieu.TenNguoiLap = await TenNguoiLapAsync(db, ma, phieu.NguoiLapUserId);
+            GanNguoiKy(phieu, req, phieu.NguoiLapUserId, phieu.TenNguoiLap);
             var kq = await svc.TaoPhieuAsync(phieu, req.HoanThanh ?? true);
             return kq.ThanhCong
                 ? Results.Created($"/api/v1/phieu-ghi-nhan/{phieu.Id}", new KetQuaDto(true, kq.ThongBao))
@@ -196,6 +206,7 @@ public static class BieuMauApi
             phieu.Id = id;
             // Mốc lưu của phiếu lúc app mở ra -> chống ghi đè khi hai người cùng nhập (app cũ không gửi = không kiểm).
             phieu.TenNguoiCapNhat = await TenNguoiLapAsync(db, ma, user.FindFirstValue(ClaimTypes.NameIdentifier));
+            GanNguoiKy(phieu, req, user.FindFirstValue(ClaimTypes.NameIdentifier), phieu.TenNguoiCapNhat);
             var kq = await svc.CapNhatPhieuAsync(phieu, req.HoanThanh ?? true, req.ThoiGianUtcGoc);
             if (kq.XungDot) return Results.Conflict(new LoiDto(kq.ThongBao));
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
@@ -251,5 +262,6 @@ public static class BieuMauApi
     private static PhieuGhiNhanDto MapPhieu(PhieuGhiNhan p) => new(
         p.Id, p.BieuMauId, p.Ngay, p.GiaTriDauJson, p.NguoiLap, p.TenNguoiLap, p.TrangThai.ToString(), p.GhiChu, p.ThoiGianUtc,
         p.Dong.OrderBy(d => d.ThuTu).Select(d => new DongGhiNhanDto(
-            d.HangMucBieuMauId, d.ThuTu, d.GiaTriJson, d.GhiChu)).ToList());
+            d.HangMucBieuMauId, d.ThuTu, d.GiaTriJson, d.GhiChu)).ToList(),
+        p.TenNguoiKy, p.KyLucUtc, p.ChuKyAnh, p.MaTraCuu);
 }

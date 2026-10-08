@@ -223,7 +223,8 @@ public sealed record HangMucBieuMauDto(int Id, string Ten, string? DienGiai, str
 
 public sealed record PhieuGhiNhanDto(
     int Id, int BieuMauId, DateOnly Ngay, string GiaTriDauJson, string? NguoiLap, string? TenNguoiLap,
-    string TrangThai, string? GhiChu, DateTime ThoiGianUtc, IReadOnlyList<DongGhiNhanDto> Dong);
+    string TrangThai, string? GhiChu, DateTime ThoiGianUtc, IReadOnlyList<DongGhiNhanDto> Dong,
+    string? TenNguoiKy = null, DateTime? KyLucUtc = null, string? ChuKyAnh = null, string? MaTraCuu = null);
 
 public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string GiaTriJson, string? GhiChu);
 
@@ -244,7 +245,8 @@ public sealed record NhacHanDto(int BieuMauId, string TenBieuMau, int PhieuId, D
 
 public sealed record TaoPhieuRequest(
     int BieuMauId, DateOnly? Ngay, IReadOnlyDictionary<string, string?>? GiaTriDau, string? GhiChu,
-    IReadOnlyList<DongGhiNhanRequest>? Dong, bool? HoanThanh, DateTime? ThoiGianUtcGoc = null);
+    IReadOnlyList<DongGhiNhanRequest>? Dong, bool? HoanThanh, DateTime? ThoiGianUtcGoc = null,
+    string? ChuKy = null);   // đường dẫn ảnh chữ ký tay (tải qua /phieu-ghi-nhan/anh) - gửi khi Hoàn thành
 
 /// <summary>Một dòng của phiếu: giá trị theo khoá trường (GiaTri["ma_truong"] = giá trị) + hạng mục (checklist).</summary>
 public sealed record DongGhiNhanRequest(

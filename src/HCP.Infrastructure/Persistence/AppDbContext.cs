@@ -702,6 +702,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         phieu.Property(p => p.NguoiLapUserId).HasMaxLength(450);
         phieu.Property(p => p.TenNguoiLap).HasMaxLength(255);
         phieu.Property(p => p.TenNguoiCapNhat).HasMaxLength(255);
+        phieu.Property(p => p.ChuKyAnh).HasMaxLength(1000);
+        phieu.Property(p => p.TenNguoiKy).HasMaxLength(255);
+        phieu.Property(p => p.NguoiKyUserId).HasMaxLength(450);
+        phieu.Property(p => p.MaBamNoiDung).HasMaxLength(64);
+        phieu.Property(p => p.MaTraCuu).HasMaxLength(32);
+        phieu.HasIndex(p => p.MaTraCuu);
         phieu.Property(p => p.NguoiThamTra).HasMaxLength(100);
         phieu.Property(p => p.GhiChu).HasMaxLength(2000);
         phieu.HasMany(p => p.Dong).WithOne(d => d.PhieuGhiNhan!)

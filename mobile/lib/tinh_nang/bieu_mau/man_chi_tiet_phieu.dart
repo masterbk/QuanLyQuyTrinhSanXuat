@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 
 import '../../loi/api.dart';
+import '../../loi/gio_viet_nam.dart';
 import 'kho_du_lieu.dart';
 import 'man_lich_su.dart' show ChipTrangThaiPhieu;
 import 'man_nhap_phieu.dart';
@@ -154,6 +155,19 @@ class _ManChiTietPhieuState extends ConsumerState<ManChiTietPhieu> {
               _DongGiaTri(nhan: 'Người lập', giaTri: Text(p.tenNguoiLap ?? _ten(nhanSuBmProvider, p.nguoiLap) ?? '—')),
               for (final t in truongDau) _DongGiaTri(nhan: t.ten, giaTri: _giaTri(t, p.giaTriDau[t.ma])),
               if ((p.ghiChu ?? '').isNotEmpty) _DongGiaTri(nhan: 'Ghi chú', giaTri: Text(p.ghiChu!)),
+              if (p.kyLucUtc != null) ...[
+                const Divider(height: 16),
+                _DongGiaTri(
+                  nhan: 'Ký xác nhận',
+                  giaTri: Text('${p.tenNguoiKy ?? '—'} · ${_gio(gioVietNam(p.kyLucUtc!))}'),
+                ),
+                if ((p.chuKyAnh ?? '').isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Image.network(p.chuKyAnh!, height: 60,
+                        errorBuilder: (_, _, _) => const Text('(không tải được ảnh chữ ký)')),
+                  ),
+              ],
             ]),
           ),
         ),
@@ -224,6 +238,10 @@ class _ManChiTietPhieuState extends ConsumerState<ManChiTietPhieu> {
       ),
     );
   }
+
+  static String _gio(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} '
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   String? _ten(FutureProvider<List<MucChon>> dm, String? ma) {
     if (ma == null || ma.isEmpty) return null;

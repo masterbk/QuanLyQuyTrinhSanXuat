@@ -51,8 +51,24 @@ public record TraCuuLo(TraCuuCoSo CoSo, string MaLo, string TenLo, string MaSanP
 ///    cứu ngẫu nhiên, bỏ bộ lọc tenant rồi lọc tường minh theo TenantId của bản ghi tìm được. Chỉ đọc, không trả giá
 ///    tiền, số điện thoại/địa chỉ khách hay nhân sự.
 /// </summary>
+/// <summary>Một ô "nhãn: giá trị" của phiếu ghi nhận trên trang tra cứu (giá trị đã đổi mã danh mục ra tên).</summary>
+public record TraCuuGiaTri(string Nhan, string GiaTri, bool LaAnh = false);
+
+public record TraCuuDongPhieu(string? TieuDe, IReadOnlyList<TraCuuGiaTri> GiaTri);
+
+/// <summary>
+/// Phiếu ghi nhận biểu mẫu trên trang tra cứu công khai (QR in trên PDF). <paramref name="NoiDungKhop"/> = mã băm tính
+/// lại từ dữ liệu hiện tại trùng mã băm lúc ký (false = dữ liệu đã bị thay đổi sau khi ký).
+/// </summary>
+public record TraCuuPhieu(TraCuuCoSo CoSo, string MaHieu, string TenMau, DateOnly Ngay, bool DaHoanThanh,
+    string? TenNguoiLap, string? TenNguoiKy, DateTime? KyLucUtc, string? ChuKyAnh, string? MaBam, bool NoiDungKhop,
+    IReadOnlyList<TraCuuGiaTri> DauPhieu, IReadOnlyList<TraCuuDongPhieu> Dong, string? GhiChu);
+
 public interface ITraCuuCongKhaiService
 {
+    /// <summary>Phiếu ghi nhận biểu mẫu theo mã tra cứu (QR trên PDF). Null nếu không có.</summary>
+    Task<TraCuuPhieu?> TraCuuPhieuAsync(string maTraCuu, CancellationToken ct = default);
+
     Task<QrTraCuu?> LayQrDonHangAsync(int id, CancellationToken ct = default);
 
     Task<QrTraCuu?> LayQrLoAsync(int id, CancellationToken ct = default);
@@ -263,6 +279,73 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
 
         return new TraCuuLo(await CoSoAsync(tenantId), lo.MaLo, lo.TenLo, lo.MaSanPham, tenSp ?? lo.MaSanPham,
             lo.NgayNhap, lo.NgaySanXuat, lo.HanSuDung, anh, khau);
+    }
+
+    public async Task<TraCuuPhieu?> TraCuuPhieuAsync(string maTraCuu, CancellationToken ct = default)
+    {
+        if (!LaMaHopLe(maTraCuu)) return null;
+        var p = await _db.PhieuGhiNhans.IgnoreQueryFilters().AsNoTracking().Include(x => x.Dong)
+            .FirstOrDefaultAsync(x => x.MaTraCuu == maTraCuu, ct);
+        if (p is null) return null;
+
+        var t = p.TenantId;
+        var mau = await _db.BieuMaus.IgnoreQueryFilters().AsNoTracking().AsSplitQuery()
+            .Include(b => b.Truong).Include(b => b.HangMuc)
+            .FirstOrDefaultAsync(b => b.Id == p.BieuMauId && b.TenantId == t, ct);
+        if (mau is null) return null;
+
+        var nhanSu = await _db.Staff.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == t)
+            .ToDictionaryAsync(x => x.MaNhanSu, x => x.HoTen, ct);
+        var sanPham = await _db.Products.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == t)
+            .ToDictionaryAsync(x => x.MaSanPham, x => x.TenSanPham, ct);
+        var ncc = await _db.SubSuppliers.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == t)
+            .ToDictionaryAsync(x => x.MaNccDauVao, x => x.Ten, ct);
+        var coSo = await _db.Facilities.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == t)
+            .ToDictionaryAsync(x => x.MaCoSo, x => x.TenCoSo, ct);
+
+        TraCuuGiaTri? O(TruongBieuMau tr, Dictionary<string, string?> gt)
+        {
+            var v = gt.GetValueOrDefault(tr.Ma);
+            if (string.IsNullOrWhiteSpace(v)) return null;
+            var hien = tr.Kieu switch
+            {
+                KieuTruongBieuMau.ChonNhanSu => nhanSu.GetValueOrDefault(v, v),
+                KieuTruongBieuMau.ChonSanPham => sanPham.GetValueOrDefault(v, v),
+                KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(v, v),
+                KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(v, v),
+                KieuTruongBieuMau.Ngay => DateOnly.TryParse(v, out var d) ? d.ToString("dd/MM/yyyy") : v,
+                _ => v
+            };
+            var nhan = string.IsNullOrWhiteSpace(tr.Nhom) ? tr.Ten : $"{tr.Nhom} - {tr.Ten}";
+            if (!string.IsNullOrWhiteSpace(tr.DonVi)) nhan += $" ({tr.DonVi})";
+            return new TraCuuGiaTri(nhan, hien, tr.Kieu == KieuTruongBieuMau.Anh);
+        }
+
+        var truongDau = mau.Truong.Where(x => x.LaDauPhieu).OrderBy(x => x.ThuTu).ToList();
+        var truongDong = mau.Truong.Where(x => !x.LaDauPhieu).OrderBy(x => x.ThuTu).ToList();
+        var dau = Json(p.GiaTriDauJson);
+        var hangMuc = mau.HangMuc.ToDictionary(h => h.Id, h => h.Ten);
+        var dong = p.Dong.OrderBy(d => d.ThuTu).Select((d, i) =>
+        {
+            var gt = Json(d.GiaTriJson);
+            var o = truongDong.Select(tr => O(tr, gt)).Where(x => x is not null).Select(x => x!).ToList();
+            if (!string.IsNullOrWhiteSpace(d.GhiChu)) o.Add(new TraCuuGiaTri("Ghi chú", d.GhiChu!));
+            var tieuDe = d.HangMucBieuMauId is { } hm ? hangMuc.GetValueOrDefault(hm, "(hạng mục đã xoá)")
+                       : mau.BoCuc == BoCucBieuMau.NhieuDongTuDo ? $"Dòng {i + 1}" : null;
+            return new TraCuuDongPhieu(tieuDe, o);
+        }).ToList();
+
+        var khop = p.MaBamNoiDung is not null && p.MaBamNoiDung == HCP.Infrastructure.Services.BieuMau.PhieuGhiNhanService.TinhMaBam(p);
+        return new TraCuuPhieu(await CoSoAsync(t), mau.MaHieu, mau.Ten, p.Ngay, p.TrangThai != TrangThaiPhieu.Nhap,
+            p.TenNguoiLap, p.TenNguoiKy, p.KyLucUtc, p.ChuKyAnh, p.MaBamNoiDung, khop,
+            truongDau.Select(tr => O(tr, dau)).Where(x => x is not null).Select(x => x!).ToList(), dong, p.GhiChu);
+    }
+
+    private static Dictionary<string, string?> Json(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string?>>(json) ?? new(); }
+        catch (System.Text.Json.JsonException) { return new(); }
     }
 
     private async Task<TraCuuCoSo> CoSoAsync(string tenantId)

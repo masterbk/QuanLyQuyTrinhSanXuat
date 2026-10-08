@@ -133,6 +133,8 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
 
         phieu.TrangThai = hoanThanh ? TrangThaiPhieu.DaGhiNhan : TrangThaiPhieu.Nhap;
         phieu.ThoiGianUtc = DateTime.UtcNow;
+        if (hoanThanh) GhiNhanKy(phieu, phieu.ChuKyAnh, phieu.TenNguoiKy, phieu.NguoiKyUserId);
+        else XoaKy(phieu);
         phieu.TenNguoiCapNhat ??= phieu.TenNguoiLap;
         phieu.NguoiThamTra = null;
         phieu.ThoiGianThamTraUtc = null;
@@ -181,6 +183,7 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         goc.TenNguoiCapNhat = phieu.TenNguoiCapNhat ?? goc.TenNguoiCapNhat;
         _db.DongGhiNhans.RemoveRange(goc.Dong);
         goc.Dong = dongMoi;
+        if (hoanThanh) GhiNhanKy(goc, phieu.ChuKyAnh, phieu.TenNguoiKy, phieu.NguoiKyUserId);
 
         try
         {
@@ -194,6 +197,63 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
             return KetQuaThaoTac.LoiXungDot("Phiếu vừa được người khác cập nhật - hãy tải lại phiếu rồi nhập tiếp.");
         }
         return KetQuaThaoTac.Ok(ThongBaoLuu(mau.Ten, goc.Ngay, hoanThanh));
+    }
+
+    /// <summary>
+    /// Chốt chữ ký khi Hoàn thành: người ký, giờ ký, ảnh chữ ký, mã tra cứu QR và mã băm nội dung lúc ký
+    /// (phải gọi SAU khi đã gán dòng cuối cùng cho phiếu).
+    /// </summary>
+    private static void GhiNhanKy(PhieuGhiNhan p, string? chuKyAnh, string? tenNguoiKy, string? nguoiKyUserId)
+    {
+        p.ChuKyAnh = string.IsNullOrWhiteSpace(chuKyAnh) ? null : chuKyAnh.Trim();
+        p.TenNguoiKy = tenNguoiKy;
+        p.NguoiKyUserId = nguoiKyUserId;
+        p.KyLucUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+        p.MaTraCuu ??= Guid.NewGuid().ToString("N");
+        p.MaBamNoiDung = TinhMaBam(p);
+    }
+
+    private static void XoaKy(PhieuGhiNhan p)
+    {
+        p.ChuKyAnh = null; p.TenNguoiKy = null; p.NguoiKyUserId = null; p.KyLucUtc = null; p.MaBamNoiDung = null;
+    }
+
+    /// <summary>
+    /// SHA-256 (hex thường) của nội dung phiếu ở dạng chuẩn hoá: mẫu, ngày, đầu phiếu, ghi chú, các dòng (theo thứ
+    /// tự, khoá giá trị sắp xếp, bỏ ô trống), người ký, giờ ký, ảnh chữ ký. Dùng khi ký và khi đối chiếu (trang tra cứu QR).
+    /// </summary>
+    public static string TinhMaBam(PhieuGhiNhan p)
+    {
+        static SortedDictionary<string, string> Gon(string? json)
+        {
+            var kq = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            if (string.IsNullOrWhiteSpace(json)) return kq;
+            try
+            {
+                foreach (var (k, v) in JsonSerializer.Deserialize<Dictionary<string, string?>>(json) ?? new())
+                    if (!string.IsNullOrWhiteSpace(v)) kq[k] = v;
+            }
+            catch (JsonException) { }
+            return kq;
+        }
+        var chuan = new
+        {
+            mau = p.BieuMauId,
+            ngay = p.Ngay.ToString("yyyy-MM-dd"),
+            dau = Gon(p.GiaTriDauJson),
+            ghiChu = p.GhiChu ?? "",
+            dong = p.Dong.OrderBy(d => d.ThuTu).Select(d => new
+            {
+                hangMuc = d.HangMucBieuMauId,
+                giaTri = Gon(d.GiaTriJson),
+                ghiChu = d.GhiChu ?? ""
+            }).ToList(),
+            nguoiKy = p.TenNguoiKy ?? "",
+            kyLuc = p.KyLucUtc?.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ") ?? "",
+            chuKy = p.ChuKyAnh ?? ""
+        };
+        var bytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(chuan));
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
     }
 
     private Task<BieuMauEntity?> LayMauKiemTraAsync(int bieuMauId, CancellationToken ct) =>

@@ -109,6 +109,10 @@ class PhieuGhiNhan {
   final String? nguoiLap;
   final String? tenNguoiLap; // tên lưu lúc lập (kể cả tài khoản không gắn nhân sự)
   final DateTime? thoiGianUtc; // mốc lưu gần nhất - gửi lại khi cập nhật để chống ghi đè
+  final String? tenNguoiKy;
+  final DateTime? kyLucUtc;
+  final String? chuKyAnh;
+  final String? maTraCuu; // mã trang đối chiếu công khai (QR trên PDF)
   final String trangThai;
   final String? ghiChu;
   final List<DongGhiNhan> dong;
@@ -121,6 +125,10 @@ class PhieuGhiNhan {
     this.nguoiLap,
     this.tenNguoiLap,
     this.thoiGianUtc,
+    this.tenNguoiKy,
+    this.kyLucUtc,
+    this.chuKyAnh,
+    this.maTraCuu,
     this.trangThai = 'DaGhiNhan',
     this.ghiChu,
     this.dong = const [],
@@ -145,6 +153,10 @@ class PhieuGhiNhan {
       nguoiLap: j['nguoiLap'] as String?,
       tenNguoiLap: j['tenNguoiLap'] as String?,
       thoiGianUtc: DateTime.tryParse(j['thoiGianUtc'] as String? ?? ''),
+      tenNguoiKy: j['tenNguoiKy'] as String?,
+      kyLucUtc: DateTime.tryParse(j['kyLucUtc'] as String? ?? ''),
+      chuKyAnh: j['chuKyAnh'] as String?,
+      maTraCuu: j['maTraCuu'] as String?,
       trangThai: j['trangThai'] as String? ?? 'DaGhiNhan',
       ghiChu: j['ghiChu'] as String?,
       dong: ((j['dong'] as List?) ?? const [])

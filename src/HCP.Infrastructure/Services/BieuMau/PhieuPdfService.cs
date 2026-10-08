@@ -1,3 +1,4 @@
+using HCP.Domain;
 using System.Text.Json;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
@@ -34,12 +35,15 @@ public sealed class PhieuPdfService : IPhieuPdfService
     private readonly IDanhMucService<SubSupplier> _ncc;
     private readonly IDanhMucService<Facility> _coSo;
     private readonly IDocAnhPhieu? _docAnh;
+    private readonly string? _gocWeb;   // Uploads:BaseUrl - gốc đường dẫn trang tra cứu công khai cho mã QR
 
     public PhieuPdfService(IPhieuGhiNhanService phieu, AppDbContext db,
                            IDanhMucService<Staff> nhanSu, IDanhMucService<Product> sanPham,
                            IDanhMucService<SubSupplier> ncc, IDanhMucService<Facility> coSo,
-                           IDocAnhPhieu? docAnh = null)
+                           IDocAnhPhieu? docAnh = null,
+                           Microsoft.Extensions.Configuration.IConfiguration? cauHinh = null)
     {
+        _gocWeb = cauHinh?["Uploads:BaseUrl"]?.Trim().TrimEnd('/');
         _phieu = phieu;
         _db = db;
         _nhanSu = nhanSu;
@@ -191,6 +195,9 @@ public sealed class PhieuPdfService : IPhieuPdfService
                             });
                         }
                     }
+
+                    // Khối ký + mã QR đối chiếu bản gốc (phiếu đã hoàn thành có chữ ký).
+                    noiDung.Item().PaddingTop(10).Element(c => KhoiKy(c, phieu));
                 });
 
                 page.Footer().Column(col =>
@@ -522,6 +529,44 @@ public sealed class PhieuPdfService : IPhieuPdfService
             table.Cell().Element(O).Text($"Mã hiệu: {mau.MaHieu}").FontSize(9);
             table.Cell().Element(O).Text($"Ngày ban hành: {mau.NgayBanHanh?.ToString("dd/MM/yyyy")}").FontSize(9);
             table.Cell().Element(O).Text($"Lần ban hành: {mau.LanBanHanh}").FontSize(9);
+        });
+    }
+
+    /// <summary>
+    /// "Người lập & ký" (tên, giờ ký, hình chữ ký) bên trái; mã QR tới trang tra cứu công khai + mã xác thực bên phải.
+    /// Phiếu chưa ký (nháp / lập trước khi có chức năng ký) thì ghi rõ chưa ký.
+    /// </summary>
+    private void KhoiKy(IContainer c, PhieuGhiNhan phieu)
+    {
+        if (phieu.KyLucUtc is not { } kyLuc)
+        {
+            c.Text(phieu.TrangThai == TrangThaiPhieu.Nhap ? "Phiếu chưa hoàn thành (nháp) - chưa ký." : "Phiếu chưa có chữ ký điện tử.")
+             .Italic().FontSize(8);
+            return;
+        }
+        var chuKy = _docAnh?.Doc(phieu.ChuKyAnh);
+        var qr = string.IsNullOrEmpty(phieu.MaTraCuu) || string.IsNullOrEmpty(_gocWeb) ? null
+            : new QRCoder.PngByteQRCode(new QRCoder.QRCodeGenerator().CreateQrCode(
+                  $"{_gocWeb}/tra-cuu/phieu/{phieu.MaTraCuu}", QRCoder.QRCodeGenerator.ECCLevel.M)).GetGraphic(10);
+        c.Row(r =>
+        {
+            r.RelativeItem().Column(col =>
+            {
+                col.Item().Text("Người lập & ký").SemiBold().FontSize(9);
+                col.Item().Text(phieu.TenNguoiKy ?? "").Bold().FontSize(10);
+                col.Item().Text($"Ký điện tử lúc {GioVietNam.TuUtc(kyLuc):HH:mm dd/MM/yyyy}").FontSize(8);
+                if (chuKy is not null) col.Item().PaddingTop(2).Height(45).AlignLeft().Image(chuKy).FitArea();
+            });
+            if (qr is not null)
+                r.ConstantItem(230).Row(q =>
+                {
+                    q.ConstantItem(70).Height(70).Image(qr).FitArea();
+                    q.RelativeItem().PaddingLeft(6).AlignMiddle().Column(t =>
+                    {
+                        t.Item().Text("Quét mã để đối chiếu bản gốc").FontSize(8).SemiBold();
+                        t.Item().Text($"Mã xác thực: {phieu.MaBamNoiDung?[..12]}").FontSize(7);
+                    });
+                });
         });
     }
 
