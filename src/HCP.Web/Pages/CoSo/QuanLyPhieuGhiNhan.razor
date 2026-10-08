@@ -78,7 +78,7 @@ else
         <RowTemplate>
             <MudTd DataLabel="Ngày">@context.Ngay.ToString("dd/MM/yyyy")</MudTd>
             <MudTd DataLabel="Biểu mẫu">@TenMau(context.BieuMauId)</MudTd>
-            <MudTd DataLabel="Người lập">@TenNhanSu(context.NguoiLap)</MudTd>
+            <MudTd DataLabel="Người lập">@(context.TenNguoiLap ?? TenNhanSu(context.NguoiLap))</MudTd>
             <MudTd DataLabel="Số dòng" Style="text-align:center">@context.Dong.Count</MudTd>
             <MudTd>
                 <div class="d-flex" style="white-space:nowrap">

@@ -26,6 +26,19 @@ public static class BieuMauApi
         return duocXem is null || duocXem.Contains(bieuMauId);
     }
 
+    /// <summary>Họ tên nhân sự (nếu tài khoản gắn nhân sự), không thì họ tên / tên đăng nhập của tài khoản.</summary>
+    private static async Task<string?> TenNguoiLapAsync(AppDbContext db, string? maNhanSu, string? userId)
+    {
+        if (maNhanSu is not null)
+        {
+            var ten = await db.Staff.AsNoTracking().Where(s => s.MaNhanSu == maNhanSu).Select(s => s.HoTen).FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(ten)) return ten;
+        }
+        if (userId is null) return null;
+        var u = await db.Users.AsNoTracking().Where(x => x.Id == userId).Select(x => new { x.HoTen, x.UserName }).FirstOrDefaultAsync();
+        return string.IsNullOrWhiteSpace(u?.HoTen) ? u?.UserName : u.HoTen;
+    }
+
     private static IResult KhongDuocXem() =>
         Results.Json(new LoiDto("Bạn không được giao biểu mẫu này - liên hệ quản trị cơ sở."), statusCode: 403);
 
@@ -53,7 +66,7 @@ public static class BieuMauApi
             .Select(t => (t.Ten, V: dau.GetValueOrDefault(t.Ma)))
             .Where(x => !string.IsNullOrWhiteSpace(x.V)).Select(x => $"{x.Ten}: {x.V}").ToList();
         return new PhieuTomTatDto(p.Id, p.BieuMauId, mau?.MaHieu ?? "", mau?.Ten ?? "(biểu mẫu đã xoá)",
-            mau?.BoCuc.ToString() ?? "", p.Ngay, p.TrangThai.ToString(), p.NguoiLap, p.ThoiGianUtc, p.Dong.Count,
+            mau?.BoCuc.ToString() ?? "", p.Ngay, p.TrangThai.ToString(), p.NguoiLap, p.TenNguoiLap, p.ThoiGianUtc, p.Dong.Count,
             dat, khongDat, dauPhieu);
     }
 
@@ -120,9 +133,8 @@ public static class BieuMauApi
             var ma = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
             var duocXem = await svc.LayMauDuocXemAsync(AppRoles.VaiTroCoSo.Where(user.IsInRole).ToList(), ma);
             var (t, n) = LenhSanXuatApi.ChuanHoaTrang(trang, soDong);
-            if (cuaToi && ma is null) return Results.Ok(new TrangDuLieu<PhieuTomTatDto>(Array.Empty<PhieuTomTatDto>(), t, n, 0));
-
-            var (ds, tong) = await svc.LayLichSuAsync(duocXem, tuNgay, denNgay, bieuMauId, cuaToi ? ma : null, t, n);
+            var toi = cuaToi ? (ma, user.FindFirstValue(ClaimTypes.NameIdentifier)) : ((string?, string?)?)null;
+            var (ds, tong) = await svc.LayLichSuAsync(duocXem, tuNgay, denNgay, bieuMauId, toi, t, n);
             var idMau = ds.Select(p => p.BieuMauId).Distinct().ToList();
             var mau = await db.BieuMaus.AsNoTracking().Include(b => b.Truong)
                 .Where(b => idMau.Contains(b.Id)).ToDictionaryAsync(b => b.Id);
@@ -164,6 +176,9 @@ public static class BieuMauApi
             var ma = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
             if (!(await MauDuocNhapAsync(svc, user, ma)).Any(b => b.Id == req.BieuMauId)) return KhongDuocNhap();
             var phieu = TuRequest(req, ma);
+            // Ghi tài khoản + tên người lập (tài khoản không gắn nhân sự như chủ cơ sở vẫn lọc "Do tôi lập" được).
+            phieu.NguoiLapUserId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            phieu.TenNguoiLap = await TenNguoiLapAsync(db, ma, phieu.NguoiLapUserId);
             var kq = await svc.TaoPhieuAsync(phieu, req.HoanThanh ?? true);
             return kq.ThanhCong
                 ? Results.Created($"/api/v1/phieu-ghi-nhan/{phieu.Id}", new KetQuaDto(true, kq.ThongBao))
@@ -231,7 +246,7 @@ public static class BieuMauApi
             h.Id, h.Ten, h.DienGiai, h.TanSuat)).ToList());
 
     private static PhieuGhiNhanDto MapPhieu(PhieuGhiNhan p) => new(
-        p.Id, p.BieuMauId, p.Ngay, p.GiaTriDauJson, p.NguoiLap, p.TrangThai.ToString(), p.GhiChu, p.ThoiGianUtc,
+        p.Id, p.BieuMauId, p.Ngay, p.GiaTriDauJson, p.NguoiLap, p.TenNguoiLap, p.TrangThai.ToString(), p.GhiChu, p.ThoiGianUtc,
         p.Dong.OrderBy(d => d.ThuTu).Select(d => new DongGhiNhanDto(
             d.HangMucBieuMauId, d.ThuTu, d.GiaTriJson, d.GhiChu)).ToList());
 }

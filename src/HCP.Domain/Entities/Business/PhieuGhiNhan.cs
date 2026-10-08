@@ -19,8 +19,14 @@ public class PhieuGhiNhan : TenantEntity
     /// <summary>Giá trị các trường ĐẦU PHIẾU (khu vực, biển số, tổ...): JSON {ma_truong: giá trị}.</summary>
     public string GiaTriDauJson { get; set; } = "{}";
 
-    /// <summary>Mã nhân sự người lập phiếu.</summary>
+    /// <summary>Mã nhân sự người lập phiếu (null nếu tài khoản không gắn nhân sự, vd chủ cơ sở).</summary>
     public string? NguoiLap { get; set; }
+
+    /// <summary>Tài khoản đăng nhập đã lập phiếu - để lọc "Do tôi lập" kể cả khi tài khoản không gắn nhân sự.</summary>
+    public string? NguoiLapUserId { get; set; }
+
+    /// <summary>Tên người lập lúc tạo phiếu (họ tên nhân sự hoặc tên tài khoản) - để hiển thị.</summary>
+    public string? TenNguoiLap { get; set; }
 
     public TrangThaiPhieu TrangThai { get; set; } = TrangThaiPhieu.DaGhiNhan;
 

@@ -219,7 +219,7 @@ public sealed record TruongBieuMauDto(
 public sealed record HangMucBieuMauDto(int Id, string Ten, string? DienGiai, string? TanSuat);
 
 public sealed record PhieuGhiNhanDto(
-    int Id, int BieuMauId, DateOnly Ngay, string GiaTriDauJson, string? NguoiLap,
+    int Id, int BieuMauId, DateOnly Ngay, string GiaTriDauJson, string? NguoiLap, string? TenNguoiLap,
     string TrangThai, string? GhiChu, DateTime ThoiGianUtc, IReadOnlyList<DongGhiNhanDto> Dong);
 
 public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string GiaTriJson, string? GhiChu);
@@ -230,7 +230,7 @@ public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string Gia
 /// </summary>
 public sealed record PhieuTomTatDto(
     int Id, int BieuMauId, string MaHieu, string TenMau, string BoCuc, DateOnly Ngay, string TrangThai,
-    string? NguoiLap, DateTime ThoiGianUtc, int SoDong, int SoDat, int SoKhongDat, IReadOnlyList<string> DauPhieu);
+    string? NguoiLap, string? TenNguoiLap, DateTime ThoiGianUtc, int SoDong, int SoDat, int SoKhongDat, IReadOnlyList<string> DauPhieu);
 
 /// <summary>Kết quả tải một ảnh cho trường kiểu Ảnh của phiếu ghi nhận.</summary>
 public sealed record AnhPhieuDto(string TenGoc, string DuongDan);

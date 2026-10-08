@@ -151,7 +151,7 @@ class _ManChiTietPhieuState extends ConsumerState<ManChiTietPhieu> {
                 ChipTrangThaiPhieu(laNhap: !p.laHoanThanh),
               ]),
               const SizedBox(height: 6),
-              _DongGiaTri(nhan: 'Người lập', giaTri: Text(_ten(nhanSuBmProvider, p.nguoiLap) ?? '—')),
+              _DongGiaTri(nhan: 'Người lập', giaTri: Text(p.tenNguoiLap ?? _ten(nhanSuBmProvider, p.nguoiLap) ?? '—')),
               for (final t in truongDau) _DongGiaTri(nhan: t.ten, giaTri: _giaTri(t, p.giaTriDau[t.ma])),
               if ((p.ghiChu ?? '').isNotEmpty) _DongGiaTri(nhan: 'Ghi chú', giaTri: Text(p.ghiChu!)),
             ]),

@@ -107,6 +107,7 @@ class PhieuGhiNhan {
   final DateTime ngay;
   final Map<String, String> giaTriDau; // giá trị các trường đầu phiếu
   final String? nguoiLap;
+  final String? tenNguoiLap; // tên lưu lúc lập (kể cả tài khoản không gắn nhân sự)
   final String trangThai;
   final String? ghiChu;
   final List<DongGhiNhan> dong;
@@ -117,6 +118,7 @@ class PhieuGhiNhan {
     required this.ngay,
     this.giaTriDau = const {},
     this.nguoiLap,
+    this.tenNguoiLap,
     this.trangThai = 'DaGhiNhan',
     this.ghiChu,
     this.dong = const [],
@@ -139,6 +141,7 @@ class PhieuGhiNhan {
       ngay: DateTime.tryParse(j['ngay'] as String? ?? '') ?? DateTime.now(),
       giaTriDau: dau,
       nguoiLap: j['nguoiLap'] as String?,
+      tenNguoiLap: j['tenNguoiLap'] as String?,
       trangThai: j['trangThai'] as String? ?? 'DaGhiNhan',
       ghiChu: j['ghiChu'] as String?,
       dong: ((j['dong'] as List?) ?? const [])
@@ -224,6 +227,7 @@ class PhieuTomTat {
   final DateTime ngay;
   final String trangThai;
   final String? nguoiLap;
+  final String? tenNguoiLap;
   final DateTime thoiGianUtc;
   final int soDong;
   final int soDat;
@@ -239,6 +243,7 @@ class PhieuTomTat {
     required this.ngay,
     this.trangThai = 'DaGhiNhan',
     this.nguoiLap,
+    this.tenNguoiLap,
     required this.thoiGianUtc,
     this.soDong = 0,
     this.soDat = 0,
@@ -257,6 +262,7 @@ class PhieuTomTat {
         ngay: DateTime.tryParse(j['ngay'] as String? ?? '') ?? DateTime.now(),
         trangThai: j['trangThai'] as String? ?? 'DaGhiNhan',
         nguoiLap: j['nguoiLap'] as String?,
+        tenNguoiLap: j['tenNguoiLap'] as String?,
         thoiGianUtc: DateTime.tryParse(j['thoiGianUtc'] as String? ?? '') ?? DateTime.now().toUtc(),
         soDong: j['soDong'] as int? ?? 0,
         soDat: j['soDat'] as int? ?? 0,

@@ -227,7 +227,7 @@ class _ManLichSuPhieuState extends ConsumerState<ManLichSuPhieu> {
             padding: const EdgeInsets.only(bottom: 8),
             child: ThePhieu(
               phieu: p,
-              tenNguoiLap: tenNguoi[p.nguoiLap] ?? p.nguoiLap,
+              tenNguoiLap: p.tenNguoiLap ?? tenNguoi[p.nguoiLap] ?? p.nguoiLap,
               onTap: () async {
                 await Navigator.push(context, MaterialPageRoute(builder: (_) => ManChiTietPhieu(phieuId: p.id)));
                 if (mounted) _taiLai(); // có thể vừa "Nhập tiếp" xong

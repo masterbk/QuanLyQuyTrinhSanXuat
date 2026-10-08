@@ -77,6 +77,36 @@ public class PhieuGhiNhanServiceTests
     }
 
     [Fact]
+    public async Task Lich_Su_Do_Toi_Lap_Khop_Ma_Nhan_Su_Hoac_Tai_Khoan()
+    {
+        await NapMauAsync();
+        using (var db = MoDb())
+        {
+            var uv = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-HD-SX-01-01")).Id;
+            PhieuGhiNhan Phieu(int ngay, string? ma, string? uid) => new()
+            {
+                BieuMauId = uv, Ngay = new DateOnly(2026, 10, ngay), NguoiLap = ma, NguoiLapUserId = uid,
+                Dong = { new DongGhiNhan { GiaTriJson = Json(("gio_bat", "17:00")) } }
+            };
+            db.PhieuGhiNhans.AddRange(
+                Phieu(1, null, "user-chu-co-so"),   // chủ cơ sở: không gắn nhân sự
+                Phieu(2, "NS01", "user-ns01"),
+                Phieu(3, "NS02", "user-ns02"));
+            await db.SaveChangesAsync();
+        }
+
+        using var db2 = MoDb();
+        var svc = new PhieuGhiNhanService(db2);
+        async Task<int> Dem((string?, string?)? toi) => (await svc.LayLichSuAsync(null, null, null, null, toi, 1, 20)).TongSo;
+
+        Assert.Equal(3, await Dem(null));
+        Assert.Equal(1, await Dem((null, "user-chu-co-so")));   // trước đây ra 0 vì chỉ so mã nhân sự
+        Assert.Equal(1, await Dem(("NS01", "user-ns01")));
+        Assert.Equal(1, await Dem(("NS02", "khac")));            // phiếu cũ chưa có tài khoản vẫn khớp theo mã
+        Assert.Equal(0, await Dem((null, null)));
+    }
+
+    [Fact]
     public async Task Tao_Phieu_Validate_Dong_Va_Truong_Bat_Buoc()
     {
         await NapMauAsync();

@@ -132,10 +132,12 @@ public sealed class PhieuPdfService : IPhieuPdfService
                             t.Span($"{td.Ten}: ").SemiBold();
                             t.Span($"{v}   ");
                         }
-                        if (!string.IsNullOrWhiteSpace(phieu.NguoiLap))
+                        var tenLap = phieu.TenNguoiLap
+                                     ?? (phieu.NguoiLap is null ? null : nhanSu.GetValueOrDefault(phieu.NguoiLap, phieu.NguoiLap));
+                        if (!string.IsNullOrWhiteSpace(tenLap))
                         {
                             t.Span("Người lập: ").SemiBold();
-                            t.Span(nhanSu.GetValueOrDefault(phieu.NguoiLap!, phieu.NguoiLap!));
+                            t.Span(tenLap);
                         }
                     });
                     col.Item().PaddingTop(4);

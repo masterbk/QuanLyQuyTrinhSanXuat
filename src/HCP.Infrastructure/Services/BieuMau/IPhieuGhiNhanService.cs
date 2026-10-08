@@ -21,11 +21,12 @@ public interface IPhieuGhiNhanService
 
     /// <summary>
     /// Lịch sử phiếu (mới nhất trước) có phân trang. <paramref name="mauIds"/> null = mọi mẫu. Lọc ngày theo khoảng
-    /// [tuNgay, denNgay], theo mẫu và người lập (tuỳ chọn).
+    /// [tuNgay, denNgay], theo mẫu (tuỳ chọn). <paramref name="cuaToi"/> khác null = chỉ phiếu do người đó lập
+    /// (khớp mã nhân sự HOẶC tài khoản đăng nhập).
     /// </summary>
     Task<(IReadOnlyList<PhieuGhiNhan> DuLieu, int TongSo)> LayLichSuAsync(IReadOnlySet<int>? mauIds,
-        DateOnly? tuNgay, DateOnly? denNgay, int? bieuMauId, string? nguoiLap, int trang, int soDong,
-        CancellationToken ct = default);
+        DateOnly? tuNgay, DateOnly? denNgay, int? bieuMauId, (string? MaNhanSu, string? UserId)? cuaToi,
+        int trang, int soDong, CancellationToken ct = default);
 
     /// <summary>Lấy một biểu mẫu (kèm trường + hạng mục) để dựng form nhập.</summary>
     Task<BieuMauEntity?> LayBieuMauAsync(int bieuMauId, CancellationToken ct = default);

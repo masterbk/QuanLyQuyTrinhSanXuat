@@ -44,8 +44,8 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
     }
 
     public async Task<(IReadOnlyList<PhieuGhiNhan> DuLieu, int TongSo)> LayLichSuAsync(IReadOnlySet<int>? mauIds,
-        DateOnly? tuNgay, DateOnly? denNgay, int? bieuMauId, string? nguoiLap, int trang, int soDong,
-        CancellationToken ct = default)
+        DateOnly? tuNgay, DateOnly? denNgay, int? bieuMauId, (string? MaNhanSu, string? UserId)? cuaToi,
+        int trang, int soDong, CancellationToken ct = default)
     {
         var q = _db.PhieuGhiNhans.AsNoTracking().AsQueryable();
         if (mauIds is not null)
@@ -56,7 +56,12 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         if (tuNgay is { } tu) q = q.Where(p => p.Ngay >= tu);
         if (denNgay is { } den) q = q.Where(p => p.Ngay <= den);
         if (bieuMauId is { } bm) q = q.Where(p => p.BieuMauId == bm);
-        if (!string.IsNullOrWhiteSpace(nguoiLap)) q = q.Where(p => p.NguoiLap == nguoiLap);
+        if (cuaToi is { } toi)
+        {
+            var ma = string.IsNullOrWhiteSpace(toi.MaNhanSu) ? null : toi.MaNhanSu;
+            var uid = string.IsNullOrWhiteSpace(toi.UserId) ? null : toi.UserId;
+            q = q.Where(p => (ma != null && p.NguoiLap == ma) || (uid != null && p.NguoiLapUserId == uid));
+        }
 
         var tong = await q.CountAsync(ct);
         var ds = await q.Include(p => p.Dong).AsSplitQuery()

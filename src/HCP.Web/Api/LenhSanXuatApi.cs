@@ -329,15 +329,32 @@ public static class LenhSanXuatApi
         return false;
     }
 
-    /// <summary>Mã nhân sự (đang làm việc) gắn với tài khoản đang gọi API; null nếu tài khoản không gắn hồ sơ nhân sự.</summary>
-    internal static async Task<string?> MaNhanSuHienTaiAsync(ClaimsPrincipal user, AppDbContext db)
+    /// <summary>
+    /// Mã nhân sự (đang làm việc) của tài khoản đang gọi API; quản trị cơ sở chưa gắn nhân sự thì là nhân sự
+    /// "chủ cơ sở" (xem <see cref="MaNhanSuTaiKhoanAsync"/>). Null nếu không xác định được.
+    /// </summary>
+    internal static Task<string?> MaNhanSuHienTaiAsync(ClaimsPrincipal user, AppDbContext db) =>
+        MaNhanSuTaiKhoanAsync(db, db.TenantInfo?.Id, user.FindFirstValue(ClaimTypes.NameIdentifier),
+                              user.IsInRole(AppRoles.TenantAdmin));
+
+    /// <summary>
+    /// Mã nhân sự đang làm việc của một tài khoản: hồ sơ nhân sự gắn với tài khoản; nếu là quản trị cơ sở chưa gắn
+    /// thì lấy nhân sự đánh dấu "Là chủ cơ sở" (chỉ khi có đúng 1 người) - để chủ cơ sở cũng được tự điền vào ô
+    /// "Chọn nhân sự", lọc "Của tôi"... Đọc theo TenantId tường minh (lúc đăng nhập chưa có ngữ cảnh cơ sở).
+    /// </summary>
+    internal static async Task<string?> MaNhanSuTaiKhoanAsync(AppDbContext db, string? tenantId, string? userId,
+                                                              bool laQuanTri, CancellationToken ct = default)
     {
-        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userId)) return null;
-        var nhanSuId = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.NhanSuId).FirstOrDefaultAsync();
-        return nhanSuId is not { } id
-            ? null
-            : await db.Staff.AsNoTracking().Where(s => s.Id == id && s.TrangThai).Select(s => s.MaNhanSu).FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(tenantId) || string.IsNullOrWhiteSpace(userId)) return null;
+        var staff = db.Staff.IgnoreQueryFilters().AsNoTracking().Where(s => s.TenantId == tenantId && s.TrangThai);
+
+        var nhanSuId = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.NhanSuId).FirstOrDefaultAsync(ct);
+        if (nhanSuId is { } id)
+            return await staff.Where(s => s.Id == id).Select(s => s.MaNhanSu).FirstOrDefaultAsync(ct);
+        if (!laQuanTri) return null;
+
+        var chu = await staff.Where(s => s.LaChuCoSo).Select(s => s.MaNhanSu).Take(2).ToListAsync(ct);
+        return chu.Count == 1 ? chu[0] : null;
     }
 
     private sealed record BangTen(
