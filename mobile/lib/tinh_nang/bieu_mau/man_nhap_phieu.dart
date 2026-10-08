@@ -6,6 +6,7 @@ import '../../loi/api.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'mo_hinh.dart';
+import 'o_chon_tim_kiem.dart';
 
 /// Một dòng đang nhập: giá trị theo khoá trường + hạng mục (checklist) + ghi chú.
 class _DongNhap {
@@ -580,31 +581,21 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         },
       );
 
-  Widget _oChon(_DongNhap dong, TruongBieuMau t, String nhan, AsyncValue<List<MucChon>> dm) {
-    final ds = dm.value ?? const <MucChon>[];
-    final hople = ds.any((m) => m.ma == dong.giaTri[t.ma]) ? dong.giaTri[t.ma] : null;
-    return DropdownButtonFormField<String>(
-      key: ValueKey('${_napLan}_${identityHashCode(dong)}_${t.ma}_$hople'),
-      initialValue: hople,
-      isExpanded: true,
-      decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
-      items: ds.map((m) => DropdownMenuItem(value: m.ma, child: Text(m.ten, overflow: TextOverflow.ellipsis))).toList(),
-      onChanged: _khoaNhap ? null : (v) => setState(() => _dat(dong, t, v ?? '')),
-    );
-  }
+  /// Ô chọn danh mục (nhân sự, sản phẩm, NCC, cơ sở) có tìm kiếm không dấu.
+  Widget _oChon(_DongNhap dong, TruongBieuMau t, String nhan, AsyncValue<List<MucChon>> dm) => OChonTimKiem(
+        nhan: nhan,
+        giaTri: dong.giaTri[t.ma],
+        ds: dm.value ?? const <MucChon>[],
+        onChanged: _khoaNhap ? null : (v) => setState(() => _dat(dong, t, v)),
+      );
 
-  Widget _oLuaChon(_DongNhap dong, TruongBieuMau t, String nhan) {
-    final ds = t.tuyChon;
-    final hople = ds.contains(dong.giaTri[t.ma]) ? dong.giaTri[t.ma] : null;
-    return DropdownButtonFormField<String>(
-      key: _khoaO(dong, t),
-      initialValue: hople,
-      isExpanded: true,
-      decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
-      items: ds.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
-      onChanged: _khoaNhap ? null : (v) => setState(() => _dat(dong, t, v ?? '')),
-    );
-  }
+  Widget _oLuaChon(_DongNhap dong, TruongBieuMau t, String nhan) => OChonTimKiem(
+        nhan: nhan,
+        giaTri: dong.giaTri[t.ma],
+        ds: t.tuyChon.map((o) => MucChon(o, o)).toList(),
+        onChanged: _khoaNhap ? null : (v) => setState(() => _dat(dong, t, v)),
+      );
+
 
   Widget _oBam({required String nhan, required String? giaTri, required IconData icon, required VoidCallback onTap}) =>
       InkWell(

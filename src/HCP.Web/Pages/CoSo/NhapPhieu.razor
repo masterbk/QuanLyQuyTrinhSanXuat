@@ -363,17 +363,12 @@ else
             case KieuTruongBieuMau.ChonCoSo:
             case KieuTruongBieuMau.LuaChon:
                 var ds = DanhSachChon(t);
-                <MudSelect T="string" Value="@v" ValueChanged="@(x => Dat(gt, t, x))" Label="@label" Dense="true"
-                           Margin="Margin.Dense" Variant="Variant.Outlined" Clearable="@(!_choXem)" ReadOnly="_choXem">
-                    @foreach (var (ma, ten) in ds)
-                    {
-                        <MudSelectItem T="string" Value="@ma">@ten</MudSelectItem>
-                    }
-                    @if (!string.IsNullOrEmpty(v) && ds.All(x => x.Ma != v))
-                    {
-                        <MudSelectItem T="string" Value="@v">@v</MudSelectItem>
-                    }
-                </MudSelect>
+                @* Ô chọn có tìm kiếm: gõ tên hoặc mã, không cần dấu ("nghia" -> "Nghĩa"). *@
+                <MudAutocomplete T="string" Value="@v" ValueChanged="@(x => Dat(gt, t, x))" Label="@label" Dense="true"
+                                 Margin="Margin.Dense" Variant="Variant.Outlined" Clearable="@(!_choXem)" ReadOnly="_choXem"
+                                 SearchFunc="@((string? q, CancellationToken _) => Task.FromResult(TimChon(ds, q, v)))"
+                                 ToStringFunc="@(ma => TenChon(ds, ma))" MaxItems="200" Strict="true"
+                                 ResetValueOnEmptyText="true" CoerceText="false" ShowProgressIndicator="false" />
                 break;
             case KieuTruongBieuMau.Anh:
                 @if (nhan) { <MudText Typo="Typo.caption" Class="d-block">@label</MudText> }
@@ -419,6 +414,26 @@ else
         _ => (t.TuyChonCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(x => (x, x)).ToList()
     };
+
+    private static string TenChon(IReadOnlyList<(string Ma, string Ten)> ds, string? ma) =>
+        string.IsNullOrEmpty(ma) ? "" : ds.FirstOrDefault(x => x.Ma == ma).Ten ?? ma;
+
+    /// <summary>Lọc ô chọn theo tên/mã, không phân biệt hoa thường và dấu. Chữ đang hiển thị = tên đã chọn thì hiện đủ.</summary>
+    private static IEnumerable<string> TimChon(IReadOnlyList<(string Ma, string Ten)> ds, string? q, string? dangChon)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q == TenChon(ds, dangChon)) return ds.Select(x => x.Ma);
+        var k = BoDau(q);
+        return ds.Where(x => BoDau(x.Ten).Contains(k) || BoDau(x.Ma).Contains(k)).Select(x => x.Ma);
+    }
+
+    private static string BoDau(string s)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in s.Normalize(System.Text.NormalizationForm.FormD))
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        return sb.ToString().Replace('đ', 'd').Replace('Đ', 'D').ToLowerInvariant();
+    }
 
     /// <summary>
     /// Ghi giá trị một ô. Nhập dữ liệu (không phải ô chọn nhân sự) thì tự điền người đang đăng nhập vào các ô
