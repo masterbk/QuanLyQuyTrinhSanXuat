@@ -121,9 +121,9 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
 - **Lọc + xuất hàng loạt:** web Phiếu ghi nhận lọc Từ ngày – Đến ngày; nút "Xuất PDF (.zip)" →
   `GET /app/phieu/xuat-zip?bieuMauId&tuNgay&denNgay` (`PhieuPdfApi`): mỗi phiếu 1 PDF `yyyy-MM-dd_MaHieu_Id.pdf`,
   tối đa `ToiDaXuatZip` = 500 phiếu/lần, chỉ mẫu người dùng được xem.
-- **Hướng dẫn sử dụng cho khách:** `Docs/Huong-dan-su-dung-Bieu-mau-kiem-soat.docx` (8 mục: vai trò, thiết lập,
-  cấu hình mẫu, giao quyền, nhập app, nhập web, xem/PDF/báo cáo/nhắc hạn, tình huống thường gặp).
-- **Hướng dẫn sử dụng CHƯA có** 3 phần mới (đổi mật khẩu, ký tay + QR, lọc/xuất zip) - bổ sung khi cập nhật tài liệu cho khách.
+- **Hướng dẫn sử dụng cho khách:** `Docs/Huong-dan-su-dung-Bieu-mau-kiem-soat.docx` (11 mục: vai trò, thiết lập,
+  cấu hình mẫu, giao quyền, nhập app, nhập web, xem/PDF/báo cáo/nhắc hạn, ký tay + QR, xuất zip, đổi mật khẩu,
+  tình huống thường gặp). Bản gốc là Claude Doc, xuất Word rồi sửa dòng byline thành "Cập nhật ngày dd/MM/yyyy".
 - **Dữ liệu prod:** phiếu nhập thử đã xoá hết (08/10/2026) - prod chưa có phiếu thật. Cơ sở thử "Hoa Sen" đã xoá
   hẳn (có backup DB trên server trước khi xoá); prod chỉ còn 1 cơ sở.
 - **CÒN LẠI:** **QC thẩm tra** (duyệt/ký phiếu) — đã để sẵn cột/trạng thái, **người dùng chủ động tạm BỎ**.
