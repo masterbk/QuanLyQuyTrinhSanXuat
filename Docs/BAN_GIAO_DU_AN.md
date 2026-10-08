@@ -1,7 +1,7 @@
 # Bàn giao dự án HanoiCheckPlatform — để Claude (phiên/tài khoản khác) làm tiếp
 
 > Tài liệu này gói đủ ngữ cảnh để một phiên Claude mới tiếp tục phát triển mà không cần trí nhớ cũ.
-> Cập nhật lần cuối: 08/10/2026 (cuối ngày - biểu mẫu hoàn tất, đã deploy; có hướng dẫn sử dụng cho khách).
+> Cập nhật lần cuối: 08/10/2026 (tối - thêm tự đổi mật khẩu, ký tay + QR đối chiếu, lọc khoảng ngày + xuất zip PDF).
 
 ## 1. Tổng quan
 - **Sản phẩm:** phần mềm quản lý quy trình sản xuất cho **tiệm bánh Tuấn Nghĩa**: quy trình sản xuất,
@@ -13,9 +13,9 @@
 - **Web/API:** .NET 8, Blazor Server + MudBlazor, EF Core (SqlServer), Finbuckle MultiTenant, QuestPDF (PDF).
   - `src/HCP.Domain` (entity + enum + helper), `src/HCP.Infrastructure` (service + EF + migration),
     `src/HCP.Web` (Blazor pages `Pages/CoSo/`, minimal API `Api/`, `Program.cs` DI ~dòng 189, `Shared/NavMenu.razor`).
-  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **257 test** pass.
+  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **259 test** pass.
 - **App mobile:** Flutter ở `mobile/` (package `hcp_mobile`), Riverpod + dio (`lib/loi/api.dart`).
-  Tính năng theo `lib/tinh_nang/<ten>/`. **43 test** pass.
+  Tính năng theo `lib/tinh_nang/<ten>/`. **46 test** pass.
 
 ## 3. Quy ước BẮT BUỘC (hay sai)
 - **Đa cơ sở (multitenant):** entity nghiệp vụ kế thừa `TenantEntity : AuditableEntity`, cấu hình
@@ -32,6 +32,10 @@
 - **Nhân sự của tài khoản:** dùng `LenhSanXuatApi.MaNhanSuTaiKhoanAsync`/`MaNhanSuHienTaiAsync` (đừng tự query).
   Tài khoản quản trị cơ sở KHÔNG gắn hồ sơ nhân sự → được hiểu là nhân sự `LaChuCoSo` (khi có đúng 1 người).
   **Đừng gắn NhanSuId cho tài khoản quản trị** (màn Nhân sự sẽ đổi UserName sang SĐT).
+- **Tự đổi mật khẩu** (mọi tài khoản): `IDoiMatKhauService` (Infrastructure/Identity) - đổi xong thu hồi mọi phiên
+  app + đổi security stamp (phiên web khác hết hiệu lực ~1 phút). Web: Razor Page `/doi-mat-khau` (Razor Page để gọi
+  `RefreshSignInAsync` giữ phiên đang dùng) + nút 🔑 trên thanh trên. API `POST /api/v1/auth/doi-mat-khau` trả phiên
+  mới cho máy đang dùng. App: menu tài khoản → `xac_thuc/man_doi_mat_khau.dart`. Lỗi Identity tiếng Việt: `LoiIdentity.MoTa`.
 - **Namespace bẫy:** namespace `HCP.*.Services.BieuMau` TRÙNG tên type `BieuMau` → dùng alias
   `using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;`.
 - **Ngôn ngữ:** làm việc bằng **tiếng Việt**, tài liệu gọn, **kiểm chứng bằng chạy thật** (build/test/deploy), không nói suông.
@@ -106,9 +110,22 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
   khớp mã NS HOẶC tài khoản.
 - **Chống ghi đè:** `CapNhatPhieuAsync(phieu, hoanThanh, mocLuuLucMo)` so `ThoiGianUtc` lúc mở (lệch >1ms) → XungDot
   (API 409; app/web hộp thoại "Tải lại"). App gửi `thoiGianUtcGoc` khi PUT.
+- **Ký tay khi Hoàn thành + QR đối chiếu bản gốc** (khách cần hồ sơ có giá trị khi gửi kiểm tra): app ký bằng ngón tay
+  (`bieu_mau/man_ky_ten.dart`), web ký bằng chuột/cảm ứng trên canvas (`wwwroot/js/chu-ky.js`, nạp trong `_Host.cshtml`).
+  Ảnh PNG tải qua `/phieu-ghi-nhan/anh` rồi gửi `chuKy`. Phiếu lưu `ChuKyAnh, TenNguoiKy, NguoiKyUserId, KyLucUtc,
+  MaBamNoiDung` (SHA-256 nội dung chuẩn hoá - `PhieuGhiNhanService.TinhMaBam`), `MaTraCuu`. PDF có khối "Người lập & ký"
+  + mã QR (QRCoder, URL = `Uploads:BaseUrl` + `/tra-cuu/phieu/{ma}`). Trang công khai `Pages/TraCuu/Phieu.cshtml`
+  tính lại mã băm → "✓ Nội dung khớp" hoặc cảnh báo đỏ nếu dữ liệu bị sửa sau khi ký. Server chưa bắt buộc chữ ký
+  (app cũ vẫn hoàn thành được). Đây là chữ ký điện tử nội bộ, KHÔNG phải chữ ký số PKI (đã tư vấn khách: file gửi
+  cơ quan thì ký thêm bằng USB token của công ty).
+- **Lọc + xuất hàng loạt:** web Phiếu ghi nhận lọc Từ ngày – Đến ngày; nút "Xuất PDF (.zip)" →
+  `GET /app/phieu/xuat-zip?bieuMauId&tuNgay&denNgay` (`PhieuPdfApi`): mỗi phiếu 1 PDF `yyyy-MM-dd_MaHieu_Id.pdf`,
+  tối đa `ToiDaXuatZip` = 500 phiếu/lần, chỉ mẫu người dùng được xem.
 - **Hướng dẫn sử dụng cho khách:** `Docs/Huong-dan-su-dung-Bieu-mau-kiem-soat.docx` (8 mục: vai trò, thiết lập,
   cấu hình mẫu, giao quyền, nhập app, nhập web, xem/PDF/báo cáo/nhắc hạn, tình huống thường gặp).
-- **Dữ liệu prod:** phiếu nhập thử đã xoá hết (08/10/2026) - prod chưa có phiếu thật.
+- **Hướng dẫn sử dụng CHƯA có** 3 phần mới (đổi mật khẩu, ký tay + QR, lọc/xuất zip) - bổ sung khi cập nhật tài liệu cho khách.
+- **Dữ liệu prod:** phiếu nhập thử đã xoá hết (08/10/2026) - prod chưa có phiếu thật. Cơ sở thử "Hoa Sen" đã xoá
+  hẳn (có backup DB trên server trước khi xoá); prod chỉ còn 1 cơ sở.
 - **CÒN LẠI:** **QC thẩm tra** (duyệt/ký phiếu) — đã để sẵn cột/trạng thái, **người dùng chủ động tạm BỎ**.
 - **Việc thủ công trên prod:** gán role "Nhân viên nhập biểu mẫu" cho nhân viên (màn Nhân sự); tải logo + kiểm tên/
   địa chỉ ở "Thông tin in"; nhập Ngày/Lần ban hành cho mẫu cũ (cột "Ban hành" báo "Chưa khai"); cài APK mới.
@@ -137,6 +154,8 @@ Thư mục `C:\Users\thuyb\.claude\projects\E--TuanNghia\memory\` có các file 
   (xem `PhieuGhiNhanService.CapNhatPhieuAsync`).
 - Razor: không đặt biến tên `helper` (`@helper` là directive). Entity `PhieuGhiNhan.ThoiGianUtc` có mặc định = now,
   đừng dùng nó làm "không có giá trị".
+- Razor `.cshtml`: ký tự `@` trong chữ phải viết `@@` (vd "(vd @@, #, !)").
+- Flutter test có xuất ảnh (`toImage`) phải chạy trong `tester.runAsync`; SnackBar ở đáy có thể che nút → đợi nó ẩn.
 - Kiểm UI ô có mặt nạ (Mask) bằng Playwright: gõ `press_sequentially(..., delay=80)`; gõ quá nhanh ra ngày sai.
 - `sqlcmd` chạy file .sql: thêm `-I` (QUOTED_IDENTIFIER, bảng có filtered index) và `-f 65001` (chữ tiếng Việt).
 - Kiểm UI web thật: Playwright cài ở `E:\pwlib` (`PYTHONPATH=/e/pwlib`), `chromium.launch(channel='msedge')` dùng
