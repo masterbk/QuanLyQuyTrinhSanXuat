@@ -28,7 +28,10 @@ public class BieuMau : TenantEntity
     /// <summary>Tần suất thực hiện (mô tả tự do), vd "Hàng ngày", "Mỗi mẻ", "Mỗi lần nhập".</summary>
     public string? TanSuat { get; set; }
 
-    /// <summary>Chuỗi vai trò được phép điền (khớp AppRoles, phân tách bằng dấu phẩy), vd QuyenSanXuat.</summary>
+    /// <summary>
+    /// KHÔNG CÒN DÙNG để lọc (từ 08/10/2026 quyền nhập do role "Nhân viên nhập biểu mẫu" + PhanQuyenBieuMau quyết định).
+    /// Giữ cột để không phải migration xoá dữ liệu.
+    /// </summary>
     public string NhomQuyen { get; set; } = string.Empty;
 
     /// <summary>Quy chuẩn / chú thích in ở chân biểu mẫu.</summary>

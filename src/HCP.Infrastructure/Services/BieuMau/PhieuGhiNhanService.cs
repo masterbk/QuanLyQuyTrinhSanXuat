@@ -1,3 +1,4 @@
+using HCP.Domain.Constants;
 using System.Text.Json;
 using HCP.Domain;
 using HCP.Domain.Entities.Business;
@@ -14,20 +15,55 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
     private readonly AppDbContext _db;
     public PhieuGhiNhanService(AppDbContext db) => _db = db;
 
-    public async Task<IReadOnlyList<BieuMauEntity>> LayBieuMauChoNhapAsync(IEnumerable<string> vaiTro,
+    public async Task<IReadOnlyList<BieuMauEntity>> LayBieuMauChoNhapAsync(IEnumerable<string> vaiTro, string? maNhanSu,
                                                                            CancellationToken ct = default)
     {
+        var duocXem = await LayMauDuocXemAsync(vaiTro, maNhanSu, ct);
+        if (duocXem is { Count: 0 }) return Array.Empty<BieuMauEntity>();
         var mau = await _db.BieuMaus.AsNoTracking().AsSplitQuery()
             .Where(b => b.KichHoat)
             .Include(b => b.Truong.OrderBy(t => t.ThuTu))
             .Include(b => b.HangMuc.OrderBy(h => h.ThuTu))
             .OrderBy(b => b.ThuTu).ThenBy(b => b.Ten)
             .ToListAsync(ct);
+        return duocXem is null ? mau : mau.Where(b => duocXem.Contains(b.Id)).ToList();
+    }
 
-        // NhomQuyen là chuỗi role (phẩy = OR); giữ mẫu nếu người dùng có ÍT NHẤT một vai trò trong đó.
-        var cuaToi = vaiTro.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return mau.Where(b => b.NhomQuyen.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                                        .Any(cuaToi.Contains)).ToList();
+    public async Task<IReadOnlySet<int>?> LayMauDuocXemAsync(IEnumerable<string> vaiTro, string? maNhanSu,
+                                                            CancellationToken ct = default)
+    {
+        var vt = vaiTro.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (vt.Contains(AppRoles.TenantAdmin) || vt.Contains(AppRoles.TenantStaff)) return null;
+        if (!vt.Contains(AppRoles.TenantBieuMau) || string.IsNullOrWhiteSpace(maNhanSu)) return new HashSet<int>();
+
+        var nhanSuId = await _db.Staff.AsNoTracking().Where(s => s.MaNhanSu == maNhanSu)
+            .Select(s => (int?)s.Id).FirstOrDefaultAsync(ct);
+        var pq = nhanSuId is null ? null
+            : await _db.PhanQuyenBieuMaus.AsNoTracking().FirstOrDefaultAsync(p => p.NhanSuId == nhanSuId, ct);
+        return pq is null || pq.TatCa ? null : pq.BieuMauIds.ToHashSet();   // chưa cấu hình = mặc định tất cả
+    }
+
+    public async Task<(IReadOnlyList<PhieuGhiNhan> DuLieu, int TongSo)> LayLichSuAsync(IReadOnlySet<int>? mauIds,
+        DateOnly? tuNgay, DateOnly? denNgay, int? bieuMauId, string? nguoiLap, int trang, int soDong,
+        CancellationToken ct = default)
+    {
+        var q = _db.PhieuGhiNhans.AsNoTracking().AsQueryable();
+        if (mauIds is not null)
+        {
+            var ids = mauIds.ToList();
+            q = q.Where(p => ids.Contains(p.BieuMauId));
+        }
+        if (tuNgay is { } tu) q = q.Where(p => p.Ngay >= tu);
+        if (denNgay is { } den) q = q.Where(p => p.Ngay <= den);
+        if (bieuMauId is { } bm) q = q.Where(p => p.BieuMauId == bm);
+        if (!string.IsNullOrWhiteSpace(nguoiLap)) q = q.Where(p => p.NguoiLap == nguoiLap);
+
+        var tong = await q.CountAsync(ct);
+        var ds = await q.Include(p => p.Dong).AsSplitQuery()
+            .OrderByDescending(p => p.Ngay).ThenByDescending(p => p.Id)
+            .Skip((Math.Max(1, trang) - 1) * soDong).Take(soDong)
+            .ToListAsync(ct);
+        return (ds, tong);
     }
 
     public Task<BieuMauEntity?> LayBieuMauAsync(int bieuMauId, CancellationToken ct = default) =>

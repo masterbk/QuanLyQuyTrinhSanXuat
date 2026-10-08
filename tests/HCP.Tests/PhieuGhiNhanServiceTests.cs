@@ -31,23 +31,49 @@ public class PhieuGhiNhanServiceTests
         JsonSerializer.Serialize(kv.ToDictionary(x => x.k, x => x.v));
 
     [Fact]
-    public async Task Loc_Bieu_Mau_Theo_Vai_Tro_Va_Kich_Hoat()
+    public async Task Loc_Bieu_Mau_Theo_Role_Nhap_Bieu_Mau_Va_Mau_Duoc_Giao()
     {
         await NapMauAsync();
-        using var db = MoDb();
-        var svc = new PhieuGhiNhanService(db);
+        int tuLanhId, xeId;
+        using (var db = MoDb())
+        {
+            db.Staff.AddRange(
+                new Staff { MaNhanSu = "NS01", HoTen = "Chưa cấu hình", TrangThai = true },
+                new Staff { MaNhanSu = "NS02", HoTen = "Tất cả", TrangThai = true },
+                new Staff { MaNhanSu = "NS03", HoTen = "Hai mẫu", TrangThai = true });
+            await db.SaveChangesAsync();
+            tuLanhId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-GMP.08-04")).Id;
+            xeId = (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-GMP-ISO-06-01")).Id;
+            var ns2 = await db.Staff.FirstAsync(s => s.MaNhanSu == "NS02");
+            var ns3 = await db.Staff.FirstAsync(s => s.MaNhanSu == "NS03");
+            db.PhanQuyenBieuMaus.AddRange(
+                new PhanQuyenBieuMau { NhanSuId = ns2.Id, TatCa = true },
+                new PhanQuyenBieuMau { NhanSuId = ns3.Id, TatCa = false, BieuMauIdsCsv = $"{tuLanhId},{xeId}" });
+            // Mẫu bị tắt không hiện cho ai.
+            (await db.BieuMaus.FirstAsync(b => b.MaHieu == "BM-KPH-01")).KichHoat = false;
+            await db.SaveChangesAsync();
+        }
 
-        // Nhân viên sản xuất: thấy các mẫu QuyenSanXuat (nhiệt độ tủ, đèn UV, checklist, nướng, KPH, bẫy côn trùng),
-        // KHÔNG thấy vệ sinh xe (QuyenGiaoHang) hay tiếp nhận NL (QuyenNhapLieu).
-        var cuaSanXuat = await svc.LayBieuMauChoNhapAsync(new[] { "TenantSanXuat" });
-        Assert.Equal(6, cuaSanXuat.Count);
-        Assert.DoesNotContain(cuaSanXuat, b => b.MaHieu == "BM-GMP-ISO-06-01");
-        Assert.DoesNotContain(cuaSanXuat, b => b.MaHieu == "BM-GMP-ISO-01-01");
+        using var db2 = MoDb();
+        var svc = new PhieuGhiNhanService(db2);
+        const string Bm = "TenantBieuMau";
 
-        // Nhân viên giao hàng: chỉ thấy vệ sinh xe.
-        var cuaGiao = await svc.LayBieuMauChoNhapAsync(new[] { "TenantGiaoHang" });
-        Assert.Single(cuaGiao);
-        Assert.Equal("BM-GMP-ISO-06-01", cuaGiao[0].MaHieu);
+        // Quản trị + nhập liệu: mọi mẫu đang kích hoạt (10 - 1 tắt).
+        Assert.Equal(9, (await svc.LayBieuMauChoNhapAsync(new[] { "TenantAdmin" }, null)).Count);
+        Assert.Equal(9, (await svc.LayBieuMauChoNhapAsync(new[] { "TenantStaff" }, null)).Count);
+
+        // Sản xuất / giao hàng KHÔNG còn tự được nhập biểu mẫu.
+        Assert.Empty(await svc.LayBieuMauChoNhapAsync(new[] { "TenantSanXuat" }, "NS01"));
+        Assert.Empty(await svc.LayBieuMauChoNhapAsync(new[] { "TenantGiaoHang" }, "NS01"));
+
+        // Role nhập biểu mẫu: chưa cấu hình = tất cả; TatCa = tất cả; danh sách = đúng các mẫu được giao.
+        Assert.Equal(9, (await svc.LayBieuMauChoNhapAsync(new[] { Bm }, "NS01")).Count);
+        Assert.Equal(9, (await svc.LayBieuMauChoNhapAsync(new[] { Bm }, "NS02")).Count);
+        var haiMau = await svc.LayBieuMauChoNhapAsync(new[] { "TenantSanXuat", Bm }, "NS03");
+        Assert.Equal(new[] { tuLanhId, xeId }.OrderBy(x => x), haiMau.Select(b => b.Id).OrderBy(x => x));
+
+        // Role nhập biểu mẫu nhưng tài khoản không gắn nhân sự -> không có mẫu nào.
+        Assert.Empty(await svc.LayBieuMauChoNhapAsync(new[] { Bm }, null));
     }
 
     [Fact]

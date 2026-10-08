@@ -213,3 +213,54 @@ class NhacHan {
         soNgayConLai: j['soNgayConLai'] as int? ?? 0,
       );
 }
+
+/// Một phiếu trong danh sách "Phiếu đã nhập": tên mẫu + tóm tắt (số ô Đạt/Không đạt, đầu phiếu dạng chữ).
+class PhieuTomTat {
+  final int id;
+  final int bieuMauId;
+  final String maHieu;
+  final String tenMau;
+  final String boCuc;
+  final DateTime ngay;
+  final String trangThai;
+  final String? nguoiLap;
+  final DateTime thoiGianUtc;
+  final int soDong;
+  final int soDat;
+  final int soKhongDat;
+  final List<String> dauPhieu;
+
+  const PhieuTomTat({
+    required this.id,
+    required this.bieuMauId,
+    required this.maHieu,
+    required this.tenMau,
+    this.boCuc = '',
+    required this.ngay,
+    this.trangThai = 'DaGhiNhan',
+    this.nguoiLap,
+    required this.thoiGianUtc,
+    this.soDong = 0,
+    this.soDat = 0,
+    this.soKhongDat = 0,
+    this.dauPhieu = const [],
+  });
+
+  bool get laNhap => trangThai == 'Nhap';
+
+  factory PhieuTomTat.tuJson(Map<String, dynamic> j) => PhieuTomTat(
+        id: j['id'] as int? ?? 0,
+        bieuMauId: j['bieuMauId'] as int? ?? 0,
+        maHieu: j['maHieu'] as String? ?? '',
+        tenMau: j['tenMau'] as String? ?? '',
+        boCuc: j['boCuc'] as String? ?? '',
+        ngay: DateTime.tryParse(j['ngay'] as String? ?? '') ?? DateTime.now(),
+        trangThai: j['trangThai'] as String? ?? 'DaGhiNhan',
+        nguoiLap: j['nguoiLap'] as String?,
+        thoiGianUtc: DateTime.tryParse(j['thoiGianUtc'] as String? ?? '') ?? DateTime.now().toUtc(),
+        soDong: j['soDong'] as int? ?? 0,
+        soDat: j['soDat'] as int? ?? 0,
+        soKhongDat: j['soKhongDat'] as int? ?? 0,
+        dauPhieu: ((j['dauPhieu'] as List?) ?? const []).map((e) => e.toString()).toList(),
+      );
+}

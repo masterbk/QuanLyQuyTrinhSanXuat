@@ -11,7 +11,8 @@ namespace HCP.Infrastructure.Identity;
 
 /// <summary>Tài khoản đăng nhập gắn với một nhân sự.</summary>
 public sealed record TaiKhoanNhanVien(string UserId, int NhanSuId, string TenDangNhap, string? Email,
-                                      IReadOnlyList<string> VaiTro, bool DangHoatDong);
+                                      IReadOnlyList<string> VaiTro, bool DangHoatDong,
+                                      bool TatCaBieuMau = true, IReadOnlyList<int>? BieuMauIds = null);
 
 /// <summary>Thông tin tài khoản nhập ở màn Nhân sự.</summary>
 public sealed class YeuCauTaiKhoan
@@ -28,6 +29,12 @@ public sealed class YeuCauTaiKhoan
     public List<string> VaiTro { get; set; } = new();
 
     public bool DangHoatDong { get; set; } = true;
+
+    /// <summary>Role "Nhân viên nhập biểu mẫu": true = mọi biểu mẫu (kể cả mẫu thêm sau).</summary>
+    public bool TatCaBieuMau { get; set; } = true;
+
+    /// <summary>Các biểu mẫu được giao khi <see cref="TatCaBieuMau"/> = false.</summary>
+    public List<int> BieuMauIds { get; set; } = new();
 }
 
 /// <summary>
@@ -87,11 +94,18 @@ public sealed class TaiKhoanNhanVienService : ITaiKhoanNhanVienService
                             select new { ur.UserId, r.Name })
                            .ToListAsync(ct);
 
+        var phanQuyen = await _db.PhanQuyenBieuMaus.AsNoTracking().ToListAsync(ct);
+        var pqTheoNhanSu = phanQuyen.GroupBy(p => p.NhanSuId).ToDictionary(g => g.Key, g => g.First());
+
         return users.ToDictionary(
             u => u.NhanSuId!.Value,
-            u => new TaiKhoanNhanVien(u.Id, u.NhanSuId!.Value, u.UserName ?? "", u.Email,
-                AppRoles.VaiTroNhanVien.Where(v => vaiTro.Any(x => x.UserId == u.Id && x.Name == v)).ToList(),
-                u.DangHoatDong));
+            u =>
+            {
+                var pq = pqTheoNhanSu.GetValueOrDefault(u.NhanSuId!.Value);
+                return new TaiKhoanNhanVien(u.Id, u.NhanSuId!.Value, u.UserName ?? "", u.Email,
+                    AppRoles.VaiTroNhanVien.Where(v => vaiTro.Any(x => x.UserId == u.Id && x.Name == v)).ToList(),
+                    u.DangHoatDong, pq?.TatCa ?? true, pq?.BieuMauIds ?? Array.Empty<int>());
+            });
     }
 
     public async Task<string?> KiemTraAsync(Staff nhanSu, YeuCauTaiKhoan yeuCau, CancellationToken ct = default)
@@ -106,6 +120,8 @@ public sealed class TaiKhoanNhanVienService : ITaiKhoanNhanVienService
         var vaiTro = yeuCau.VaiTro.Distinct().ToList();
         if (vaiTro.Count == 0) return "Chọn ít nhất một vai trò cho tài khoản.";
         if (vaiTro.Any(v => !AppRoles.VaiTroNhanVien.Contains(v))) return "Vai trò tài khoản không hợp lệ.";
+        if (vaiTro.Contains(AppRoles.TenantBieuMau) && !yeuCau.TatCaBieuMau && yeuCau.BieuMauIds.Count == 0)
+            return "Chọn ít nhất một biểu mẫu nhân viên được nhập (hoặc chọn \"Tất cả biểu mẫu\").";
 
         var hienTai = nhanSu.Id == 0 ? null : await TimAsync(tenantId, nhanSu.Id, ct);
 
@@ -171,6 +187,7 @@ public sealed class TaiKhoanNhanVienService : ITaiKhoanNhanVienService
                 await _userManager.DeleteAsync(user);
                 return KetQuaThaoTac.Loi("Không gán được vai trò: " + MoTaLoi(gan));
             }
+            await LuuPhanQuyenBieuMauAsync(nhanSu.Id, vaiTro, yeuCau, ct);
             return KetQuaThaoTac.Ok($"Đã tạo tài khoản đăng nhập {tenDangNhap} ({TenVaiTro(vaiTro)}).");
         }
 
@@ -207,6 +224,8 @@ public sealed class TaiKhoanNhanVienService : ITaiKhoanNhanVienService
             phaiDangNhapLai = true;
         }
 
+        await LuuPhanQuyenBieuMauAsync(nhanSu.Id, vaiTro, yeuCau, ct);
+
         if (phaiDangNhapLai)
         {
             await _userManager.UpdateSecurityStampAsync(user);                      // phiên web
@@ -223,9 +242,30 @@ public sealed class TaiKhoanNhanVienService : ITaiKhoanNhanVienService
         return user is null ? KetQuaThaoTac.Ok("") : await XoaAsync(user, ct);
     }
 
+    /// <summary>Lưu danh sách biểu mẫu được giao (chỉ khi có role nhập biểu mẫu; bỏ role thì xoá).</summary>
+    private async Task LuuPhanQuyenBieuMauAsync(int nhanSuId, IReadOnlyCollection<string> vaiTro, YeuCauTaiKhoan yeuCau,
+                                                CancellationToken ct)
+    {
+        var pq = await _db.PhanQuyenBieuMaus.FirstOrDefaultAsync(p => p.NhanSuId == nhanSuId, ct);
+        if (!vaiTro.Contains(AppRoles.TenantBieuMau))
+        {
+            if (pq is not null) { _db.PhanQuyenBieuMaus.Remove(pq); await _db.SaveChangesAsync(ct); }
+            return;
+        }
+        if (pq is null) _db.PhanQuyenBieuMaus.Add(pq = new PhanQuyenBieuMau { NhanSuId = nhanSuId });
+        pq.TatCa = yeuCau.TatCaBieuMau;
+        pq.BieuMauIdsCsv = yeuCau.TatCaBieuMau ? null : string.Join(",", yeuCau.BieuMauIds.Distinct().OrderBy(x => x));
+        await _db.SaveChangesAsync(ct);
+    }
+
     private async Task<KetQuaThaoTac> XoaAsync(ApplicationUser user, CancellationToken ct)
     {
         await ThuHoiPhienAppAsync(user.Id, ct);
+        if (user.NhanSuId is { } nsId)
+        {
+            var pq = await _db.PhanQuyenBieuMaus.FirstOrDefaultAsync(p => p.NhanSuId == nsId, ct);
+            if (pq is not null) { _db.PhanQuyenBieuMaus.Remove(pq); await _db.SaveChangesAsync(ct); }
+        }
         var kq = await _userManager.DeleteAsync(user);
         return kq.Succeeded
             ? KetQuaThaoTac.Ok($"Đã xoá tài khoản đăng nhập {user.UserName}.")

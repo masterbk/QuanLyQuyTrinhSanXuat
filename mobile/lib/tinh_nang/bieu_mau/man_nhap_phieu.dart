@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../loi/api.dart';
+import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'mo_hinh.dart';
 
@@ -17,14 +18,22 @@ class _DongNhap {
 /// Form nhập một phiếu ghi nhận theo biểu mẫu. Tự sinh widget theo kiểu từng trường.
 class ManNhapPhieu extends ConsumerStatefulWidget {
   final BieuMau mau;
-  const ManNhapPhieu({super.key, required this.mau});
+
+  /// Mở sẵn ngày này (mặc định hôm nay) - dùng khi "Nhập tiếp" một phiếu nháp từ màn Phiếu đã nhập.
+  final DateTime? ngayBanDau;
+
+  /// Mở đúng phiếu này (mẫu nhiều phiếu/ngày); mẫu 1 phiếu/ngày tự mở theo ngày nên không cần.
+  final int? phieuId;
+
+  const ManNhapPhieu({super.key, required this.mau, this.ngayBanDau, this.phieuId});
 
   @override
   ConsumerState<ManNhapPhieu> createState() => _ManNhapPhieuState();
 }
 
 class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
-  DateTime _ngay = DateTime.now();
+  late DateTime _ngay = widget.ngayBanDau ?? DateTime.now();
+  bool _daMoPhieuChiDinh = false;
   final _ghiChu = TextEditingController();
   final _DongNhap _dauPhieu = _DongNhap(); // giá trị các trường đầu phiếu
   late List<_DongNhap> _dong;
@@ -63,7 +72,10 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       } else {
         final ds = await kho.phieu(ngay: _ngay, bieuMauId: widget.mau.id);
         if (!mounted) return;
-        setState(() { _dsNgay = ds; _apDungPhieu(null); });
+        // Lần nạp đầu mà được chỉ định phiếu -> mở luôn phiếu đó (nhập tiếp nháp).
+        final chiDinh = _daMoPhieuChiDinh ? null : ds.where((p) => p.id == widget.phieuId).firstOrNull;
+        _daMoPhieuChiDinh = true;
+        setState(() { _dsNgay = ds; _apDungPhieu(chiDinh); });
       }
     } catch (_) {
       if (mounted) setState(() => _apDungPhieu(null)); // lỗi tải -> coi như phiếu mới
@@ -116,6 +128,25 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         _dong.first.ghiChu = nhap.dong.first.ghiChu;
       }
     }
+  }
+
+  /// Ghi giá trị một ô. Nhập dữ liệu (không phải ô chọn nhân sự) thì tự điền người đang đăng nhập vào các ô
+  /// "Chọn nhân sự" CÒN TRỐNG cùng dòng và cùng nhóm cột - vd nhập nhiệt độ buổi sáng thì "Người kiểm tra" buổi
+  /// sáng là mình, ô buổi chiều để nguyên cho người ca chiều. Trả true nếu có tự điền.
+  bool _dat(_DongNhap dong, TruongBieuMau t, String v) {
+    dong.giaTri[t.ma] = v;
+    if (t.kieu == 'ChonNhanSu' || v.isEmpty) return false;
+    final maToi = ref.read(xacThucProvider).nguoiDung?.maNhanSu;
+    if (maToi == null || maToi.isEmpty) return false;
+    final pham = identical(dong, _dauPhieu) ? _truongDau : _truongDong;
+    var dien = false;
+    for (final f in pham) {
+      if (f.kieu == 'ChonNhanSu' && f.nhom == t.nhom && (dong.giaTri[f.ma] ?? '').isEmpty) {
+        dong.giaTri[f.ma] = maToi;
+        dien = true;
+      }
+    }
+    return dien;
   }
 
   List<_DongNhap> _dungDongBanDau() {
@@ -470,7 +501,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       final bytes = await x.readAsBytes();
       final url = await ref.read(khoBieuMauProvider).taiAnh(bytes, x.name);
       if (!mounted) return;
-      setState(() => dong.giaTri[t.ma] = url);
+      setState(() => _dat(dong, t, url));
     } on LoiApi catch (e) {
       _bao(e.thongBao);
     } catch (_) {
@@ -487,7 +518,9 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         enabled: !_choXem,
         keyboardType: soL ? const TextInputType.numberWithOptions(decimal: true, signed: true) : TextInputType.text,
         decoration: InputDecoration(labelText: nhan, helperText: chuan, border: const OutlineInputBorder(), isDense: true),
-        onChanged: (v) => dong.giaTri[t.ma] = v,
+        onChanged: (v) {
+          if (_dat(dong, t, v)) setState(() {}); // chỉ dựng lại khi vừa tự điền người
+        },
       );
 
   Widget _oDatKhongDat(_DongNhap dong, TruongBieuMau t, String nhan) {
@@ -501,12 +534,12 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
           ChoiceChip(
             label: const Text('Đạt'),
             selected: v == 'Đạt',
-            onSelected: _khoaNhap ? null : (_) => setState(() => dong.giaTri[t.ma] = 'Đạt'),
+            onSelected: _khoaNhap ? null : (_) => setState(() => _dat(dong, t, 'Đạt')),
           ),
           ChoiceChip(
             label: const Text('Không đạt'),
             selected: v == 'Không đạt',
-            onSelected: _khoaNhap ? null : (_) => setState(() => dong.giaTri[t.ma] = 'Không đạt'),
+            onSelected: _khoaNhap ? null : (_) => setState(() => _dat(dong, t, 'Không đạt')),
           ),
         ]),
       ],
@@ -521,8 +554,8 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
           final now = TimeOfDay.now();
           final chon = await showTimePicker(context: context, initialTime: now);
           if (chon != null) {
-            setState(() => dong.giaTri[t.ma] =
-                '${chon.hour.toString().padLeft(2, '0')}:${chon.minute.toString().padLeft(2, '0')}');
+            setState(() => _dat(dong, t,
+                '${chon.hour.toString().padLeft(2, '0')}:${chon.minute.toString().padLeft(2, '0')}'));
           }
         },
       );
@@ -539,8 +572,8 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
             lastDate: DateTime(2100),
           );
           if (chon != null) {
-            setState(() => dong.giaTri[t.ma] =
-                '${chon.year}-${chon.month.toString().padLeft(2, '0')}-${chon.day.toString().padLeft(2, '0')}');
+            setState(() => _dat(dong, t,
+                '${chon.year}-${chon.month.toString().padLeft(2, '0')}-${chon.day.toString().padLeft(2, '0')}'));
           }
         },
       );
@@ -549,12 +582,12 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     final ds = dm.value ?? const <MucChon>[];
     final hople = ds.any((m) => m.ma == dong.giaTri[t.ma]) ? dong.giaTri[t.ma] : null;
     return DropdownButtonFormField<String>(
-      key: _khoaO(dong, t),
+      key: ValueKey('${_napLan}_${identityHashCode(dong)}_${t.ma}_$hople'),
       initialValue: hople,
       isExpanded: true,
       decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
       items: ds.map((m) => DropdownMenuItem(value: m.ma, child: Text(m.ten, overflow: TextOverflow.ellipsis))).toList(),
-      onChanged: _khoaNhap ? null : (v) => setState(() => dong.giaTri[t.ma] = v ?? ''),
+      onChanged: _khoaNhap ? null : (v) => setState(() => _dat(dong, t, v ?? '')),
     );
   }
 
@@ -567,7 +600,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
       isExpanded: true,
       decoration: InputDecoration(labelText: nhan, border: const OutlineInputBorder(), isDense: true),
       items: ds.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
-      onChanged: _khoaNhap ? null : (v) => setState(() => dong.giaTri[t.ma] = v ?? ''),
+      onChanged: _khoaNhap ? null : (v) => setState(() => _dat(dong, t, v ?? '')),
     );
   }
 

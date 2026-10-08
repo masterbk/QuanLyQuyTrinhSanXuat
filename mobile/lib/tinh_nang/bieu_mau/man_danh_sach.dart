@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../loi/api.dart';
 import 'kho_du_lieu.dart';
+import 'man_lich_su.dart';
 import 'man_nhac_han.dart';
 import 'man_nhap_phieu.dart';
 import 'mo_hinh.dart';
@@ -31,8 +32,7 @@ class _ManDanhSachBieuMauState extends ConsumerState<ManDanhSachBieuMau> {
     final homNay = ref.watch(phieuHomNayProvider).value ?? const <PhieuGhiNhan>[];
     final nhac = ref.watch(nhacHanProvider(30)).value ?? const <NhacHan>[];
 
-    return Scaffold(
-      body: ds.when(
+    final tabNhap = ds.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _Loi(
           thongBao: e is LoiApi ? e.thongBao : 'Không tải được biểu mẫu: $e',
@@ -76,6 +76,24 @@ class _ManDanhSachBieuMauState extends ConsumerState<ManDanhSachBieuMau> {
             ),
           );
         },
+      );
+
+    // Hai tab: nhập phiếu theo mẫu | xem lại phiếu đã nhập.
+    return Scaffold(
+      body: DefaultTabController(
+        length: 2,
+        child: Column(children: [
+          const TabBar(tabs: [
+            Tab(icon: Icon(Icons.edit_note), text: 'Nhập phiếu'),
+            Tab(icon: Icon(Icons.history), text: 'Phiếu đã nhập'),
+          ]),
+          Expanded(
+            child: TabBarView(children: [
+              tabNhap,
+              const ManLichSuPhieu(nhung: true),
+            ]),
+          ),
+        ]),
       ),
     );
   }
@@ -188,7 +206,12 @@ class _The extends ConsumerWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
+              IconButton(
+                tooltip: 'Phiếu đã nhập của mẫu này',
+                icon: const Icon(Icons.history),
+                onPressed: () => Navigator.push(
+                    context, MaterialPageRoute(builder: (_) => ManLichSuPhieu(bieuMauId: mau.id))),
+              ),
             ],
           ),
         ),

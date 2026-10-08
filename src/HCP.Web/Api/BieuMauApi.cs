@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Text.Json;
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
+using HCP.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.BieuMau;
 using HCP.Web.Services;
@@ -13,6 +15,58 @@ namespace HCP.Web.Api;
 /// <summary>API Biểu mẫu kiểm soát cho ứng dụng di động: tải mẫu được phép điền và gửi phiếu ghi nhận.</summary>
 public static class BieuMauApi
 {
+    private static Task<IReadOnlyList<HCP.Domain.Entities.Business.BieuMau>> MauDuocNhapAsync(
+        IPhieuGhiNhanService svc, ClaimsPrincipal user, string? maNhanSu) =>
+        svc.LayBieuMauChoNhapAsync(AppRoles.VaiTroCoSo.Where(user.IsInRole).ToList(), maNhanSu);
+
+    private static async Task<bool> DuocXemAsync(int bieuMauId, IPhieuGhiNhanService svc, ClaimsPrincipal user, AppDbContext db)
+    {
+        var duocXem = await svc.LayMauDuocXemAsync(AppRoles.VaiTroCoSo.Where(user.IsInRole).ToList(),
+                                                    await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db));
+        return duocXem is null || duocXem.Contains(bieuMauId);
+    }
+
+    private static IResult KhongDuocXem() =>
+        Results.Json(new LoiDto("Bạn không được giao biểu mẫu này - liên hệ quản trị cơ sở."), statusCode: 403);
+
+    /// <summary>Tóm tắt phiếu cho danh sách: đếm ô Đạt/Không đạt, giá trị đầu phiếu dạng chữ.</summary>
+    private static PhieuTomTatDto TomTat(PhieuGhiNhan p, BieuMauEntity? mau)
+    {
+        var truong = mau?.Truong ?? new List<TruongBieuMau>();
+        var datKd = truong.Where(t => !t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.DatKhongDat).Select(t => t.Ma).ToList();
+        int dat = 0, khongDat = 0;
+        foreach (var d in p.Dong)
+        {
+            var gt = DocJson(d.GiaTriJson);
+            foreach (var ma in datKd)
+            {
+                var v = gt.GetValueOrDefault(ma);
+                if (string.IsNullOrWhiteSpace(v)) continue;
+                if (v.Trim().Equals("Đạt", StringComparison.OrdinalIgnoreCase)) dat++; else khongDat++;
+            }
+        }
+        // Đầu phiếu: chỉ các kiểu hiển thị được ngay (chữ/số/lựa chọn), bỏ ô chọn danh mục và ảnh.
+        var dau = DocJson(p.GiaTriDauJson);
+        var dauPhieu = truong.Where(t => t.LaDauPhieu && t.Kieu is KieuTruongBieuMau.Text or KieuTruongBieuMau.So
+                                                   or KieuTruongBieuMau.LuaChon)
+            .OrderBy(t => t.ThuTu)
+            .Select(t => (t.Ten, V: dau.GetValueOrDefault(t.Ma)))
+            .Where(x => !string.IsNullOrWhiteSpace(x.V)).Select(x => $"{x.Ten}: {x.V}").ToList();
+        return new PhieuTomTatDto(p.Id, p.BieuMauId, mau?.MaHieu ?? "", mau?.Ten ?? "(biểu mẫu đã xoá)",
+            mau?.BoCuc.ToString() ?? "", p.Ngay, p.TrangThai.ToString(), p.NguoiLap, p.ThoiGianUtc, p.Dong.Count,
+            dat, khongDat, dauPhieu);
+    }
+
+    private static Dictionary<string, string?> DocJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return JsonSerializer.Deserialize<Dictionary<string, string?>>(json) ?? new(); }
+        catch (JsonException) { return new(); }
+    }
+
+    private static IResult KhongDuocNhap() =>
+        Results.Json(new LoiDto("Bạn không được giao nhập biểu mẫu này - liên hệ quản trị cơ sở."), statusCode: 403);
+
     public static void MapBieuMauApi(this IEndpointRouteBuilder app)
     {
         var nhom = app.MapGroup("/api/v1")
@@ -20,16 +74,16 @@ public static class BieuMauApi
             .RequireAuthorization(new AuthorizeAttribute { Roles = AppRoles.MoiNguoiDungCoSo })
             .WithTags("Biểu mẫu kiểm soát");
 
-        // Danh sách biểu mẫu người đang đăng nhập được phép điền (theo vai trò + đang kích hoạt).
-        nhom.MapGet("/bieu-mau", async (IPhieuGhiNhanService svc, ClaimsPrincipal user) =>
+        // Danh sách biểu mẫu người đang đăng nhập được nhập (đang kích hoạt; nhân viên nhập biểu mẫu = mẫu được giao).
+        nhom.MapGet("/bieu-mau", async (IPhieuGhiNhanService svc, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var vaiTro = AppRoles.VaiTroCoSo.Where(user.IsInRole).ToList();
-            var ds = await svc.LayBieuMauChoNhapAsync(vaiTro);
+            var ds = await MauDuocNhapAsync(svc, user, await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db));
             return Results.Ok(ds.Select(Map).ToList());
         });
 
-        nhom.MapGet("/bieu-mau/{id:int}", async (int id, IPhieuGhiNhanService svc) =>
+        nhom.MapGet("/bieu-mau/{id:int}", async (int id, IPhieuGhiNhanService svc, ClaimsPrincipal user, AppDbContext db) =>
         {
+            if (!await DuocXemAsync(id, svc, user, db)) return KhongDuocXem();
             var mau = await svc.LayBieuMauAsync(id);
             return mau is null ? Results.NotFound(new LoiDto("Không tìm thấy biểu mẫu.")) : Results.Ok(Map(mau));
         });
@@ -52,10 +106,39 @@ public static class BieuMauApi
             return Results.Ok(ds.Select(MapPhieu).ToList());
         });
 
-        nhom.MapGet("/phieu-ghi-nhan/{id:int}", async (int id, IPhieuGhiNhanService svc) =>
+        nhom.MapGet("/phieu-ghi-nhan/{id:int}", async (int id, IPhieuGhiNhanService svc, ClaimsPrincipal user, AppDbContext db) =>
         {
             var p = await svc.LayPhieuTheoIdAsync(id);
-            return p is null ? Results.NotFound(new LoiDto("Không tìm thấy phiếu.")) : Results.Ok(MapPhieu(p));
+            if (p is null) return Results.NotFound(new LoiDto("Không tìm thấy phiếu."));
+            return await DuocXemAsync(p.BieuMauId, svc, user, db) ? Results.Ok(MapPhieu(p)) : KhongDuocXem();
+        });
+
+        // Lịch sử phiếu cho app (mới nhất trước, phân trang): chỉ phiếu của các mẫu được xem; cuaToi = do tôi lập.
+        nhom.MapGet("/phieu-ghi-nhan/lich-su", async (IPhieuGhiNhanService svc, ClaimsPrincipal user, AppDbContext db,
+            DateOnly? tuNgay, DateOnly? denNgay, int? bieuMauId, bool cuaToi = false, int trang = 1, int soDong = 20) =>
+        {
+            var ma = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
+            var duocXem = await svc.LayMauDuocXemAsync(AppRoles.VaiTroCoSo.Where(user.IsInRole).ToList(), ma);
+            var (t, n) = LenhSanXuatApi.ChuanHoaTrang(trang, soDong);
+            if (cuaToi && ma is null) return Results.Ok(new TrangDuLieu<PhieuTomTatDto>(Array.Empty<PhieuTomTatDto>(), t, n, 0));
+
+            var (ds, tong) = await svc.LayLichSuAsync(duocXem, tuNgay, denNgay, bieuMauId, cuaToi ? ma : null, t, n);
+            var idMau = ds.Select(p => p.BieuMauId).Distinct().ToList();
+            var mau = await db.BieuMaus.AsNoTracking().Include(b => b.Truong)
+                .Where(b => idMau.Contains(b.Id)).ToDictionaryAsync(b => b.Id);
+            return Results.Ok(new TrangDuLieu<PhieuTomTatDto>(
+                ds.Select(p => TomTat(p, mau.GetValueOrDefault(p.BieuMauId))).ToList(), t, n, tong));
+        });
+
+        // PDF một phiếu (giống bản in trên web) để app xem / in / chia sẻ.
+        nhom.MapGet("/phieu-ghi-nhan/{id:int}/pdf", async (int id, IPhieuGhiNhanService svc, IPhieuPdfService pdf,
+                                                            ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>
+        {
+            var p = await svc.LayPhieuTheoIdAsync(id, ct);
+            if (p is null) return Results.NotFound(new LoiDto("Không tìm thấy phiếu."));
+            if (!await DuocXemAsync(p.BieuMauId, svc, user, db)) return KhongDuocXem();
+            var bytes = await pdf.TaoPdfAsync(id, ct);
+            return bytes is null ? Results.NotFound(new LoiDto("Không tìm thấy phiếu.")) : Results.File(bytes, "application/pdf", $"Phieu-{id}.pdf");
         });
 
         // Phiếu NHÁP của người đang đăng nhập cho một biểu mẫu + ngày (để mở nhập tiếp). 204 nếu chưa có.
@@ -78,7 +161,9 @@ public static class BieuMauApi
         nhom.MapPost("/phieu-ghi-nhan", async (TaoPhieuRequest req, IPhieuGhiNhanService svc,
                                                ClaimsPrincipal user, AppDbContext db) =>
         {
-            var phieu = TuRequest(req, await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db));
+            var ma = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
+            if (!(await MauDuocNhapAsync(svc, user, ma)).Any(b => b.Id == req.BieuMauId)) return KhongDuocNhap();
+            var phieu = TuRequest(req, ma);
             var kq = await svc.TaoPhieuAsync(phieu, req.HoanThanh ?? true);
             return kq.ThanhCong
                 ? Results.Created($"/api/v1/phieu-ghi-nhan/{phieu.Id}", new KetQuaDto(true, kq.ThongBao))
@@ -88,7 +173,11 @@ public static class BieuMauApi
         nhom.MapPut("/phieu-ghi-nhan/{id:int}", async (int id, TaoPhieuRequest req, IPhieuGhiNhanService svc,
                                                        ClaimsPrincipal user, AppDbContext db) =>
         {
-            var phieu = TuRequest(req, await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db));
+            var ma = await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, db);
+            var cu = await svc.LayPhieuTheoIdAsync(id);
+            if (cu is null) return Results.NotFound(new LoiDto("Không tìm thấy phiếu."));
+            if (!(await MauDuocNhapAsync(svc, user, ma)).Any(b => b.Id == cu.BieuMauId)) return KhongDuocNhap();
+            var phieu = TuRequest(req, ma);
             phieu.Id = id;
             var kq = await svc.CapNhatPhieuAsync(phieu, req.HoanThanh ?? true);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))

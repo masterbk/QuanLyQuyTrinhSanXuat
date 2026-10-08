@@ -6,8 +6,26 @@ namespace HCP.Infrastructure.Services.BieuMau;
 /// <summary>Nhân viên nhập phiếu ghi nhận theo một biểu mẫu (nhiệt độ, vệ sinh, checklist…).</summary>
 public interface IPhieuGhiNhanService
 {
-    /// <summary>Danh sách biểu mẫu đang kích hoạt mà một trong các vai trò được phép điền.</summary>
-    Task<IReadOnlyList<BieuMauEntity>> LayBieuMauChoNhapAsync(IEnumerable<string> vaiTro, CancellationToken ct = default);
+    /// <summary>
+    /// Biểu mẫu đang kích hoạt người dùng được nhập: quản trị + nhập liệu = mọi mẫu; "nhân viên nhập biểu mẫu" = các
+    /// mẫu được giao (PhanQuyenBieuMau của nhân sự <paramref name="maNhanSu"/>); vai trò khác = không có.
+    /// </summary>
+    Task<IReadOnlyList<BieuMauEntity>> LayBieuMauChoNhapAsync(IEnumerable<string> vaiTro, string? maNhanSu,
+                                                              CancellationToken ct = default);
+
+    /// <summary>
+    /// Id các biểu mẫu người dùng được XEM phiếu (kể cả mẫu đã tắt): null = mọi mẫu (quản trị, nhập liệu, nhân viên
+    /// nhập biểu mẫu được giao tất cả); tập rỗng = không mẫu nào.
+    /// </summary>
+    Task<IReadOnlySet<int>?> LayMauDuocXemAsync(IEnumerable<string> vaiTro, string? maNhanSu, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lịch sử phiếu (mới nhất trước) có phân trang. <paramref name="mauIds"/> null = mọi mẫu. Lọc ngày theo khoảng
+    /// [tuNgay, denNgay], theo mẫu và người lập (tuỳ chọn).
+    /// </summary>
+    Task<(IReadOnlyList<PhieuGhiNhan> DuLieu, int TongSo)> LayLichSuAsync(IReadOnlySet<int>? mauIds,
+        DateOnly? tuNgay, DateOnly? denNgay, int? bieuMauId, string? nguoiLap, int trang, int soDong,
+        CancellationToken ct = default);
 
     /// <summary>Lấy một biểu mẫu (kèm trường + hạng mục) để dựng form nhập.</summary>
     Task<BieuMauEntity?> LayBieuMauAsync(int bieuMauId, CancellationToken ct = default);

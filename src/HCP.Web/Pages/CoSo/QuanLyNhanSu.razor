@@ -7,6 +7,7 @@
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
 @inject IDanhMucService<Staff> NhanSuService
 @inject ITaiKhoanNhanVienService TaiKhoanService
+@inject HCP.Infrastructure.Services.BieuMau.IBieuMauService BieuMauService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -283,6 +284,27 @@ else
                                  Color="Color.Primary" Dense="true"
                                  Label="@($"{AppRoles.TenHienThi(vt)}: {AppRoles.MoTa(vt)}")" />
                 }
+                @if (_tk.VaiTro.Contains(AppRoles.TenantBieuMau))
+                {
+                    <MudPaper Outlined="true" Class="pa-3 mt-2 ml-8">
+                        <MudText Typo="Typo.body2" Class="mb-1"><b>Biểu mẫu được nhập</b></MudText>
+                        <MudCheckBox @bind-Value="_tk.TatCaBieuMau" Color="Color.Primary" Dense="true"
+                                     Label="Tất cả biểu mẫu (kể cả biểu mẫu thêm sau này)" />
+                        @if (!_tk.TatCaBieuMau)
+                        {
+                            @if (_bieuMau.Count == 0)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Warning">Chưa có biểu mẫu nào - tạo ở màn Biểu mẫu kiểm soát.</MudText>
+                            }
+                            @foreach (var bm in _bieuMau)
+                            {
+                                <MudCheckBox T="bool" Value="@_tk.BieuMauIds.Contains(bm.Id)" ValueChanged="@(c => DoiBieuMau(bm.Id, c))"
+                                             Color="Color.Primary" Dense="true"
+                                             Label="@($"{bm.MaHieu} - {bm.Ten}{(bm.KichHoat ? "" : " (đang tắt)")}")" />
+                            }
+                        }
+                    </MudPaper>
+                }
                 @if (!_input.TrangThai)
                 {
                     <MudText Typo="Typo.caption" Color="Color.Warning">Nhân sự đang nghỉ nên tài khoản sẽ bị khoá.</MudText>
@@ -322,10 +344,12 @@ else
     private IReadOnlyDictionary<int, TaiKhoanNhanVien> _taiKhoan = new Dictionary<int, TaiKhoanNhanVien>();
     private YeuCauTaiKhoan _tk = new();
     private bool _daCoTaiKhoan;
+    private List<HCP.Domain.Entities.Business.BieuMau> _bieuMau = new();
 
     protected override async Task OnInitializedAsync()
     {
         if (AuthState is not null) _laQuanTri = (await AuthState).User.IsInRole(AppRoles.TenantAdmin);
+        if (_laQuanTri) _bieuMau = (await BieuMauService.LayTatCaAsync()).ToList();
         await TaiDanhSachAsync();
     }
 
@@ -338,6 +362,12 @@ else
         if (_input.LaNguoiCheBien) _tk.VaiTro.Add(AppRoles.TenantSanXuat);
         if (_input.LaNguoiGiaoHang) _tk.VaiTro.Add(AppRoles.TenantGiaoHang);
         if (_tk.VaiTro.Count == 0) _tk.VaiTro.Add(AppRoles.TenantStaff);
+    }
+
+    private void DoiBieuMau(int id, bool chon)
+    {
+        if (!chon) _tk.BieuMauIds.Remove(id);
+        else if (!_tk.BieuMauIds.Contains(id)) _tk.BieuMauIds.Add(id);
     }
 
     private void DoiVaiTro(string vaiTro, bool chon)
@@ -407,7 +437,11 @@ else
 
         _daCoTaiKhoan = ns is not null && _taiKhoan.ContainsKey(ns.Id);
         _tk = _daCoTaiKhoan && _taiKhoan[ns!.Id] is { } tk
-            ? new YeuCauTaiKhoan { CoTaiKhoan = true, Email = tk.Email, VaiTro = tk.VaiTro.ToList(), DangHoatDong = tk.DangHoatDong }
+            ? new YeuCauTaiKhoan
+            {
+                CoTaiKhoan = true, Email = tk.Email, VaiTro = tk.VaiTro.ToList(), DangHoatDong = tk.DangHoatDong,
+                TatCaBieuMau = tk.TatCaBieuMau, BieuMauIds = (tk.BieuMauIds ?? Array.Empty<int>()).ToList()
+            }
             : new YeuCauTaiKhoan();
 
         _hienForm = true;
@@ -511,7 +545,8 @@ else
         {
             await TaiKhoanService.LuuAsync(hienTai, new YeuCauTaiKhoan
             {
-                CoTaiKhoan = true, Email = tk.Email, VaiTro = tk.VaiTro.ToList(), DangHoatDong = tk.DangHoatDong
+                CoTaiKhoan = true, Email = tk.Email, VaiTro = tk.VaiTro.ToList(), DangHoatDong = tk.DangHoatDong,
+                TatCaBieuMau = tk.TatCaBieuMau, BieuMauIds = (tk.BieuMauIds ?? Array.Empty<int>()).ToList()
             });
         }
 

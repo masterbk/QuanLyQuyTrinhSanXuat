@@ -21,7 +21,7 @@ const _quyenLenhSanXuat = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenKhoNoiBo = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenDonHang = {'TenantAdmin', 'TenantStaff', 'TenantGiaoHang'};
 const _quyenDanhMuc = {'TenantAdmin', 'TenantStaff'};
-const _quyenBieuMau = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat', 'TenantGiaoHang'};
+const _quyenBieuMau = {'TenantAdmin', 'TenantStaff', 'TenantBieuMau'};
 
 class _ManChinhState extends ConsumerState<ManChinh> {
   int _tab = 0;

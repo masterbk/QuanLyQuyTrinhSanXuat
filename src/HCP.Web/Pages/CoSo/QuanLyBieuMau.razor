@@ -84,6 +84,7 @@ else
         <HeaderContent>
             <MudTh>Mã hiệu</MudTh>
             <MudTh>Tên biểu mẫu</MudTh>
+            <MudTh>Ban hành</MudTh>
             <MudTh>Bố cục</MudTh>
             <MudTh>Tần suất</MudTh>
             <MudTh Style="text-align:center">Phiếu/ngày</MudTh>
@@ -95,6 +96,16 @@ else
         <RowTemplate>
             <MudTd DataLabel="Mã hiệu"><b>@context.MaHieu</b></MudTd>
             <MudTd DataLabel="Tên">@context.Ten</MudTd>
+            <MudTd DataLabel="Ban hành">
+                @if (context.NgayBanHanh is null && string.IsNullOrWhiteSpace(context.LanBanHanh))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">Chưa khai</MudText>
+                }
+                else
+                {
+                    @($"{context.NgayBanHanh?.ToString("dd/MM/yyyy")} · lần {context.LanBanHanh}")
+                }
+            </MudTd>
             <MudTd DataLabel="Bố cục">@TenBoCuc(context.BoCuc)</MudTd>
             <MudTd DataLabel="Tần suất">@context.TanSuat</MudTd>
             <MudTd DataLabel="Phiếu/ngày" Style="text-align:center">@(context.MotPhieuMoiNgay ? "1/ngày" : "Nhiều")</MudTd>
@@ -133,7 +144,17 @@ else
             <MudItem xs="12" sm="4">
                 <MudTextField @bind-Value="_input.MaHieu" Label="Mã hiệu *" Variant="Variant.Outlined" MaxLength="100" />
             </MudItem>
-            <MudItem xs="12" sm="8">
+            <MudItem xs="6" sm="4">
+                <MudDatePicker Date="@(_input.NgayBanHanh?.ToDateTime(TimeOnly.MinValue))"
+                               DateChanged="@(d => _input.NgayBanHanh = d is { } x ? DateOnly.FromDateTime(x) : null)"
+                               Label="Ngày ban hành" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true"
+                               Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true" HelperText="In ở header PDF" />
+            </MudItem>
+            <MudItem xs="6" sm="4">
+                <MudTextField @bind-Value="_input.LanBanHanh" Label="Lần ban hành" Variant="Variant.Outlined" MaxLength="20"
+                              HelperText="Vd: 01, 02 - in ở header PDF" />
+            </MudItem>
+            <MudItem xs="12">
                 <MudTextField @bind-Value="_input.Ten" Label="Tên biểu mẫu *" Variant="Variant.Outlined" MaxLength="255" />
             </MudItem>
             <MudItem xs="12" sm="4">
@@ -144,16 +165,8 @@ else
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" sm="4">
+            <MudItem xs="12" sm="8">
                 <MudTextField @bind-Value="_input.TanSuat" Label="Tần suất" Variant="Variant.Outlined" MaxLength="255" />
-            </MudItem>
-            <MudItem xs="12" sm="4">
-                <MudSelect T="string" @bind-Value="_input.NhomQuyen" Label="Ai được điền" Variant="Variant.Outlined">
-                    @foreach (var q in _nhomQuyen)
-                    {
-                        <MudSelectItem T="string" Value="@q.Ma">@q.Ten</MudSelectItem>
-                    }
-                </MudSelect>
             </MudItem>
             <MudItem xs="12">
                 <MudTextField @bind-Value="_input.GhiChuChan" Label="Quy chuẩn / ghi chú chân biểu mẫu" Variant="Variant.Outlined"
@@ -165,15 +178,6 @@ else
                     <MudSelectItem T="bool" Value="true">1 phiếu/ngày (khóa theo ngày)</MudSelectItem>
                     <MudSelectItem T="bool" Value="false">Nhiều phiếu/ngày (sổ/log)</MudSelectItem>
                 </MudSelect>
-            </MudItem>
-            <MudItem xs="6" sm="3">
-                <MudDatePicker Date="@(_input.NgayBanHanh?.ToDateTime(TimeOnly.MinValue))"
-                               DateChanged="@(d => _input.NgayBanHanh = d is { } x ? DateOnly.FromDateTime(x) : null)"
-                               Label="Ngày ban hành" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true"
-                               Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true" />
-            </MudItem>
-            <MudItem xs="6" sm="3">
-                <MudTextField @bind-Value="_input.LanBanHanh" Label="Lần ban hành" Variant="Variant.Outlined" MaxLength="20" />
             </MudItem>
             <MudItem xs="6" sm="3">
                 <MudNumericField @bind-Value="_input.ThuTu" Label="Thứ tự" Variant="Variant.Outlined" Min="0" />
@@ -304,13 +308,6 @@ else
 
     private readonly DialogOptions _dialogLon = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
 
-    private readonly (string Ma, string Ten)[] _nhomQuyen =
-    {
-        (AppRoles.QuyenNhapLieu, "Nhân viên nhập liệu (+ quản trị)"),
-        (AppRoles.QuyenSanXuat, "Nhân viên sản xuất (+ nhập liệu, quản trị)"),
-        (AppRoles.QuyenGiaoHang, "Nhân viên giao hàng (+ nhập liệu, quản trị)"),
-        (AppRoles.MoiNguoiDungCoSo, "Mọi nhân viên cơ sở"),
-    };
 
     protected override async Task OnInitializedAsync() => await TaiAsync();
 

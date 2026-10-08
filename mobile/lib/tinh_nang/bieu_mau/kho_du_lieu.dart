@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../loi/api.dart';
+import '../lenh_san_xuat/mo_hinh.dart' show TrangDuLieu;
 import '../xac_thuc/xac_thuc.dart';
 import 'mo_hinh.dart';
 
@@ -21,6 +24,33 @@ class KhoBieuMau {
     return ((await _api.get('/api/v1/phieu-ghi-nhan', thamSo: thamSo)) as List)
         .map((e) => PhieuGhiNhan.tuJson(e as Map<String, dynamic>)).toList();
   }
+
+  /// Lịch sử phiếu (mới nhất trước, phân trang) của các mẫu được xem. [cuaToi] = chỉ phiếu do tôi lập.
+  Future<TrangDuLieu<PhieuTomTat>> lichSu({
+    DateTime? tuNgay,
+    DateTime? denNgay,
+    int? bieuMauId,
+    bool cuaToi = false,
+    int trang = 1,
+    int soDong = 20,
+  }) async {
+    final thamSo = <String, dynamic>{'trang': trang, 'soDong': soDong, if (cuaToi) 'cuaToi': true};
+    if (tuNgay != null) thamSo['tuNgay'] = _chuoiNgay(tuNgay);
+    if (denNgay != null) thamSo['denNgay'] = _chuoiNgay(denNgay);
+    if (bieuMauId != null) thamSo['bieuMauId'] = bieuMauId;
+    final j = await _api.get('/api/v1/phieu-ghi-nhan/lich-su', thamSo: thamSo) as Map<String, dynamic>;
+    return TrangDuLieu.tuJson(j, PhieuTomTat.tuJson);
+  }
+
+  Future<PhieuGhiNhan> chiTietPhieu(int id) async =>
+      PhieuGhiNhan.tuJson(await _api.get('/api/v1/phieu-ghi-nhan/$id') as Map<String, dynamic>);
+
+  /// Định nghĩa một biểu mẫu (kể cả mẫu đã tắt) - để hiển thị phiếu cũ.
+  Future<BieuMau> bieuMauTheoId(int id) async =>
+      BieuMau.tuJson(await _api.get('/api/v1/bieu-mau/$id') as Map<String, dynamic>);
+
+  /// PDF của phiếu (giống bản in trên web).
+  Future<Uint8List> pdfPhieu(int id) => _api.getBytes('/api/v1/phieu-ghi-nhan/$id/pdf');
 
   /// Phiếu NHÁP của tôi cho biểu mẫu + ngày (để nhập tiếp). Null nếu chưa có.
   Future<PhieuGhiNhan?> phieuNhap(int bieuMauId, DateTime ngay) async {

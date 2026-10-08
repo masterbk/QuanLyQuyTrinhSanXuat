@@ -107,6 +107,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<TruongBieuMau> TruongBieuMaus => Set<TruongBieuMau>();
     public DbSet<HangMucBieuMau> HangMucBieuMaus => Set<HangMucBieuMau>();
     public DbSet<CaiDatInBieuMau> CaiDatInBieuMaus => Set<CaiDatInBieuMau>();
+    public DbSet<PhanQuyenBieuMau> PhanQuyenBieuMaus => Set<PhanQuyenBieuMau>();
     public DbSet<PhieuGhiNhan> PhieuGhiNhans => Set<PhieuGhiNhan>();
     public DbSet<DongGhiNhan> DongGhiNhans => Set<DongGhiNhan>();
 
@@ -667,6 +668,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         caiDatIn.Property(c => c.DiaChi).HasMaxLength(500);
         caiDatIn.Property(c => c.LogoDuongDan).HasMaxLength(1000);
         caiDatIn.IsMultiTenant();
+
+        var phanQuyenBm = builder.Entity<PhanQuyenBieuMau>();
+        phanQuyenBm.ToTable("PhanQuyenBieuMau");
+        phanQuyenBm.Property(p => p.BieuMauIdsCsv).HasMaxLength(2000);
+        phanQuyenBm.Ignore(p => p.BieuMauIds);
+        phanQuyenBm.HasIndex(p => p.NhanSuId).IsUnique();
+        phanQuyenBm.IsMultiTenant().AdjustUniqueIndexes();
 
         var truong = builder.Entity<TruongBieuMau>();
         truong.ToTable("TruongBieuMau");

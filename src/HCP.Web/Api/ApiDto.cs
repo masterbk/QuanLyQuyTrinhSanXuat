@@ -224,6 +224,14 @@ public sealed record PhieuGhiNhanDto(
 
 public sealed record DongGhiNhanDto(int? HangMucBieuMauId, int ThuTu, string GiaTriJson, string? GhiChu);
 
+/// <summary>
+/// Một phiếu trong danh sách lịch sử (app): kèm tên mẫu và tóm tắt để biết phiếu có vấn đề mà không cần mở -
+/// số ô Đạt / Không đạt, giá trị đầu phiếu dạng chữ ("Khu vực: Xưởng 1").
+/// </summary>
+public sealed record PhieuTomTatDto(
+    int Id, int BieuMauId, string MaHieu, string TenMau, string BoCuc, DateOnly Ngay, string TrangThai,
+    string? NguoiLap, DateTime ThoiGianUtc, int SoDong, int SoDat, int SoKhongDat, IReadOnlyList<string> DauPhieu);
+
 /// <summary>Kết quả tải một ảnh cho trường kiểu Ảnh của phiếu ghi nhận.</summary>
 public sealed record AnhPhieuDto(string TenGoc, string DuongDan);
 
