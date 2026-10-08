@@ -1,7 +1,7 @@
 # Bàn giao dự án HanoiCheckPlatform — để Claude (phiên/tài khoản khác) làm tiếp
 
 > Tài liệu này gói đủ ngữ cảnh để một phiên Claude mới tiếp tục phát triển mà không cần trí nhớ cũ.
-> Cập nhật lần cuối: 08/10/2026 (chiều - sau đợt biểu mẫu: role nhập biểu mẫu, nhập phiếu web, chống ghi đè).
+> Cập nhật lần cuối: 08/10/2026 (cuối ngày - biểu mẫu hoàn tất, đã deploy; có hướng dẫn sử dụng cho khách).
 
 ## 1. Tổng quan
 - **Sản phẩm:** phần mềm quản lý quy trình sản xuất cho **tiệm bánh Tuấn Nghĩa**: quy trình sản xuất,
@@ -15,7 +15,7 @@
     `src/HCP.Web` (Blazor pages `Pages/CoSo/`, minimal API `Api/`, `Program.cs` DI ~dòng 189, `Shared/NavMenu.razor`).
   - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **257 test** pass.
 - **App mobile:** Flutter ở `mobile/` (package `hcp_mobile`), Riverpod + dio (`lib/loi/api.dart`).
-  Tính năng theo `lib/tinh_nang/<ten>/`. **38 test** pass.
+  Tính năng theo `lib/tinh_nang/<ten>/`. **43 test** pass.
 
 ## 3. Quy ước BẮT BUỘC (hay sai)
 - **Đa cơ sở (multitenant):** entity nghiệp vụ kế thừa `TenantEntity : AuditableEntity`, cấu hình
@@ -96,12 +96,19 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
 - **Xem lại phiếu:** app tab "Phiếu đã nhập" (`man_lich_su.dart`, `man_chi_tiet_phieu.dart`; API
   `GET /api/v1/phieu-ghi-nhan/lich-su` phân trang + tóm tắt Đạt/KĐ, `/{id}/pdf`); web `/app/phieu-ghi-nhan`.
 - **Nhập phiếu trên web** `/app/nhap-phieu` (`NhapPhieu.razor`): checklist/nhiều dòng dạng bảng, "Đạt các ô trống".
+- **Ô chọn có tìm kiếm không dấu** (gõ "nghia" ra "Nghĩa"): web `MudAutocomplete`, app `o_chon_tim_kiem.dart`
+  (`OChonTimKiem`, nên dùng lại cho màn mới).
+- **Ngày/giờ hiển thị cố định:** trường Ngày luôn dd/MM/yyyy, Giờ 24h HH:mm (web MudDatePicker Culture vi-VN +
+  MudTimePicker; app `hienThiNgay`). Dữ liệu lưu vẫn yyyy-MM-dd / HH:mm. KHÔNG dùng ô ngày/giờ gốc của trình duyệt.
 - **Tự điền người:** nhập dữ liệu ô nào thì ô "Chọn nhân sự" CÒN TRỐNG cùng dòng + cùng `Nhom` tự = người đăng nhập
   (cố ý KHÔNG điền sẵn lúc mở phiếu để không lẫn ca sáng/chiều) - app `_dat`, web `Dat`.
 - **Người lập:** phiếu lưu `NguoiLap` (mã NS), `NguoiLapUserId`, `TenNguoiLap`, `TenNguoiCapNhat`; "Do tôi lập"
   khớp mã NS HOẶC tài khoản.
 - **Chống ghi đè:** `CapNhatPhieuAsync(phieu, hoanThanh, mocLuuLucMo)` so `ThoiGianUtc` lúc mở (lệch >1ms) → XungDot
   (API 409; app/web hộp thoại "Tải lại"). App gửi `thoiGianUtcGoc` khi PUT.
+- **Hướng dẫn sử dụng cho khách:** `Docs/Huong-dan-su-dung-Bieu-mau-kiem-soat.docx` (8 mục: vai trò, thiết lập,
+  cấu hình mẫu, giao quyền, nhập app, nhập web, xem/PDF/báo cáo/nhắc hạn, tình huống thường gặp).
+- **Dữ liệu prod:** phiếu nhập thử đã xoá hết (08/10/2026) - prod chưa có phiếu thật.
 - **CÒN LẠI:** **QC thẩm tra** (duyệt/ký phiếu) — đã để sẵn cột/trạng thái, **người dùng chủ động tạm BỎ**.
 - **Việc thủ công trên prod:** gán role "Nhân viên nhập biểu mẫu" cho nhân viên (màn Nhân sự); tải logo + kiểm tên/
   địa chỉ ở "Thông tin in"; nhập Ngày/Lần ban hành cho mẫu cũ (cột "Ban hành" báo "Chưa khai"); cài APK mới.
@@ -130,6 +137,7 @@ Thư mục `C:\Users\thuyb\.claude\projects\E--TuanNghia\memory\` có các file 
   (xem `PhieuGhiNhanService.CapNhatPhieuAsync`).
 - Razor: không đặt biến tên `helper` (`@helper` là directive). Entity `PhieuGhiNhan.ThoiGianUtc` có mặc định = now,
   đừng dùng nó làm "không có giá trị".
+- Kiểm UI ô có mặt nạ (Mask) bằng Playwright: gõ `press_sequentially(..., delay=80)`; gõ quá nhanh ra ngày sai.
 - `sqlcmd` chạy file .sql: thêm `-I` (QUOTED_IDENTIFIER, bảng có filtered index) và `-f 65001` (chữ tiếng Việt).
 - Kiểm UI web thật: Playwright cài ở `E:\pwlib` (`PYTHONPATH=/e/pwlib`), `chromium.launch(channel='msedge')` dùng
   Edge sẵn có (không tải trình duyệt vì ổ C gần đầy). Tài khoản dev thử: `coso-sx@example.vn` (mật khẩu hỏi người dùng/xem memory máy này).
