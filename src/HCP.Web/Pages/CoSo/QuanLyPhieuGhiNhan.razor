@@ -36,10 +36,25 @@
             <MudSelectItem T="int?" Value="@m.Id">@m.Ten (@m.MaHieu)</MudSelectItem>
         }
     </MudSelect>
-    <MudDatePicker Date="_locNgay" DateChanged="DoiLocNgay" Label="Ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
-                   DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
-                   Style="min-width:180px" />
+    <MudDatePicker Date="_tuNgay" DateChanged="DoiTuNgay" Label="Từ ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   DateFormat="dd/MM/yyyy" Culture="@VN" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
+                   Style="width:200px" />
+    <MudDatePicker Date="_denNgay" DateChanged="DoiDenNgay" Label="Đến ngày" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   DateFormat="dd/MM/yyyy" Culture="@VN" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true"
+                   Style="width:200px" />
+    <MudSpacer />
+    <MudTooltip Text="@($"Mỗi phiếu một file PDF, nén chung một file .zip (tối đa {HCP.Web.Api.PhieuPdfApi.ToiDaXuatZip} phiếu)")">
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.FolderZip"
+                   Disabled="@(_dangTai || _phieu.Count == 0 || _phieu.Count > HCP.Web.Api.PhieuPdfApi.ToiDaXuatZip)"
+                   Href="@XuatZipUrl" Target="_blank">Xuất PDF (.zip) – @_phieu.Count phiếu</MudButton>
+    </MudTooltip>
 </div>
+@if (_phieu.Count > HCP.Web.Api.PhieuPdfApi.ToiDaXuatZip)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+        Có @_phieu.Count phiếu - thu hẹp khoảng ngày hoặc chọn biểu mẫu (tối đa @HCP.Web.Api.PhieuPdfApi.ToiDaXuatZip phiếu mỗi lần xuất).
+    </MudAlert>
+}
 
 <MudPaper Outlined="true" Class="pa-3 mb-3">
     <div class="d-flex flex-wrap gap-2 align-center">
@@ -135,7 +150,18 @@ else
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private int? _locMauId;
-    private DateTime? _locNgay;
+    private DateTime? _tuNgay, _denNgay;
+    private static readonly System.Globalization.CultureInfo VN = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+    private static DateOnly? Ngay(DateTime? d) => d is { } x ? DateOnly.FromDateTime(x) : null;
+
+    /// <summary>Link tải zip theo đúng bộ lọc đang chọn.</summary>
+    private string XuatZipUrl =>
+        "/app/phieu/xuat-zip?" + string.Join("&", new[]
+        {
+            _locMauId is { } m ? $"bieuMauId={m}" : null,
+            Ngay(_tuNgay) is { } tu ? $"tuNgay={tu:yyyy-MM-dd}" : null,
+            Ngay(_denNgay) is { } den ? $"denNgay={den:yyyy-MM-dd}" : null,
+        }.Where(x => x is not null));
 
     // Báo cáo tháng
     private int? _bcMauId;
@@ -160,14 +186,14 @@ else
     private async Task TaiAsync()
     {
         _dangTai = true;
-        var ngay = _locNgay is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
-        _phieu = (await PhieuService.LayPhieuAsync(ngay, null, _locMauId))
-            .Where(p => _duocXem is null || _duocXem.Contains(p.BieuMauId)).ToList();
+        // Lọc theo khoảng ngày + mẫu, chỉ mẫu được xem (cùng điều kiện với nút xuất zip).
+        _phieu = (await PhieuService.LayLichSuAsync(_duocXem, Ngay(_tuNgay), Ngay(_denNgay), _locMauId, null, 1, 5000)).DuLieu.ToList();
         _dangTai = false;
     }
 
     private async Task DoiLocMau(int? v) { _locMauId = v; await TaiAsync(); }
-    private async Task DoiLocNgay(DateTime? v) { _locNgay = v; await TaiAsync(); }
+    private async Task DoiTuNgay(DateTime? v) { _tuNgay = v; await TaiAsync(); }
+    private async Task DoiDenNgay(DateTime? v) { _denNgay = v; await TaiAsync(); }
 
     private string TenMau(int id) => _tenMau.GetValueOrDefault(id) ?? $"#{id}";
     private string TenNhanSu(string? ma) => ma is null ? "" : (_tenNhanSu.GetValueOrDefault(ma) ?? ma);
