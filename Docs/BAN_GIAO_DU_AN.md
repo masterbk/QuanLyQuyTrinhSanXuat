@@ -115,7 +115,14 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
   Ảnh PNG tải qua `/phieu-ghi-nhan/anh` rồi gửi `chuKy`. Phiếu lưu `ChuKyAnh, TenNguoiKy, NguoiKyUserId, KyLucUtc,
   MaBamNoiDung` (SHA-256 nội dung chuẩn hoá - `PhieuGhiNhanService.TinhMaBam`), `MaTraCuu`. PDF có khối "Người lập & ký"
   + mã QR (QRCoder, URL = `Uploads:BaseUrl` + `/tra-cuu/phieu/{ma}`). Trang công khai `Pages/TraCuu/Phieu.cshtml`
-  tính lại mã băm → "✓ Nội dung khớp" hoặc cảnh báo đỏ nếu dữ liệu bị sửa sau khi ký. Server chưa bắt buộc chữ ký
+  tính lại mã băm từ dữ liệu trong CSDL + xác minh **chữ ký số máy chủ** `ChuKyMayChu` (ECDSA P-256 trên
+  `HCP-PHIEU-v1|MaTraCuu|MaBam`, `Security/KyPhieuMayChu.cs`). Khoá bí mật là file PEM ngoài CSDL: `KyPhieu:KhoaPath`,
+  mặc định `C:\ProgramData\HanoiCheckPlatform\KhoaKyPhieu\khoa-ky-phieu.pem`, tự sinh lần đầu - **PHẢI SAO LƯU**, mất là
+  mọi phiếu báo đỏ. Lần đầu có khoá thì ký bù phiếu cũ (`KyBuPhieuCuAsync`) rồi ghi file dấu `*.da-ky-bu` (dấu ở file,
+  không ở CSDL, để người sửa CSDL không kích lại ký bù được). Phiếu thiếu chữ ký = không hợp lệ. QR mang `?h=<mã băm>`
+  → trang tự báo bản PDF đang quét có phải bản hiện hành (PDF in trước 09/10/2026 không có h: người kiểm tra tự so 12
+  ký tự in đậm). Trang KHÔNG đọc được chữ trên tờ PDF. Không chống được người có quyền quản trị máy chủ (đọc được file
+  khoá) - muốn thế phải ký số PKI. Server chưa bắt buộc chữ ký
   (app cũ vẫn hoàn thành được). Đây là chữ ký điện tử nội bộ, KHÔNG phải chữ ký số PKI (đã tư vấn khách: file gửi
   cơ quan thì ký thêm bằng USB token của công ty).
 - **Lọc + xuất hàng loạt:** web Phiếu ghi nhận lọc Từ ngày – Đến ngày; nút "Xuất PDF (.zip)" →
