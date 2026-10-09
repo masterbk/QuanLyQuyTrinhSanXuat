@@ -62,6 +62,22 @@
   vào chat hay repo. Người dùng cũng **tự deploy thủ công** đôi khi, và **đôi khi xử lý đơn thẳng trên cổng
   HanoiCheck** → trạng thái đơn nội bộ lệch là BÌNH THƯỜNG.
 
+### Chuyển máy chủ
+- **Chép sang là chạy tiếp:** CSDL (backup/restore), `appsettings.json` (chuỗi kết nối, `Jwt:Key`, cấu hình
+  HanoiCheck), file Firebase, `wwwroot\uploads`, và **khoá ký phiếu** - cả 2 file trong
+  `C:\ProgramData\HanoiCheckPlatform\KhoaKyPhieu\` (`khoa-ky-phieu.pem` + `khoa-ky-phieu.pem.da-ky-bu`; thiếu file
+  dấu thì máy mới ký bù lại phiếu chưa có chữ ký). Cho app pool quyền đọc. Chép bằng USB/SSH, không qua email/chat.
+- **Chép khoá ký phiếu TRƯỚC khi chạy app lần đầu** - không thì app tự sinh khoá mới, mọi phiếu cũ báo đỏ (chữa:
+  chép đè khoá cũ, khởi động lại; phiếu nào ký bằng khoá mới trong lúc đó phải ký lại).
+- **KHÔNG chép được:** khoá Data Protection (`C:\ProgramData\HanoiCheckPlatform\DataProtectionKeys`) mã hoá DPAPI
+  theo máy (`ProtectKeysWithDpapi(protectToLocalMachine: true)`). Trên máy mới phải **nhập lại**:
+  1. Client secret + 2. HMAC secret kết nối HanoiCheck của từng cơ sở (`TenantHnCCredential`) - thiếu thì mọi đồng
+     bộ/kéo đơn/đẩy trạng thái HanoiCheck lỗi.
+  3. **CCCD của từng nhân sự** (`Staff.CccdEncrypted`) - thiếu thì ô CCCD trống, đồng bộ nhân sự gửi CCCD rỗng.
+  Ngoài ra mọi người phải đăng nhập lại web (cookie cũng dùng khoá này). Mật khẩu tài khoản không ảnh hưởng.
+- **Muốn khỏi nhập lại (chưa làm, ~nửa ngày):** trên máy cũ giải mã cả 3 loại rồi mã hoá lại bằng khoá Data
+  Protection bảo vệ bằng chứng chỉ `.pfx` (`ProtectKeysWithCertificate`) → chỉ cần chép thư mục khoá + `.pfx`.
+
 ## 5. Lệnh hay dùng
 ```bash
 # Test .NET
