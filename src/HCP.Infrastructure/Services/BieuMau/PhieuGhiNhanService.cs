@@ -4,6 +4,7 @@ using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
 
@@ -13,7 +14,13 @@ namespace HCP.Infrastructure.Services.BieuMau;
 public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
 {
     private readonly AppDbContext _db;
-    public PhieuGhiNhanService(AppDbContext db) => _db = db;
+    private readonly IKyPhieuMayChu? _kyMayChu;
+
+    public PhieuGhiNhanService(AppDbContext db, IKyPhieuMayChu? kyMayChu = null)
+    {
+        _db = db;
+        _kyMayChu = kyMayChu;
+    }
 
     public async Task<IReadOnlyList<BieuMauEntity>> LayBieuMauChoNhapAsync(IEnumerable<string> vaiTro, string? maNhanSu,
                                                                            CancellationToken ct = default)
@@ -201,9 +208,9 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
 
     /// <summary>
     /// Chốt chữ ký khi Hoàn thành: người ký, giờ ký, ảnh chữ ký, mã tra cứu QR và mã băm nội dung lúc ký
-    /// (phải gọi SAU khi đã gán dòng cuối cùng cho phiếu).
+    /// + chữ ký số của máy chủ (phải gọi SAU khi đã gán dòng cuối cùng cho phiếu).
     /// </summary>
-    private static void GhiNhanKy(PhieuGhiNhan p, string? chuKyAnh, string? tenNguoiKy, string? nguoiKyUserId)
+    private void GhiNhanKy(PhieuGhiNhan p, string? chuKyAnh, string? tenNguoiKy, string? nguoiKyUserId)
     {
         p.ChuKyAnh = string.IsNullOrWhiteSpace(chuKyAnh) ? null : chuKyAnh.Trim();
         p.TenNguoiKy = tenNguoiKy;
@@ -211,11 +218,35 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         p.KyLucUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
         p.MaTraCuu ??= Guid.NewGuid().ToString("N");
         p.MaBamNoiDung = TinhMaBam(p);
+        p.ChuKyMayChu = _kyMayChu?.Ky(p.MaTraCuu, p.MaBamNoiDung);
     }
 
     private static void XoaKy(PhieuGhiNhan p)
     {
-        p.ChuKyAnh = null; p.TenNguoiKy = null; p.NguoiKyUserId = null; p.KyLucUtc = null; p.MaBamNoiDung = null;
+        p.ChuKyAnh = null; p.TenNguoiKy = null; p.NguoiKyUserId = null; p.KyLucUtc = null; p.MaBamNoiDung = null;
+        p.ChuKyMayChu = null;
+    }
+
+    /// <summary>
+    /// Ký bù chữ ký số máy chủ cho các phiếu đã ký TRƯỚC khi có chức năng này (mọi cơ sở). Chỉ chạy MỘT LẦN, lúc máy
+    /// chủ chưa có dấu đã ký bù (<see cref="IKyPhieuMayChu.CanKyBu"/>) - nếu chạy lại về sau thì phiếu bị sửa bằng SQL và
+    /// xoá chữ ký sẽ được "ký hợp thức hoá". Bỏ qua phiếu có mã băm không còn khớp dữ liệu. Trả số phiếu đã ký bù.
+    /// </summary>
+    public static async Task<int> KyBuPhieuCuAsync(AppDbContext db, IKyPhieuMayChu ky, CancellationToken ct = default)
+    {
+        // Đọc không theo dõi + UPDATE thẳng theo Id: chạy lúc khởi động, không có tenant hiện hành nên SaveChanges của
+        // Finbuckle sẽ chặn ghi bản ghi của cơ sở khác.
+        var ds = await db.PhieuGhiNhans.IgnoreQueryFilters().AsNoTracking().Include(p => p.Dong)
+            .Where(p => p.MaBamNoiDung != null && p.MaTraCuu != null && p.ChuKyMayChu == null)
+            .ToListAsync(ct);
+        var dem = 0;
+        foreach (var p in ds.Where(p => p.MaBamNoiDung == TinhMaBam(p)))
+        {
+            var chuKy = ky.Ky(p.MaTraCuu!, p.MaBamNoiDung!);
+            dem += await db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE PhieuGhiNhan SET ChuKyMayChu = {chuKy} WHERE Id = {p.Id} AND ChuKyMayChu IS NULL", ct);
+        }
+        return dem;
     }
 
     /// <summary>

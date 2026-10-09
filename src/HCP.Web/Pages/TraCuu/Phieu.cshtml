@@ -14,22 +14,39 @@
 
 <partial name="_CoSoTraCuu" model="p.CoSo" />
 
-@if (p.NoiDungKhop)
-{
-    <div class="alert alert-success">
-        <strong>✓ Nội dung khớp với bản đã ký.</strong>
-        Dữ liệu phiếu không bị thay đổi kể từ lúc ký.
-    </div>
-}
-else if (p.MaBam is null)
+@if (p.MaBam is null)
 {
     <div class="alert alert-warning">Phiếu này chưa được ký (đang nhập dở hoặc lập trước khi có chức năng ký).</div>
 }
-else
+else if (!p.NoiDungKhop)
 {
     <div class="alert alert-danger">
-        <strong>⚠ Nội dung KHÔNG khớp với bản đã ký.</strong>
-        Dữ liệu phiếu đã bị thay đổi sau khi ký - đề nghị đối chiếu với cơ sở.
+        <strong>⚠ Dữ liệu trên hệ thống đã bị thay đổi sau khi ký.</strong>
+        Nội dung bên dưới không còn đúng như lúc ký (sai mã xác thực hoặc chữ ký số của hệ thống) - đề nghị đối chiếu với cơ sở.
+    </div>
+}
+else if (p.PdfKhop == false)
+{
+    <div class="alert alert-danger">
+        <strong>⚠ Bản PDF bạn đang quét KHÔNG phải bản đang lưu trên hệ thống.</strong>
+        Phiếu đã được sửa và ký lại sau khi in bản PDF này, hoặc bản PDF không do hệ thống tạo ra.
+        Bản đúng là nội dung bên dưới.
+    </div>
+}
+else if (p.PdfKhop == true)
+{
+    <div class="alert alert-success">
+        <strong>✓ Bản PDF này đúng là bản đã ký, dữ liệu trên hệ thống chưa bị thay đổi.</strong>
+        Hãy so số liệu trên PDF/giấy với nội dung bên dưới - nếu khác nhau thì chữ trên bản PDF/giấy đã bị sửa.
+    </div>
+}
+else
+{
+    @* QR của PDF in trước khi QR mang mã băm: không tự so được, người kiểm tra so mã xác thực bằng mắt. *@
+    <div class="alert alert-success">
+        <strong>✓ Dữ liệu trên hệ thống chưa bị thay đổi kể từ lúc ký.</strong>
+        Nội dung bên dưới là bản gốc. Hãy so với bản PDF/giấy đang có: mã xác thực in trên PDF phải trùng
+        12 ký tự in đậm của mã xác thực bên dưới, và số liệu phải giống nhau.
     </div>
 }
 
@@ -66,7 +83,11 @@ else
             {
                 <img src="@p.ChuKyAnh" alt="Chữ ký" style="max-height:90px;max-width:100%;border-bottom:1px solid #ccc" class="mt-2" />
             }
-            <div class="nhan mt-2" style="word-break:break-all">Mã xác thực: @p.MaBam</div>
+            <div class="nhan mt-2" style="word-break:break-all">Mã xác thực: @if (p.MaBam is { Length: > 12 } mb) {<strong>@mb[..12]</strong>@mb[12..]} else {@p.MaBam}</div>
+            @if (p.ChuKyMayHopLe == true)
+            {
+                <div class="nhan">Chữ ký số của hệ thống: hợp lệ</div>
+            }
         </div>
     </div>
 }

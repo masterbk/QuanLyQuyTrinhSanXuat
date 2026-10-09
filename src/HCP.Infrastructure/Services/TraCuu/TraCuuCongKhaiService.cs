@@ -5,6 +5,7 @@ using HCP.Domain.Entities.Infrastructure;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.TraCuu;
@@ -57,17 +58,22 @@ public record TraCuuGiaTri(string Nhan, string GiaTri, bool LaAnh = false);
 public record TraCuuDongPhieu(string? TieuDe, IReadOnlyList<TraCuuGiaTri> GiaTri);
 
 /// <summary>
-/// Phiếu ghi nhận biểu mẫu trên trang tra cứu công khai (QR in trên PDF). <paramref name="NoiDungKhop"/> = mã băm tính
-/// lại từ dữ liệu hiện tại trùng mã băm lúc ký (false = dữ liệu đã bị thay đổi sau khi ký).
+/// Phiếu ghi nhận biểu mẫu trên trang tra cứu công khai (QR in trên PDF).
+/// <paramref name="NoiDungKhop"/> = dữ liệu trên hệ thống còn nguyên như lúc ký: mã băm tính lại trùng mã băm lúc ký
+/// VÀ chữ ký số máy chủ hợp lệ (false = dữ liệu bị thay đổi sau khi ký). <paramref name="ChuKyMayHopLe"/>: kết quả
+/// xác minh chữ ký số máy chủ (null = không xác minh, vd chưa cấu hình khoá). <paramref name="PdfKhop"/>: mã băm in
+/// trong QR (bản PDF đang quét) có trùng mã băm trên hệ thống không (null = QR không mang mã băm - PDF in trước đây).
 /// </summary>
 public record TraCuuPhieu(TraCuuCoSo CoSo, string MaHieu, string TenMau, DateOnly Ngay, bool DaHoanThanh,
     string? TenNguoiLap, string? TenNguoiKy, DateTime? KyLucUtc, string? ChuKyAnh, string? MaBam, bool NoiDungKhop,
-    IReadOnlyList<TraCuuGiaTri> DauPhieu, IReadOnlyList<TraCuuDongPhieu> Dong, string? GhiChu);
+    IReadOnlyList<TraCuuGiaTri> DauPhieu, IReadOnlyList<TraCuuDongPhieu> Dong, string? GhiChu,
+    bool? ChuKyMayHopLe = null, bool? PdfKhop = null);
 
 public interface ITraCuuCongKhaiService
 {
-    /// <summary>Phiếu ghi nhận biểu mẫu theo mã tra cứu (QR trên PDF). Null nếu không có.</summary>
-    Task<TraCuuPhieu?> TraCuuPhieuAsync(string maTraCuu, CancellationToken ct = default);
+    /// <summary>Phiếu ghi nhận biểu mẫu theo mã tra cứu (QR trên PDF). <paramref name="maBamQr"/>: mã băm mang trong QR
+    /// của bản PDF đang quét (tham số h). Null nếu không có phiếu.</summary>
+    Task<TraCuuPhieu?> TraCuuPhieuAsync(string maTraCuu, string? maBamQr = null, CancellationToken ct = default);
 
     Task<QrTraCuu?> LayQrDonHangAsync(int id, CancellationToken ct = default);
 
@@ -86,11 +92,14 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
 {
     private readonly AppDbContext _db;
     private readonly IMultiTenantStore<Tenant>? _tenantStore;
+    private readonly IKyPhieuMayChu? _kyMayChu;
 
-    public TraCuuCongKhaiService(AppDbContext db, IMultiTenantStore<Tenant>? tenantStore = null)
+    public TraCuuCongKhaiService(AppDbContext db, IMultiTenantStore<Tenant>? tenantStore = null,
+                                 IKyPhieuMayChu? kyMayChu = null)
     {
         _db = db;
         _tenantStore = tenantStore;
+        _kyMayChu = kyMayChu;
     }
 
     public async Task<QrTraCuu?> LayQrDonHangAsync(int id, CancellationToken ct = default)
@@ -281,7 +290,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             lo.NgayNhap, lo.NgaySanXuat, lo.HanSuDung, anh, khau);
     }
 
-    public async Task<TraCuuPhieu?> TraCuuPhieuAsync(string maTraCuu, CancellationToken ct = default)
+    public async Task<TraCuuPhieu?> TraCuuPhieuAsync(string maTraCuu, string? maBamQr = null, CancellationToken ct = default)
     {
         if (!LaMaHopLe(maTraCuu)) return null;
         var p = await _db.PhieuGhiNhans.IgnoreQueryFilters().AsNoTracking().Include(x => x.Dong)
@@ -335,10 +344,17 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             return new TraCuuDongPhieu(tieuDe, o);
         }).ToList();
 
-        var khop = p.MaBamNoiDung is not null && p.MaBamNoiDung == HCP.Infrastructure.Services.BieuMau.PhieuGhiNhanService.TinhMaBam(p);
+        var bamKhop = p.MaBamNoiDung is not null && p.MaBamNoiDung == HCP.Infrastructure.Services.BieuMau.PhieuGhiNhanService.TinhMaBam(p);
+        // Thiếu chữ ký máy chủ cũng tính là KHÔNG hợp lệ: mọi phiếu đã ký đều được ký (phiếu cũ ký bù một lần lúc sinh
+        // khoá), nên phiếu mất chữ ký = có người xoá đi để hợp thức hoá dữ liệu đã sửa.
+        bool? kyMayHopLe = _kyMayChu is null || p.MaBamNoiDung is null ? null
+            : _kyMayChu.XacMinh(p.MaTraCuu!, p.MaBamNoiDung, p.ChuKyMayChu);
+        bool? pdfKhop = string.IsNullOrWhiteSpace(maBamQr) || p.MaBamNoiDung is null ? null
+            : string.Equals(maBamQr.Trim(), p.MaBamNoiDung, StringComparison.OrdinalIgnoreCase);
         return new TraCuuPhieu(await CoSoAsync(t), mau.MaHieu, mau.Ten, p.Ngay, p.TrangThai != TrangThaiPhieu.Nhap,
-            p.TenNguoiLap, p.TenNguoiKy, p.KyLucUtc, p.ChuKyAnh, p.MaBamNoiDung, khop,
-            truongDau.Select(tr => O(tr, dau)).Where(x => x is not null).Select(x => x!).ToList(), dong, p.GhiChu);
+            p.TenNguoiLap, p.TenNguoiKy, p.KyLucUtc, p.ChuKyAnh, p.MaBamNoiDung, bamKhop && kyMayHopLe != false,
+            truongDau.Select(tr => O(tr, dau)).Where(x => x is not null).Select(x => x!).ToList(), dong, p.GhiChu,
+            kyMayHopLe, pdfKhop);
     }
 
     private static Dictionary<string, string?> Json(string? json)

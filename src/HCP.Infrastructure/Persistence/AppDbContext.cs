@@ -706,6 +706,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         phieu.Property(p => p.TenNguoiKy).HasMaxLength(255);
         phieu.Property(p => p.NguoiKyUserId).HasMaxLength(450);
         phieu.Property(p => p.MaBamNoiDung).HasMaxLength(64);
+        phieu.Property(p => p.ChuKyMayChu).HasMaxLength(100);
         phieu.Property(p => p.MaTraCuu).HasMaxLength(32);
         phieu.HasIndex(p => p.MaTraCuu);
         phieu.Property(p => p.NguoiThamTra).HasMaxLength(100);

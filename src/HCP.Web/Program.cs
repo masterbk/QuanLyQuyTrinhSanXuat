@@ -194,6 +194,14 @@ builder.Services.AddScoped<IKiemTraApiHnCService, KiemTraApiHnCService>();
 builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IBieuMauService, BieuMauService>();
 builder.Services.AddScoped<IPhieuGhiNhanService, PhieuGhiNhanService>();
+// Chữ ký số máy chủ trên phiếu đã ký: khoá bí mật là file PEM NGOÀI CSDL và ngoài thư mục deploy (mặc định cạnh
+// DataProtectionKeys trong ProgramData). Chưa có thì tự sinh. CẦN SAO LƯU file này - mất là mọi phiếu báo sai chữ ký.
+var khoaKyPhieu = builder.Configuration["KyPhieu:KhoaPath"];
+if (string.IsNullOrWhiteSpace(khoaKyPhieu))
+    khoaKyPhieu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "HanoiCheckPlatform", "KhoaKyPhieu", "khoa-ky-phieu.pem");
+builder.Services.AddSingleton<IKyPhieuMayChu>(
+    KyPhieuMayChu.TaiHoacTao(khoaKyPhieu));
 builder.Services.AddScoped<IPhieuPdfService, PhieuPdfService>();
 builder.Services.AddScoped<IDonHangBanService, DonHangBanService>();
 builder.Services.AddScoped<IDonHangHnCService, DonHangHnCService>();
@@ -383,6 +391,17 @@ using (var scope = app.Services.CreateScope())
 }
 
 await DbSeeder.SeedAsync(app.Services);
+
+// Lần đầu chạy bản có chữ ký số máy chủ: ký bù MỘT LẦN các phiếu đã ký trước đó, xong mới ghi dấu (lỗi giữa chừng
+// thì lần khởi động sau ký bù tiếp).
+if (app.Services.GetRequiredService<IKyPhieuMayChu>() is { CanKyBu: true } kyPhieu)
+{
+    using var scope = app.Services.CreateScope();
+    var soPhieu = await PhieuGhiNhanService.KyBuPhieuCuAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), kyPhieu);
+    kyPhieu.DanhDauDaKyBu();
+    app.Logger.LogWarning("Đã ký bù {SoPhieu} phiếu cũ bằng khoá ký phiếu {Path}. HÃY SAO LƯU file khoá này.",
+        soPhieu, khoaKyPhieu);
+}
 
 // Job nền quét hàng đợi đồng bộ mỗi phút. Chạy tự động, không cần thao tác thủ công.
 // Dùng IRecurringJobManager (theo DI) thay cho API tĩnh RecurringJob - API tĩnh cần

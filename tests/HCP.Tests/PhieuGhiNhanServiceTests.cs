@@ -2,6 +2,7 @@ using System.Text.Json;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Security;
 using HCP.Infrastructure.Services.BieuMau;
 using Microsoft.EntityFrameworkCore;
 
@@ -189,6 +190,8 @@ public class PhieuGhiNhanServiceTests
     [Fact]
     public async Task Hoan_Thanh_Ghi_Chu_Ky_Ma_Bam_Va_Tra_Cuu_Phat_Hien_Sua_Sau_Khi_Ky()
     {
+        var ky = new KyPhieuMayChu(System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256));
+        HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService TraCuu(AppDbContext db) => new(db, null, ky);
         await NapMauAsync();
         int id;
         using (var db = MoDb())
@@ -206,7 +209,7 @@ public class PhieuGhiNhanServiceTests
         // Hoàn thành kèm chữ ký.
         using (var db = MoDb())
         {
-            var kq = await new PhieuGhiNhanService(db).CapNhatPhieuAsync(new PhieuGhiNhan
+            var kq = await new PhieuGhiNhanService(db, ky).CapNhatPhieuAsync(new PhieuGhiNhan
             {
                 Id = id, GiaTriDauJson = Json(("khu_vuc", "Phòng đóng gói")), ChuKyAnh = "/uploads/coso-a/ky.png",
                 TenNguoiKy = "Nguyễn Thị Nghĩa", NguoiKyUserId = "u-nghia",
@@ -215,7 +218,7 @@ public class PhieuGhiNhanServiceTests
             Assert.True(kq.ThanhCong, kq.ThongBao);
         }
 
-        string ma;
+        string ma, bam;
         using (var db = MoDb())
         {
             var p = await db.PhieuGhiNhans.Include(x => x.Dong).FirstAsync(x => x.Id == id);
@@ -224,15 +227,21 @@ public class PhieuGhiNhanServiceTests
             Assert.Equal("/uploads/coso-a/ky.png", p.ChuKyAnh);
             Assert.Matches("^[0-9a-f]{32}$", p.MaTraCuu!);
             Assert.Equal(PhieuGhiNhanService.TinhMaBam(p), p.MaBamNoiDung);   // đọc lại từ CSDL vẫn khớp
+            Assert.True(ky.XacMinh(p.MaTraCuu!, p.MaBamNoiDung!, p.ChuKyMayChu));   // có chữ ký số máy chủ
             ma = p.MaTraCuu!;
+            bam = p.MaBamNoiDung!;
         }
 
         // Trang tra cứu công khai (quét QR): nội dung khớp, có người ký + giá trị đã đổi ra chữ.
         using (var db = MoDb())
         {
-            var tc = await new HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService(db).TraCuuPhieuAsync(ma);
+            var tc = await TraCuu(db).TraCuuPhieuAsync(ma);
             Assert.NotNull(tc);
             Assert.True(tc!.NoiDungKhop);
+            Assert.True(tc.ChuKyMayHopLe);
+            Assert.Null(tc.PdfKhop);                                                   // QR cũ không mang mã băm
+            Assert.True((await TraCuu(db).TraCuuPhieuAsync(ma, bam.ToUpperInvariant()))!.PdfKhop);
+            Assert.False((await TraCuu(db).TraCuuPhieuAsync(ma, new string('0', 64)))!.PdfKhop);   // PDF bản khác
             Assert.True(tc.DaHoanThanh);
             Assert.Equal("Nguyễn Thị Nghĩa", tc.TenNguoiKy);
             Assert.Contains(tc.DauPhieu, g => g.GiaTri == "Phòng đóng gói");
@@ -247,7 +256,33 @@ public class PhieuGhiNhanServiceTests
             await db.SaveChangesAsync();
         }
         using (var db = MoDb())
-            Assert.False((await new HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService(db).TraCuuPhieuAsync(ma))!.NoiDungKhop);
+            Assert.False((await TraCuu(db).TraCuuPhieuAsync(ma))!.NoiDungKhop);
+
+        // Sửa xong còn tính lại cả mã băm cho khớp -> vẫn bị lộ vì không có khoá để ký lại.
+        using (var db = MoDb())
+        {
+            var p = await db.PhieuGhiNhans.Include(x => x.Dong).FirstAsync(x => x.Id == id);
+            p.MaBamNoiDung = PhieuGhiNhanService.TinhMaBam(p);
+            await db.SaveChangesAsync();
+            bam = p.MaBamNoiDung;
+        }
+        using (var db = MoDb())
+        {
+            var tc = (await TraCuu(db).TraCuuPhieuAsync(ma))!;
+            Assert.False(tc.NoiDungKhop);
+            Assert.False(tc.ChuKyMayHopLe);
+            // Không có khoá (dịch vụ tra cứu cũ) thì mã băm tự tính lại sẽ lọt - đúng lý do cần chữ ký máy chủ.
+            Assert.True((await new HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService(db).TraCuuPhieuAsync(ma))!.NoiDungKhop);
+        }
+
+        // Xoá luôn chữ ký máy chủ để giả làm phiếu cũ -> vẫn KHÔNG hợp lệ.
+        using (var db = MoDb())
+        {
+            (await db.PhieuGhiNhans.FirstAsync(x => x.Id == id)).ChuKyMayChu = null;
+            await db.SaveChangesAsync();
+        }
+        using (var db = MoDb())
+            Assert.False((await TraCuu(db).TraCuuPhieuAsync(ma))!.NoiDungKhop);
 
         // Mã sai định dạng / không tồn tại -> null.
         using (var db = MoDb())
@@ -491,4 +526,36 @@ public class PhieuGhiNhanServiceTests
 
         using (var db = MoDb()) Assert.Equal(2, await db.PhieuGhiNhans.CountAsync());
     }
+
+    [Fact]
+    public void Chu_Ky_May_Chu_Gan_Voi_Ma_Tra_Cuu_Va_Khoa_Luu_File_Doc_Lai_Duoc()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "hcp-test-" + Guid.NewGuid().ToString("N"), "khoa.pem");
+        try
+        {
+            var ky = KyPhieuMayChu.TaiHoacTao(file);
+            Assert.True(ky.CanKyBu);
+            var bam = new string('a', 64);
+            var chuKy = ky.Ky("ma-1", bam);
+
+            var docLai = KyPhieuMayChu.TaiHoacTao(file);                    // khởi động lại: đọc đúng khoá cũ
+            Assert.True(docLai.CanKyBu);                                      // chưa ghi dấu -> vẫn phải ký bù
+            docLai.DanhDauDaKyBu();
+            Assert.False(KyPhieuMayChu.TaiHoacTao(file).CanKyBu);
+            Assert.True(docLai.XacMinh("ma-1", bam, chuKy));
+            Assert.False(docLai.XacMinh("ma-2", bam, chuKy));               // chép chữ ký sang phiếu khác
+            Assert.False(docLai.XacMinh("ma-1", new string('b', 64), chuKy));
+            Assert.False(docLai.XacMinh("ma-1", bam, null));
+            Assert.False(docLai.XacMinh("ma-1", bam, "khong-phai-base64!"));
+
+            var khoaKhac = new KyPhieuMayChu(System.Security.Cryptography.ECDsa.Create(
+                System.Security.Cryptography.ECCurve.NamedCurves.nistP256));
+            Assert.False(khoaKhac.XacMinh("ma-1", bam, chuKy));             // khoá khác không xác minh được
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(file)!, recursive: true);
+        }
+    }
 }
+

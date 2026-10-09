@@ -45,6 +45,9 @@ public class PhieuGhiNhan : TenantEntity
     /// <summary>SHA-256 (hex) nội dung phiếu lúc ký - đối chiếu khi quét QR để phát hiện sửa sau khi ký.</summary>
     public string? MaBamNoiDung { get; set; }
 
+    /// <summary>Chữ ký số của máy chủ (base64url) trên (MaTraCuu, MaBamNoiDung) - khoá nằm ngoài CSDL, xem KyPhieuMayChu.</summary>
+    public string? ChuKyMayChu { get; set; }
+
     /// <summary>Mã tra cứu công khai (QR trên PDF) - chuỗi ngẫu nhiên 32 ký tự, sinh khi ký.</summary>
     public string? MaTraCuu { get; set; }
 

@@ -547,7 +547,8 @@ public sealed class PhieuPdfService : IPhieuPdfService
         var chuKy = _docAnh?.Doc(phieu.ChuKyAnh);
         var qr = string.IsNullOrEmpty(phieu.MaTraCuu) || string.IsNullOrEmpty(_gocWeb) ? null
             : new QRCoder.PngByteQRCode(new QRCoder.QRCodeGenerator().CreateQrCode(
-                  $"{_gocWeb}/tra-cuu/phieu/{phieu.MaTraCuu}", QRCoder.QRCodeGenerator.ECCLevel.M)).GetGraphic(10);
+                  // h = mã băm lúc ký: trang tra cứu tự so với hệ thống để biết bản PDF đang quét có phải bản hiện hành.
+                  $"{_gocWeb}/tra-cuu/phieu/{phieu.MaTraCuu}?h={phieu.MaBamNoiDung}", QRCoder.QRCodeGenerator.ECCLevel.M)).GetGraphic(10);
         c.Row(r =>
         {
             r.RelativeItem().Column(col =>
