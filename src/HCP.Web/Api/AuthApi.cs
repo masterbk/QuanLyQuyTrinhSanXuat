@@ -18,18 +18,19 @@ public static class AuthApi
         var nhom = app.MapGroup("/api/v1/auth").WithTags("Xác thực");
 
         nhom.MapPost("/dang-nhap", async (DangNhapRequest req, IMobileTokenService tokens, AppDbContext db,
-                                          CancellationToken ct) =>
+                                          IMultiTenantStore<Tenant> coSo, CancellationToken ct) =>
         {
             var kq = await tokens.DangNhapAsync(req.Email, req.MatKhau, req.ThietBi, ct);
             return kq.ThanhCong
-                ? Results.Ok(await MapAsync(kq.Phien!, db, ct))
+                ? Results.Ok(await MapAsync(kq.Phien!, db, coSo, ct))
                 : Results.Json(new LoiDto(kq.ThongBao!), statusCode: StatusCodes.Status401Unauthorized);
         });
 
         // Tự đổi mật khẩu: thành công thì mọi phiên app cũ bị thu hồi và trả PHIÊN MỚI cho thiết bị đang dùng
         // (giữ đăng nhập ở máy này, máy khác phải đăng nhập lại bằng mật khẩu mới).
         nhom.MapPost("/doi-mat-khau", async (DoiMatKhauRequest req, ClaimsPrincipal user, IDoiMatKhauService svc,
-                                             IMobileTokenService tokens, AppDbContext db, CancellationToken ct) =>
+                                             IMobileTokenService tokens, AppDbContext db,
+                                             IMultiTenantStore<Tenant> coSo, CancellationToken ct) =>
         {
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
             var kq = await svc.DoiMatKhauAsync(userId, req.MatKhauHienTai, req.MatKhauMoi, ct);
@@ -38,16 +39,16 @@ public static class AuthApi
             var tenDangNhap = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.UserName).FirstAsync(ct);
             var phien = await tokens.DangNhapAsync(tenDangNhap!, req.MatKhauMoi, req.ThietBi, ct);
             return phien.ThanhCong
-                ? Results.Ok(await MapAsync(phien.Phien!, db, ct))
+                ? Results.Ok(await MapAsync(phien.Phien!, db, coSo, ct))
                 : Results.Ok(new KetQuaDto(true, kq.ThongBao + " Vui lòng đăng nhập lại."));
         }).RequireAuthorization(ApiAuth.ChinhSach);
 
         nhom.MapPost("/lam-moi", async (LamMoiRequest req, IMobileTokenService tokens, AppDbContext db,
-                                        CancellationToken ct) =>
+                                        IMultiTenantStore<Tenant> coSo, CancellationToken ct) =>
         {
             var kq = await tokens.LamMoiAsync(req.RefreshToken, req.ThietBi, ct);
             return kq.ThanhCong
-                ? Results.Ok(await MapAsync(kq.Phien!, db, ct))
+                ? Results.Ok(await MapAsync(kq.Phien!, db, coSo, ct))
                 : Results.Json(new LoiDto(kq.ThongBao!), statusCode: StatusCodes.Status401Unauthorized);
         });
 
@@ -68,7 +69,8 @@ public static class AuthApi
                 user.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList(),
                 await HanoiCheckBatAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id, ct),
                 await LenhSanXuatApi.MaNhanSuTaiKhoanAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id,
-                    user.FindFirstValue(ClaimTypes.NameIdentifier), user.IsInRole(AppRoles.TenantAdmin), ct))))
+                    user.FindFirstValue(ClaimTypes.NameIdentifier), user.IsInRole(AppRoles.TenantAdmin), ct),
+                tenant.MultiTenantContext?.TenantInfo?.Name)))
             .RequireAuthorization(ApiAuth.ChinhSach);
 
         // Đăng ký/bỏ đăng ký token thiết bị (FCM) để nhận thông báo đẩy - gọi lúc đăng nhập/đăng xuất.
@@ -102,12 +104,15 @@ public static class AuthApi
         }).RequireAuthorization(ApiAuth.ChinhSach);
     }
 
-    private static async Task<PhienDto> MapAsync(PhienDangNhap p, AppDbContext db, CancellationToken ct) => new(
+    private static async Task<PhienDto> MapAsync(PhienDangNhap p, AppDbContext db, IMultiTenantStore<Tenant> coSo,
+                                                 CancellationToken ct) => new(
         p.AccessToken, p.AccessTokenHetHanUtc, p.RefreshToken, p.RefreshTokenHetHanUtc,
         new NguoiDungDto(p.NguoiDung.Id, p.NguoiDung.Email ?? "", p.NguoiDung.HoTen,
                          p.NguoiDung.TenantId, p.VaiTro, await HanoiCheckBatAsync(db, p.NguoiDung.TenantId, ct),
                          await LenhSanXuatApi.MaNhanSuTaiKhoanAsync(db, p.NguoiDung.TenantId, p.NguoiDung.Id,
-                                                                    p.VaiTro.Contains(AppRoles.TenantAdmin), ct)));
+                                                                    p.VaiTro.Contains(AppRoles.TenantAdmin), ct),
+                         string.IsNullOrWhiteSpace(p.NguoiDung.TenantId)
+                             ? null : (await coSo.TryGetAsync(p.NguoiDung.TenantId))?.Name));
 
     /// <summary>
     /// Công tắc tổng HanoiCheck (chưa có cấu hình kết nối = tắt). Đọc thẳng theo TenantId vì lúc đăng nhập request

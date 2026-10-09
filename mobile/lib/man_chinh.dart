@@ -104,8 +104,8 @@ class _ManChinhState extends ConsumerState<ManChinh> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(nd?.tenHienThi ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    if (nd?.maCoSo != null)
-                      Text('Cơ sở: ${nd!.maCoSo}', style: Theme.of(context).textTheme.bodySmall),
+                    if ((nd?.tenCoSo ?? nd?.maCoSo) != null)
+                      Text('Cơ sở: ${nd!.tenCoSo ?? nd.maCoSo}', style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),

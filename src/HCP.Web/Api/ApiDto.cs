@@ -12,8 +12,10 @@ public sealed record LamMoiRequest(string RefreshToken, string? ThietBi);
 public sealed record DangXuatRequest(string RefreshToken);
 
 /// <param name="HanoiCheckBat">Công tắc đồng bộ HanoiCheck của cơ sở: tắt thì app ẩn phần HanoiCheck.</param>
+/// <param name="TenCoSo">Tên cơ sở để app hiển thị (mã cơ sở chỉ dùng nội bộ).</param>
 public sealed record NguoiDungDto(string Id, string Email, string? HoTen, string? MaCoSo,
-                                  IReadOnlyList<string> VaiTro, bool HanoiCheckBat, string? MaNhanSu);
+                                  IReadOnlyList<string> VaiTro, bool HanoiCheckBat, string? MaNhanSu,
+                                  string? TenCoSo = null);
 
 public sealed record PhienDto(string AccessToken, DateTime AccessTokenHetHanUtc,
                               string RefreshToken, DateTime RefreshTokenHetHanUtc,

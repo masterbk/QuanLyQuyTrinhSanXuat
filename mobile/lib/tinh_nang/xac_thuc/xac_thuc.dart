@@ -12,6 +12,9 @@ class NguoiDung {
   final String email;
   final String? hoTen;
   final String? maCoSo;
+
+  /// Tên cơ sở để hiển thị (máy chủ bản cũ không trả thì dùng mã).
+  final String? tenCoSo;
   final List<String> vaiTro;
 
   /// Cơ sở có bật đồng bộ HanoiCheck không. Tắt thì app ẩn phần HanoiCheck (tạo lô đồng bộ, giới hạn ảnh...).
@@ -20,7 +23,7 @@ class NguoiDung {
   /// Mã nhân sự gắn với tài khoản nhân viên (null với quản trị cơ sở).
   final String? maNhanSu;
 
-  NguoiDung({required this.id, required this.email, this.hoTen, this.maCoSo,
+  NguoiDung({required this.id, required this.email, this.hoTen, this.maCoSo, this.tenCoSo,
              this.vaiTro = const [], this.hanoiCheckBat = true, this.maNhanSu});
 
   /// Nhân viên sản xuất chế biến có hồ sơ nhân sự thì mới quét mã lệnh để tham gia các khâu.
@@ -37,6 +40,7 @@ class NguoiDung {
         email: j['email'] as String? ?? '',
         hoTen: j['hoTen'] as String?,
         maCoSo: j['maCoSo'] as String?,
+        tenCoSo: j['tenCoSo'] as String?,
         vaiTro: (j['vaiTro'] as List?)?.map((e) => e.toString()).toList() ?? const [],
         // Máy chủ bản cũ chưa trả trường này: coi như bật để app giữ nguyên cách làm trước đây.
         hanoiCheckBat: j['hanoiCheckBat'] as bool? ?? true,
