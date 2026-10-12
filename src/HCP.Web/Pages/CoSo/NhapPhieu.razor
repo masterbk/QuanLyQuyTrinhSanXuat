@@ -17,6 +17,7 @@
 @inject IDanhMucService<Product> SanPhamService
 @inject IDanhMucService<SubSupplier> NccService
 @inject IDanhMucService<Facility> CoSoService
+@inject IDanhMucService<Warehouse> KhoService
 @inject ILuuTruAnhService LuuTruAnh
 @inject AppDbContext Db
 @inject ISnackbar Snackbar
@@ -274,7 +275,7 @@ else
 
     private string? _maNhanSu;          // nhân sự của tài khoản đăng nhập (tự điền ô "Chọn nhân sự")
     private string? _userId;
-    private Dictionary<string, string> _nhanSu = new(), _sanPham = new(), _nguyenLieu = new(), _ncc = new(), _coSo = new();
+    private Dictionary<string, string> _nhanSu = new(), _sanPham = new(), _nguyenLieu = new(), _ncc = new(), _coSo = new(), _kho = new();
 
     /// <summary>Đọc/hiển thị ngày theo dd/MM/yyyy bất kể ngôn ngữ trình duyệt/máy chủ.</summary>
     private static readonly System.Globalization.CultureInfo VN = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
@@ -299,6 +300,7 @@ else
             .GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
         _ncc = (await NccService.LayTatCaAsync()).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
         _coSo = (await CoSoService.LayTatCaAsync()).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
+        _kho = (await KhoService.LayTatCaAsync()).GroupBy(k => k.MaKho).ToDictionary(g => g.Key, g => g.First().TenKho);
 
         if (DateOnly.TryParse(Ngay, out var n)) _ngay = n.ToDateTime(TimeOnly.MinValue);
         _mauId = _dsMau.Any(m => m.Id == BieuMauId) ? BieuMauId!.Value : _dsMau.FirstOrDefault()?.Id ?? 0;
@@ -406,6 +408,7 @@ else
             case KieuTruongBieuMau.ChonNguyenLieu:
             case KieuTruongBieuMau.ChonNcc:
             case KieuTruongBieuMau.ChonCoSo:
+            case KieuTruongBieuMau.ChonKho:
             case KieuTruongBieuMau.LuaChon:
                 var ds = DanhSachChon(t);
                 @* Ô chọn có tìm kiếm: gõ tên hoặc mã, không cần dấu ("nghia" -> "Nghĩa"). *@
@@ -465,6 +468,7 @@ else
         KieuTruongBieuMau.ChonNguyenLieu => _nguyenLieu.Select(x => (x.Key, x.Value)).ToList(),
         KieuTruongBieuMau.ChonNcc => _ncc.Select(x => (x.Key, x.Value)).ToList(),
         KieuTruongBieuMau.ChonCoSo => _coSo.Select(x => (x.Key, x.Value)).ToList(),
+        KieuTruongBieuMau.ChonKho => _kho.Select(x => (x.Key, x.Value)).ToList(),
         _ => (t.TuyChonCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(x => (x, x)).ToList()
     };

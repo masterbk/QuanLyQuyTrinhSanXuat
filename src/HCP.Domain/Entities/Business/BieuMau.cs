@@ -46,6 +46,13 @@ public class BieuMau : TenantEntity
     /// </summary>
     public bool MotPhieuMoiNgay { get; set; } = true;
 
+    /// <summary>
+    /// true = khi HOÀN THÀNH phiếu thì tự tạo phiếu nhập kho nguyên liệu cho từng dòng (dùng cho mẫu "Tiếp nhận
+    /// nguyên liệu NCC"). Dòng phải có trường kiểu Chọn nguyên liệu + Số (số lượng); kho lấy từ trường Chọn kho ở
+    /// đầu phiếu; mã lô tự sinh; bỏ qua dòng có trường Đạt/Không đạt = "Không đạt".
+    /// </summary>
+    public bool DayVaoKho { get; set; }
+
     public int ThuTu { get; set; }
 
     public List<TruongBieuMau> Truong { get; set; } = new();

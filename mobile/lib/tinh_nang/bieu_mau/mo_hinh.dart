@@ -49,7 +49,7 @@ class BieuMau {
 class TruongBieuMau {
   final String ma;
   final String ten;
-  final String kieu; // Text | So | Gio | Ngay | DatKhongDat | ChonSanPham | ChonNguyenLieu | ChonNhanSu | ChonNcc | ChonCoSo | Anh | LuaChon
+  final String kieu; // Text | So | Gio | Ngay | DatKhongDat | ChonSanPham | ChonNguyenLieu | ChonNhanSu | ChonNcc | ChonCoSo | ChonKho | Anh | LuaChon
   final bool laDauPhieu; // true = trường đầu phiếu (nhập 1 lần cho cả phiếu)
   final bool batBuoc;
   final String? donVi;

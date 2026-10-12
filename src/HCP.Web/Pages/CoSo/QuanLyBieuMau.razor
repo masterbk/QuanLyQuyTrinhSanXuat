@@ -185,6 +185,18 @@ else
             <MudItem xs="6" sm="3" Class="d-flex align-center">
                 <MudCheckBox @bind-Value="_input.KichHoat" Label="Kích hoạt" Color="Color.Primary" />
             </MudItem>
+            @if (_input.BoCuc == BoCucBieuMau.NhieuDongTuDo)
+            {
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Value="_input.DayVaoKho" Color="Color.Primary"
+                                 Label="Đẩy vào kho khi hoàn thành (tiếp nhận nguyên liệu)" />
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" Style="margin-left:32px">
+                        Khi bật: mỗi dòng Đạt sẽ tạo một phiếu nhập kho. Cần có trường kiểu <b>Chọn nguyên liệu</b> và
+                        <b>Số</b> (số lượng) ở dòng, một trường <b>Chọn kho</b> ở đầu phiếu; mã lô tự sinh. Dòng có
+                        Đạt/Không đạt = "Không đạt" sẽ bỏ qua.
+                    </MudText>
+                </MudItem>
+            }
         </MudGrid>
 
         <div class="d-flex justify-space-between align-center mt-4 mb-1">
@@ -339,6 +351,7 @@ else
         KieuTruongBieuMau.ChonNhanSu => "Chọn nhân sự",
         KieuTruongBieuMau.ChonNcc => "Chọn NCC",
         KieuTruongBieuMau.ChonCoSo => "Chọn cơ sở",
+        KieuTruongBieuMau.ChonKho => "Chọn kho",
         KieuTruongBieuMau.Anh => "Ảnh",
         KieuTruongBieuMau.LuaChon => "Lựa chọn",
         _ => k.ToString()
@@ -373,7 +386,7 @@ else
         {
             Id = mau.Id, MaHieu = mau.MaHieu, Ten = mau.Ten, BoCuc = mau.BoCuc, TanSuat = mau.TanSuat,
             NhomQuyen = mau.NhomQuyen, GhiChuChan = mau.GhiChuChan, KichHoat = mau.KichHoat,
-            MotPhieuMoiNgay = mau.MotPhieuMoiNgay, ThuTu = mau.ThuTu,
+            MotPhieuMoiNgay = mau.MotPhieuMoiNgay, DayVaoKho = mau.DayVaoKho, ThuTu = mau.ThuTu,
             NgayBanHanh = mau.NgayBanHanh, LanBanHanh = mau.LanBanHanh,
             Truong = mau.Truong.OrderBy(t => t.ThuTu).Select(t => new TruongBieuMau
             {

@@ -5,6 +5,7 @@ using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Security;
+using HCP.Infrastructure.Services.Kho;
 using Microsoft.EntityFrameworkCore;
 using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
 
@@ -15,11 +16,13 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
 {
     private readonly AppDbContext _db;
     private readonly IKyPhieuMayChu? _kyMayChu;
+    private readonly IKhoNoiBoService? _kho;
 
-    public PhieuGhiNhanService(AppDbContext db, IKyPhieuMayChu? kyMayChu = null)
+    public PhieuGhiNhanService(AppDbContext db, IKyPhieuMayChu? kyMayChu = null, IKhoNoiBoService? kho = null)
     {
         _db = db;
         _kyMayChu = kyMayChu;
+        _kho = kho;
     }
 
     public async Task<IReadOnlyList<BieuMauEntity>> LayBieuMauChoNhapAsync(IEnumerable<string> vaiTro, string? maNhanSu,
@@ -148,7 +151,8 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         phieu.KetQuaThamTra = null;
         _db.PhieuGhiNhans.Add(phieu);
         await _db.SaveChangesAsync(ct);
-        return KetQuaThaoTac.Ok(ThongBaoLuu(mau.Ten, phieu.Ngay, hoanThanh));
+        var themKho = hoanThanh ? await DayNguyenLieuVaoKhoAsync(mau, phieu, ct) : "";
+        return KetQuaThaoTac.Ok(ThongBaoLuu(mau.Ten, phieu.Ngay, hoanThanh) + themKho);
     }
 
     public async Task<KetQuaThaoTac> CapNhatPhieuAsync(PhieuGhiNhan phieu, bool hoanThanh = true,
@@ -203,7 +207,8 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
                 e.State = EntityState.Detached;
             return KetQuaThaoTac.LoiXungDot("Phiếu vừa được người khác cập nhật - hãy tải lại phiếu rồi nhập tiếp.");
         }
-        return KetQuaThaoTac.Ok(ThongBaoLuu(mau.Ten, goc.Ngay, hoanThanh));
+        var themKho = hoanThanh ? await DayNguyenLieuVaoKhoAsync(mau, goc, ct) : "";
+        return KetQuaThaoTac.Ok(ThongBaoLuu(mau.Ten, goc.Ngay, hoanThanh) + themKho);
     }
 
     /// <summary>
@@ -223,7 +228,7 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
 
     private static void XoaKy(PhieuGhiNhan p)
     {
-        p.ChuKyAnh = null; p.TenNguoiKy = null; p.NguoiKyUserId = null; p.KyLucUtc = null; p.MaBamNoiDung = null;
+        p.ChuKyAnh = null; p.TenNguoiKy = null; p.NguoiKyUserId = null; p.KyLucUtc = null; p.MaBamNoiDung = null;
         p.ChuKyMayChu = null;
     }
 
@@ -291,6 +296,72 @@ public sealed class PhieuGhiNhanService : IPhieuGhiNhanService
         _db.BieuMaus.AsNoTracking().AsSplitQuery()
             .Include(b => b.Truong).Include(b => b.HangMuc)
             .FirstOrDefaultAsync(b => b.Id == bieuMauId, ct);
+
+    private static Dictionary<string, string?> DocGiaTri(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return JsonSerializer.Deserialize<Dictionary<string, string?>>(json) ?? new(); }
+        catch (JsonException) { return new(); }
+    }
+
+    /// <summary>
+    /// Mẫu bật "Đẩy vào kho": khi hoàn thành, mỗi dòng (Đạt) tạo một phiếu nhập kho nguyên liệu. Nhận diện trường
+    /// theo KIỂU: Chọn kho ở đầu phiếu, Chọn nguyên liệu + Số (số lượng) ở dòng, Chọn NCC, Ngày (ưu tiên khoá chứa
+    /// "hsd"/"han" là hạn dùng). Mã lô tự sinh. Bỏ qua dòng Đạt/Không đạt = "Không đạt". Nhập kho lỗi KHÔNG làm hỏng
+    /// việc hoàn thành phiếu - chỉ gắn chú thích vào thông báo.
+    /// </summary>
+    private async Task<string> DayNguyenLieuVaoKhoAsync(BieuMauEntity mau, PhieuGhiNhan phieu, CancellationToken ct)
+    {
+        if (!mau.DayVaoKho || _kho is null) return "";
+
+        var truongKho = mau.Truong.FirstOrDefault(t => t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.ChonKho);
+        var truongNL = mau.Truong.FirstOrDefault(t => !t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.ChonNguyenLieu);
+        var truongSL = mau.Truong.FirstOrDefault(t => !t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.So);
+        if (truongKho is null || truongNL is null || truongSL is null)
+            return " (Chưa nhập kho: mẫu cần trường Chọn kho ở đầu phiếu + Chọn nguyên liệu + Số ở dòng.)";
+
+        var truongNcc = mau.Truong.FirstOrDefault(t => !t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.ChonNcc);
+        var truongDanhGia = mau.Truong.FirstOrDefault(t => !t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.DatKhongDat);
+        var truongNgay = mau.Truong.Where(t => !t.LaDauPhieu && t.Kieu == KieuTruongBieuMau.Ngay).ToList();
+        var truongHsd = truongNgay.FirstOrDefault(t => t.Ma.Contains("hsd") || t.Ma.Contains("han"))
+                        ?? truongNgay.FirstOrDefault();
+
+        var maKho = DocGiaTri(phieu.GiaTriDauJson).GetValueOrDefault(truongKho.Ma);
+        if (string.IsNullOrWhiteSpace(maKho)) return " (Chưa nhập kho: phiếu chưa chọn kho.)";
+
+        int daNhap = 0, boQua = 0, loi = 0, stt = 0;
+        foreach (var d in phieu.Dong.OrderBy(x => x.ThuTu))
+        {
+            stt++;
+            var gt = DocGiaTri(d.GiaTriJson);
+            if (truongDanhGia is not null
+                && string.Equals(gt.GetValueOrDefault(truongDanhGia.Ma), "Không đạt", StringComparison.OrdinalIgnoreCase))
+            { boQua++; continue; }
+
+            var maNL = gt.GetValueOrDefault(truongNL.Ma);
+            var slRaw = gt.GetValueOrDefault(truongSL.Ma)?.Replace(',', '.');
+            if (string.IsNullOrWhiteSpace(maNL)
+                || !decimal.TryParse(slRaw, System.Globalization.NumberStyles.Any,
+                                     System.Globalization.CultureInfo.InvariantCulture, out var sl) || sl <= 0)
+            { loi++; continue; }
+
+            DateOnly? hsd = truongHsd is not null && DateOnly.TryParse(gt.GetValueOrDefault(truongHsd.Ma), out var h) ? h : null;
+            var ncc = truongNcc is null ? null : gt.GetValueOrDefault(truongNcc.Ma);
+
+            var kq = await _kho.NhapNguyenLieuAsync(new NhapKhoRequest
+            {
+                MaSanPham = maNL!, MaKho = maKho!, MaLo = $"TN-{GioVietNam.Nay:yyMMdd}-{phieu.Id}-{stt}",
+                SoLuong = sl, HanSuDung = hsd, MaNccDauVao = ncc,
+                GhiChu = $"Tiếp nhận NL - phiếu {mau.MaHieu} #{phieu.Id}"
+            }, ct);
+            if (kq.ThanhCong) daNhap++; else loi++;
+        }
+
+        var tb = $" Đã nhập kho {daNhap} dòng";
+        if (boQua > 0) tb += $", bỏ qua {boQua} (không đạt)";
+        if (loi > 0) tb += $", {loi} dòng lỗi/thiếu dữ liệu";
+        return tb + ".";
+    }
 
     private static string ThongBaoLuu(string tenMau, DateOnly ngay, bool hoanThanh) =>
         hoanThanh ? $"Đã hoàn thành phiếu \"{tenMau}\" ngày {ngay:dd/MM/yyyy}."

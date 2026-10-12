@@ -4,7 +4,9 @@ using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Security;
 using HCP.Infrastructure.Services.BieuMau;
+using HCP.Infrastructure.Services.Kho;
 using Microsoft.EntityFrameworkCore;
+using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau;
 
 namespace HCP.Tests;
 
@@ -555,6 +557,66 @@ public class PhieuGhiNhanServiceTests
         finally
         {
             Directory.Delete(Path.GetDirectoryName(file)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Hoan_Thanh_Phieu_Day_Nguyen_Lieu_Vao_Kho()
+    {
+        using (var db = MoDb())
+        {
+            db.Products.Add(new Product { MaSanPham = "BOT_MI", TenSanPham = "Bột mì",
+                                          LoaiSanPham = LoaiSanPham.NguyenLieu, DonViTinh = "kg" });
+            db.Warehouses.Add(new Warehouse { MaKho = "KHO01", TenKho = "Kho NL", DiaChi = "HN" });
+            await db.SaveChangesAsync();
+        }
+
+        int mauId;
+        using (var db = MoDb())
+        {
+            var mau = new BieuMauEntity
+            {
+                MaHieu = "BM-TN", Ten = "Tiếp nhận NL", BoCuc = BoCucBieuMau.NhieuDongTuDo, DayVaoKho = true,
+                Truong =
+                {
+                    new TruongBieuMau { Ma = "kho", Ten = "Kho", Kieu = KieuTruongBieuMau.ChonKho, LaDauPhieu = true },
+                    new TruongBieuMau { Ma = "nguyen_lieu", Ten = "Nguyên liệu", Kieu = KieuTruongBieuMau.ChonNguyenLieu },
+                    new TruongBieuMau { Ma = "so_luong", Ten = "Số lượng", Kieu = KieuTruongBieuMau.So },
+                    new TruongBieuMau { Ma = "danh_gia", Ten = "Cảm quan", Kieu = KieuTruongBieuMau.DatKhongDat },
+                }
+            };
+            db.BieuMaus.Add(mau);
+            await db.SaveChangesAsync();
+            mauId = mau.Id;
+        }
+
+        // Hoàn thành: dòng Đạt (5kg) nhập kho, dòng Không đạt bỏ qua.
+        using (var db = MoDb())
+        {
+            var svc = new PhieuGhiNhanService(db, null, new KhoNoiBoService(db));
+            var phieu = new PhieuGhiNhan
+            {
+                BieuMauId = mauId, Ngay = new DateOnly(2026, 10, 12),
+                GiaTriDauJson = "{\"kho\":\"KHO01\"}",
+                Dong =
+                {
+                    new DongGhiNhan { ThuTu = 0, GiaTriJson = "{\"nguyen_lieu\":\"BOT_MI\",\"so_luong\":\"5\",\"danh_gia\":\"Đạt\"}" },
+                    new DongGhiNhan { ThuTu = 1, GiaTriJson = "{\"nguyen_lieu\":\"BOT_MI\",\"so_luong\":\"3\",\"danh_gia\":\"Không đạt\"}" },
+                }
+            };
+            var kq = await svc.TaoPhieuAsync(phieu, hoanThanh: true);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+            Assert.Contains("nhập kho 1 dòng", kq.ThongBao);
+            Assert.Contains("bỏ qua 1", kq.ThongBao);
+        }
+
+        // Kho chỉ có 1 dòng nhập BOT_MI, số lượng 5 (dòng Không đạt không nhập).
+        using (var db = MoDb())
+        {
+            var gd = await db.KhoGiaoDichs.Where(g => g.MaSanPham == "BOT_MI").ToListAsync();
+            Assert.Single(gd);
+            Assert.Equal(5m, gd[0].SoLuong);
+            Assert.Equal("KHO01", gd[0].MaKho);
         }
     }
 }

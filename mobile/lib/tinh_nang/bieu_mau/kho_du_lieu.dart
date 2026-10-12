@@ -134,6 +134,7 @@ class KhoBieuMau {
   Future<List<MucChon>> coSo() => _dm('co-so', (j) => MucChon(j['maCoSo'] as String? ?? '', j['tenCoSo'] as String? ?? ''));
   Future<List<MucChon>> thanhPham() => _dm('thanh-pham-ban', (j) => MucChon(j['maSanPham'] as String? ?? '', j['tenSanPham'] as String? ?? ''));
   Future<List<MucChon>> nguyenLieu() => _dm('nguyen-lieu', (j) => MucChon(j['maSanPham'] as String? ?? '', j['tenSanPham'] as String? ?? ''));
+  Future<List<MucChon>> kho() => _dm('kho', (j) => MucChon(j['maKho'] as String? ?? '', j['tenKho'] as String? ?? ''));
   Future<List<MucChon>> ncc() => _dm('ncc', (j) => MucChon(j['ma'] as String? ?? '', j['ten'] as String? ?? ''));
 
   Future<List<MucChon>> _dm(String duongDan, MucChon Function(Map<String, dynamic>) doc) async =>
@@ -162,4 +163,5 @@ final nhanSuBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBie
 final coSoBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).coSo());
 final thanhPhamBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).thanhPham());
 final nguyenLieuBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).nguyenLieu());
+final khoBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).kho());
 final nccBmProvider = FutureProvider<List<MucChon>>((ref) => ref.watch(khoBieuMauProvider).ncc());

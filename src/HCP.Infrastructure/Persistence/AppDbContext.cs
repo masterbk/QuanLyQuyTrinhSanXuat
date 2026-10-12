@@ -655,6 +655,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         bieuMau.Property(b => b.LanBanHanh).HasMaxLength(20);
         // Mặc định true: bản ghi cũ (seed trước đây) hiểu là 1 phiếu/ngày.
         bieuMau.Property(b => b.MotPhieuMoiNgay).HasDefaultValue(true);
+        bieuMau.Property(b => b.DayVaoKho).HasDefaultValue(false);
         bieuMau.HasMany(b => b.Truong).WithOne(t => t.BieuMau!)
                .HasForeignKey(t => t.BieuMauId).OnDelete(DeleteBehavior.Cascade);
         bieuMau.HasMany(b => b.HangMuc).WithOne(h => h.BieuMau!)

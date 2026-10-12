@@ -64,6 +64,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
         var sanPham = (await _sanPham.LayTatCaAsync(ct)).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
         var ncc = (await _ncc.LayTatCaAsync(ct)).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
         var coSo = (await _coSo.LayTatCaAsync(ct)).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
+        var kho = (await _db.Warehouses.AsNoTracking().ToListAsync(ct)).GroupBy(k => k.MaKho).ToDictionary(g => g.Key, g => g.First().TenKho);
         var thongTinIn = await LayThongTinInAsync(ct);
 
         string Resolve(TruongBieuMau t, string? raw)
@@ -76,6 +77,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
                 KieuTruongBieuMau.ChonNguyenLieu => sanPham.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.ChonKho => kho.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(raw, out var d) ? d.ToString("dd/MM/yyyy") : raw,
                 KieuTruongBieuMau.Anh => "Có ảnh",
                 _ => raw
@@ -227,6 +229,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
         var sanPham = (await _sanPham.LayTatCaAsync(ct)).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
         var ncc = (await _ncc.LayTatCaAsync(ct)).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
         var coSo = (await _coSo.LayTatCaAsync(ct)).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
+        var kho = (await _db.Warehouses.AsNoTracking().ToListAsync(ct)).GroupBy(k => k.MaKho).ToDictionary(g => g.Key, g => g.First().TenKho);
         var thongTinIn = await LayThongTinInAsync(ct);
 
         string Resolve(TruongBieuMau t, string? raw)
@@ -239,6 +242,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
                 KieuTruongBieuMau.ChonNguyenLieu => sanPham.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.ChonKho => kho.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(raw, out var d) ? d.ToString("dd/MM/yyyy") : raw,
                 KieuTruongBieuMau.Anh => "Có ảnh",
                 _ => raw

@@ -37,5 +37,8 @@ public enum KieuTruongBieuMau
     LuaChon = 10,
 
     /// <summary>Chọn một nguyên liệu từ danh mục sản phẩm (LoaiSanPham = NguyenLieu).</summary>
-    ChonNguyenLieu = 11
+    ChonNguyenLieu = 11,
+
+    /// <summary>Chọn một kho từ danh mục nhà kho.</summary>
+    ChonKho = 12
 }

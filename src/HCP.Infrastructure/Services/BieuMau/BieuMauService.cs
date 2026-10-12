@@ -61,6 +61,7 @@ public sealed class BieuMauService : IBieuMauService
             goc.GhiChuChan = mau.GhiChuChan;
             goc.KichHoat = mau.KichHoat;
             goc.MotPhieuMoiNgay = mau.MotPhieuMoiNgay;
+            goc.DayVaoKho = mau.DayVaoKho;
             goc.ThuTu = mau.ThuTu;
             // Trường: thay toàn bộ (dữ liệu phiếu bám theo khóa Ma nên không ảnh hưởng).
             _db.TruongBieuMaus.RemoveRange(goc.Truong);
@@ -320,14 +321,15 @@ public sealed class BieuMauService : IBieuMauService
         yield return new BieuMauEntity
         {
             MaHieu = "BM-GMP-ISO-01-01", Ten = "Kiểm tra, tiếp nhận nguyên liệu NCC", BoCuc = BoCucBieuMau.NhieuDongTuDo,
-            TanSuat = "Mỗi lần nhập", NhomQuyen = AppRoles.QuyenNhapLieu, ThuTu = 5,
-            GhiChuChan = "Cảm quan: Đạt / Không đạt. Bộ phận: Kho nguyên liệu.",
+            TanSuat = "Mỗi lần nhập", NhomQuyen = AppRoles.QuyenNhapLieu, ThuTu = 5, DayVaoKho = true,
+            GhiChuChan = "Cảm quan: Đạt / Không đạt. Dòng Đạt sẽ tự nhập vào kho nguyên liệu khi hoàn thành.",
             Truong =
             {
                 T("bo_phan", "Bộ phận", KieuTruongBieuMau.Text, dauPhieu: true),
-                T("loai_nguyen_lieu", "Loại nguyên liệu", KieuTruongBieuMau.Text, batBuoc: true),
+                T("kho", "Kho nhập", KieuTruongBieuMau.ChonKho, dauPhieu: true, batBuoc: true),
+                T("loai_nguyen_lieu", "Nguyên liệu", KieuTruongBieuMau.ChonNguyenLieu, batBuoc: true),
                 T("ten_ncc", "Cơ sở cung cấp", KieuTruongBieuMau.ChonNcc),
-                T("so_luong", "Số lượng", KieuTruongBieuMau.Text),
+                T("so_luong", "Số lượng", KieuTruongBieuMau.So),
                 T("tinh_trang_xe", "Tình trạng xe (vệ sinh/nhiệt độ)", KieuTruongBieuMau.Text),
                 T("cam_quan", "Cảm quan chất lượng", KieuTruongBieuMau.DatKhongDat),
                 T("nsx", "Ngày sản xuất", KieuTruongBieuMau.Ngay),

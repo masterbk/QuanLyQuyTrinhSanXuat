@@ -311,6 +311,8 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             .ToDictionaryAsync(x => x.MaNccDauVao, x => x.Ten, ct);
         var coSo = await _db.Facilities.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == t)
             .ToDictionaryAsync(x => x.MaCoSo, x => x.TenCoSo, ct);
+        var kho = await _db.Warehouses.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == t)
+            .ToDictionaryAsync(x => x.MaKho, x => x.TenKho, ct);
 
         TraCuuGiaTri? O(TruongBieuMau tr, Dictionary<string, string?> gt)
         {
@@ -323,6 +325,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
                 KieuTruongBieuMau.ChonNguyenLieu => sanPham.GetValueOrDefault(v, v),
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(v, v),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(v, v),
+                KieuTruongBieuMau.ChonKho => kho.GetValueOrDefault(v, v),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(v, out var d) ? d.ToString("dd/MM/yyyy") : v,
                 _ => v
             };

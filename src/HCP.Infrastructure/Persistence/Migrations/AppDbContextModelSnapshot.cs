@@ -330,6 +330,11 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("DayVaoKho")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("GhiChuChan")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");

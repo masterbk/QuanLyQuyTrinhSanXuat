@@ -290,6 +290,8 @@ class _ManChiTietPhieuState extends ConsumerState<ManChiTietPhieu> {
         return Text(_ten(thanhPhamBmProvider, v) ?? v);
       case 'ChonNguyenLieu':
         return Text(_ten(nguyenLieuBmProvider, v) ?? v);
+      case 'ChonKho':
+        return Text(_ten(khoBmProvider, v) ?? v);
       case 'ChonNcc':
         return Text(_ten(nccBmProvider, v) ?? v);
       case 'Ngay':
