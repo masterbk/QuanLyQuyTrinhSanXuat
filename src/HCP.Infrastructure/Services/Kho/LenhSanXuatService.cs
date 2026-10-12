@@ -34,12 +34,47 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         new() { ["loaiThongBao"] = "lenh_san_xuat", ["lenhSanXuatId"] = lenhId.ToString() };
 
     public async Task<IReadOnlyList<LenhSanXuat>> LayTatCaAsync(CancellationToken ct = default) =>
-        await _db.LenhSanXuats.AsNoTracking()
-            .Include(l => l.SanPham).ThenInclude(s => s.Khau)
-            .Include(l => l.ThamGia)
-            .AsSplitQuery()
+        await QueryDanhSach()
             .OrderByDescending(l => l.NgaySanXuat).ThenByDescending(l => l.Id)
             .ToListAsync(ct);
+
+    // Truy vấn danh sách (chỉ các Include cần cho dòng danh sách: SanPham->Khau để biết người làm, ThamGia).
+    private IQueryable<LenhSanXuat> QueryDanhSach() =>
+        _db.LenhSanXuats.AsNoTracking()
+            .Include(l => l.SanPham).ThenInclude(s => s.Khau)
+            .Include(l => l.ThamGia)
+            .AsSplitQuery();
+
+    public async Task<IReadOnlyList<LenhSanXuat>> LayTheoLocAsync(DateOnly? tuNgay, DateOnly? denNgay,
+        TrangThaiLenhSX? trangThai, CancellationToken ct = default)
+    {
+        var q = QueryDanhSach();
+        if (tuNgay is { } t) q = q.Where(l => l.NgaySanXuat >= t);
+        if (denNgay is { } d) q = q.Where(l => l.NgaySanXuat <= d);
+        if (trangThai is { } tt) q = q.Where(l => l.TrangThai == tt);
+        return await q.OrderByDescending(l => l.NgaySanXuat).ThenByDescending(l => l.Id).ToListAsync(ct);
+    }
+
+    public async Task<(IReadOnlyList<LenhSanXuat> Items, int Tong)> LayTrangAsync(int trang, int soDong,
+        TrangThaiLenhSX? trangThai, string? maCuaToi, CancellationToken ct = default)
+    {
+        var q = QueryDanhSach();
+        if (trangThai is { } tt) q = q.Where(l => l.TrangThai == tt);
+        if (!string.IsNullOrWhiteSpace(maCuaToi))
+        {
+            // Khớp mã NV chính xác trong CSV (tránh "NS1" dính "NS10"); 4 điều kiện dịch thẳng sang =/LIKE trên SQL.
+            var ma = maCuaToi;
+            q = q.Where(l => l.SanPham.Any(s => s.Khau.Any(k =>
+                k.NguoiThucHienCsv == ma
+                || k.NguoiThucHienCsv.StartsWith(ma + ",")
+                || k.NguoiThucHienCsv.EndsWith("," + ma)
+                || k.NguoiThucHienCsv.Contains("," + ma + ","))));
+        }
+        var tong = await q.CountAsync(ct);
+        var items = await q.OrderByDescending(l => l.NgaySanXuat).ThenByDescending(l => l.Id)
+            .Skip((trang - 1) * soDong).Take(soDong).ToListAsync(ct);
+        return (items, tong);
+    }
 
     public Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);

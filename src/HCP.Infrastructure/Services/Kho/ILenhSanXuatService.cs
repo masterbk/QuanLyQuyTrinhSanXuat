@@ -1,4 +1,5 @@
 using HCP.Domain.Entities.Business;
+using HCP.Domain.Enums;
 
 namespace HCP.Infrastructure.Services.Kho;
 
@@ -27,6 +28,21 @@ public sealed record NguyenLieuCanDto(
 public interface ILenhSanXuatService
 {
     Task<IReadOnlyList<LenhSanXuat>> LayTatCaAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Danh sách lệnh đã LỌC TRÊN DB theo khoảng ngày sản xuất + trạng thái (sắp mới nhất trước) - cho màn web,
+    /// tránh tải toàn bộ lịch sử.
+    /// </summary>
+    Task<IReadOnlyList<LenhSanXuat>> LayTheoLocAsync(DateOnly? tuNgay, DateOnly? denNgay, TrangThaiLenhSX? trangThai,
+                                                    CancellationToken ct = default);
+
+    /// <summary>
+    /// Một TRANG lệnh (lọc + phân trang trên DB), kèm tổng số. <paramref name="maCuaToi"/> != null: chỉ lấy
+    /// lệnh có khâu mà người đó thực hiện. Dùng cho API app.
+    /// </summary>
+    Task<(IReadOnlyList<LenhSanXuat> Items, int Tong)> LayTrangAsync(int trang, int soDong,
+        TrangThaiLenhSX? trangThai, string? maCuaToi, CancellationToken ct = default);
+
     Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default);
 
     /// <summary>Tra lệnh theo mã lệnh - app quét mã QR của lệnh (nội dung "LSX:&lt;mã lệnh&gt;").</summary>

@@ -61,9 +61,31 @@ else
         </MudAlert>
     }
 
+    <div class="d-flex flex-wrap gap-2 align-center mb-3">
+        <MudDatePicker Date="_tuNgay" DateChanged="@(async d => { _tuNgay = d; await TaiAsync(); })"
+                       Label="Từ ngày" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="dd/MM/yyyy"
+                       Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true" Style="min-width:150px" />
+        <MudDatePicker Date="_denNgay" DateChanged="@(async d => { _denNgay = d; await TaiAsync(); })"
+                       Label="Đến ngày" Variant="Variant.Outlined" Margin="Margin.Dense" DateFormat="dd/MM/yyyy"
+                       Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true" Style="min-width:150px" />
+        <MudSelect T="TrangThaiLenhSX?" Value="_locTrangThai" Label="Trạng thái" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Clearable="true" Style="min-width:150px"
+                   ValueChanged="@(async (TrangThaiLenhSX? v) => { _locTrangThai = v; await TaiAsync(); })">
+            <MudSelectItem T="TrangThaiLenhSX?" Value="@(TrangThaiLenhSX.MoiTao)">Mới tạo</MudSelectItem>
+            <MudSelectItem T="TrangThaiLenhSX?" Value="@(TrangThaiLenhSX.HoanThanh)">Hoàn thành</MudSelectItem>
+            <MudSelectItem T="TrangThaiLenhSX?" Value="@(TrangThaiLenhSX.DaHuy)">Đã huỷ</MudSelectItem>
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@_danhSach.Count lệnh</MudText>
+    </div>
+
+    @if (_dangTaiDs)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mb-2" />
+    }
+
     @if (_danhSach.Count == 0)
     {
-        <MudAlert Severity="Severity.Info">Chưa có lệnh sản xuất nào.</MudAlert>
+        <MudAlert Severity="Severity.Info">Không có lệnh nào khớp bộ lọc (thử mở rộng khoảng ngày).</MudAlert>
     }
     else
     {
@@ -449,8 +471,14 @@ else
     private Dictionary<string, string> _tenThanhPham = new();
     private List<NguyenLieuCanDto> _preview = new();
 
-    private bool _dangTai = true;
+    private bool _dangTai = true;    // lần tải đầu (cả trang)
+    private bool _dangTaiDs;          // tải lại riêng danh sách (đổi lọc / sau thao tác)
     private bool _dangLuu;
+
+    // Bộ lọc danh sách (mặc định 30 ngày gần nhất để tránh tải toàn bộ lịch sử).
+    private DateTime? _tuNgay = DateTime.Today.AddDays(-30);
+    private DateTime? _denNgay;
+    private TrangThaiLenhSX? _locTrangThai;
     private bool _dangXuLy;
 
     private MudForm? _form;
@@ -525,13 +553,14 @@ else
             _coQuyenNhapLieu = user.IsInRole(AppRoles.TenantAdmin) || user.IsInRole(AppRoles.TenantStaff);
             _maNhanSuHienTai = _coQuyenNhapLieu ? null : await LenhSanXuatApi.MaNhanSuHienTaiAsync(user, Db);
         }
-        await TaiAsync();
+        await TaiDanhMucAsync();   // danh mục ít đổi -> chỉ nạp một lần
+        await TaiAsync();          // danh sách lệnh theo bộ lọc
+        _dangTai = false;
     }
 
-    private async Task TaiAsync()
+    // Danh mục cho tạo/sửa lệnh (kho, quy trình, cơ sở, nhân sự, khâu, thành phẩm có định mức).
+    private async Task TaiDanhMucAsync()
     {
-        _dangTai = true;
-        _danhSach = (await LenhService.LayTatCaAsync()).ToList();
         _kho = (await KhoDanhMucService.LayTatCaAsync()).ToList();
         _quyTrinh = (await QuyTrinhService.LayTatCaAsync()).Where(q => q.DanhSachKhau.Count > 0).ToList();
         _coSo = (await CoSoService.LayTatCaAsync()).ToList();
@@ -547,7 +576,16 @@ else
             var dm = await DinhMucService.LayTheoThanhPhamAsync(p.Id);
             if (dm.Count > 0) _thanhPham.Add(p);   // chỉ hiện thành phẩm đã có định mức
         }
-        _dangTai = false;
+    }
+
+    // Nạp lại DANH SÁCH lệnh theo bộ lọc (khoảng ngày + trạng thái) - lọc trên DB, không tải toàn bộ lịch sử.
+    private async Task TaiAsync()
+    {
+        _dangTaiDs = true;
+        var tu = _tuNgay is { } d1 ? DateOnly.FromDateTime(d1) : (DateOnly?)null;
+        var den = _denNgay is { } d2 ? DateOnly.FromDateTime(d2) : (DateOnly?)null;
+        _danhSach = (await LenhService.LayTheoLocAsync(tu, den, _locTrangThai)).ToList();
+        _dangTaiDs = false;
     }
 
     private string TenThanhPham(string ma) => _tenThanhPham.GetValueOrDefault(ma) ?? ma;

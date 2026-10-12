@@ -36,23 +36,22 @@ public static class LenhSanXuatApi
                                IDanhMucService<Facility> coSo, ClaimsPrincipal user, AppDbContext db,
                                string? trangThai, int trang = 1, int soDong = 20, bool cuaToi = false) =>
         {
-            var tatCa = await svc.LayTatCaAsync();
-            if (!string.IsNullOrWhiteSpace(trangThai) && Enum.TryParse<TrangThaiLenhSX>(trangThai, true, out var tt))
-                tatCa = tatCa.Where(l => l.TrangThai == tt).ToList();
+            var (t, n) = ChuanHoaTrang(trang, soDong);
+            // "Của tôi" = lệnh có khâu mà người đang đăng nhập là người thực hiện.
+            string? maCuaToi = null;
             if (cuaToi)
             {
-                // "Của tôi" = lệnh có khâu mà người đang đăng nhập là người thực hiện.
-                var ma = await MaNhanSuHienTaiAsync(user, db);
-                tatCa = ma is null
-                    ? new List<LenhSanXuat>()
-                    : tatCa.Where(l => l.SanPham.Any(s => s.Khau.Any(k =>
-                          k.NguoiThucHien.Contains(ma, StringComparer.OrdinalIgnoreCase)))).ToList();
+                maCuaToi = await MaNhanSuHienTaiAsync(user, db);
+                if (maCuaToi is null)
+                    return Results.Ok(new TrangDuLieu<LenhSanXuatDto>(Array.Empty<LenhSanXuatDto>(), t, n, 0));
             }
+            TrangThaiLenhSX? tt = !string.IsNullOrWhiteSpace(trangThai)
+                && Enum.TryParse<TrangThaiLenhSX>(trangThai, true, out var tParsed) ? tParsed : null;
 
+            var (items, tong) = await svc.LayTrangAsync(t, n, tt, maCuaToi);
             var ten = await LayTenAsync(sp, qt, khau, coSo);
-            var (t, n) = ChuanHoaTrang(trang, soDong);
-            var trangDl = tatCa.Skip((t - 1) * n).Take(n).Select(l => Map(l, ten)).ToList();
-            return Results.Ok(new TrangDuLieu<LenhSanXuatDto>(trangDl, t, n, tatCa.Count));
+            var trangDl = items.Select(l => Map(l, ten)).ToList();
+            return Results.Ok(new TrangDuLieu<LenhSanXuatDto>(trangDl, t, n, tong));
         });
 
         nhom.MapGet("/{id:int}", async (int id, ILenhSanXuatService svc, IDanhMucService<Product> sp,

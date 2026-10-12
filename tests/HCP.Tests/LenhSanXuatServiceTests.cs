@@ -1001,4 +1001,65 @@ public class LenhSanXuatServiceTests
         Assert.Equal("Lệnh sản xuất hoàn thành", push.DaGui[1].TieuDe);
         Assert.Equal(AppRoles.QuyenSanXuat.Split(','), push.DaGui[1].VaiTro);
     }
+
+    // ==================== Lọc + phân trang danh sách (hiệu năng màn web/app) ====================
+
+    private static LenhSanXuat LenhMau(string ma, DateOnly ngay, TrangThaiLenhSX tt, string nguoi) => new()
+    {
+        MaLenh = ma, MaKho = "KHO01", NgaySanXuat = ngay, TrangThai = tt,
+        SanPham =
+        {
+            new LenhSanXuatSanPham
+            {
+                MaThanhPham = "BANH_MI", SoLuong = 1, MaLoThanhPham = "LO-" + ma, MaQuyTrinh = "QT01",
+                Khau = { new LenhSanXuatKhau { MaKhau = "KHAU01", ThuTu = 1, MaCoSo = "CS01", NguoiThucHienCsv = nguoi } }
+            }
+        }
+    };
+
+    [Fact]
+    public async Task Lay_Theo_Loc_Va_Trang_Loc_Phan_Trang_Tren_Db()
+    {
+        SeedDanhMuc();
+        using (var db = MoDb())
+        {
+            db.LenhSanXuats.Add(LenhMau("L1", new DateOnly(2026, 10, 1), TrangThaiLenhSX.MoiTao, "NS01"));
+            db.LenhSanXuats.Add(LenhMau("L2", new DateOnly(2026, 10, 5), TrangThaiLenhSX.HoanThanh, "NS02"));
+            db.LenhSanXuats.Add(LenhMau("L3", new DateOnly(2026, 9, 1), TrangThaiLenhSX.MoiTao, "NS10"));
+            await db.SaveChangesAsync();
+        }
+
+        // Lọc khoảng ngày: chỉ tháng 10, mới nhất trước.
+        using (var db = MoDb())
+        {
+            var ds = await Svc(db).LayTheoLocAsync(new DateOnly(2026, 10, 1), null, null);
+            Assert.Equal(new[] { "L2", "L1" }, ds.Select(l => l.MaLenh));
+        }
+
+        // Lọc trạng thái.
+        using (var db = MoDb())
+        {
+            var ds = await Svc(db).LayTheoLocAsync(null, null, TrangThaiLenhSX.MoiTao);
+            Assert.Equal(2, ds.Count);
+            Assert.All(ds, l => Assert.Equal(TrangThaiLenhSX.MoiTao, l.TrangThai));
+        }
+
+        // Phân trang trên DB: tổng 3, trang 1 cỡ 2 -> 2, trang 2 -> 1.
+        using (var db = MoDb())
+        {
+            var (items, tong) = await Svc(db).LayTrangAsync(1, 2, null, null);
+            Assert.Equal(3, tong);
+            Assert.Equal(2, items.Count);
+            var (trang2, _) = await Svc(db).LayTrangAsync(2, 2, null, null);
+            Assert.Single(trang2);
+        }
+
+        // "Của tôi" khớp mã NV chính xác: NS01 KHÔNG dính NS10.
+        using (var db = MoDb())
+        {
+            var (items, tong) = await Svc(db).LayTrangAsync(1, 20, null, "NS01");
+            Assert.Equal(1, tong);
+            Assert.Equal("L1", items[0].MaLenh);
+        }
+    }
 }
