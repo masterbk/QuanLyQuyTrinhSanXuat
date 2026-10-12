@@ -399,10 +399,10 @@ else
             <MudTextField @bind-Value="_ghiChuXuat" Label="Ghi chú" Variant="Variant.Outlined" Lines="2"
                           MaxLength="1000" Immediate="true" Class="mb-3" />
 
-            <MudText Typo="Typo.subtitle2" Class="mb-1">Ảnh tổng quan (tối đa 3 ảnh) - gửi kèm sang HanoiCheck</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Ảnh tổng quan (tối đa 10 ảnh; 3 ảnh đầu gửi kèm sang HanoiCheck)</MudText>
             <div class="d-flex flex-wrap gap-2 align-center mb-3">
                 <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="ChonAnhTongQuanAsync"
-                               Accept="image/*" MaximumFileCount="3">
+                               Accept="image/*" MaximumFileCount="10">
                     <ActivatorContent>
                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                                    Disabled="_dangTaiAnh" StartIcon="@Icons.Material.Filled.PhotoCamera">
@@ -464,7 +464,7 @@ else
     <TitleContent><MudText Typo="Typo.h6">Xác nhận đã giao @_donGiao?.MaDonHang</MudText></TitleContent>
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-2">
-            Cần ít nhất 1 ảnh chứng minh đã giao (tối đa 3).
+            Cần ít nhất 1 ảnh chứng minh đã giao (tối đa 10).
             @if (_donGiao?.Nguon == NguonDonHang.HanoiCheck)
             {
                 <b>Đơn từ trường: ảnh này được gửi sang HanoiCheck kèm trạng thái "Đã giao".</b>
@@ -472,7 +472,7 @@ else
         </MudText>
         <div class="d-flex flex-wrap gap-2 align-center">
             <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="ChonAnhGiaoAsync"
-                           Accept="image/*" MaximumFileCount="3">
+                           Accept="image/*" MaximumFileCount="10">
                 <ActivatorContent>
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                                Disabled="_dangTaiAnh" StartIcon="@Icons.Material.Filled.PhotoCamera">
@@ -816,7 +816,7 @@ else
     private async Task ChonAnhGiaoAsync(IReadOnlyList<IBrowserFile> files)
     {
         _dangTaiAnh = true;
-        foreach (var f in files.Take(3 - _anhGiao.Count))
+        foreach (var f in files.Take(10 - _anhGiao.Count))
         {
             try { _anhGiao.Add(await LuuTruAnh.LuuAsync(f)); }
             catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
@@ -838,7 +838,7 @@ else
     private async Task ChonAnhTongQuanAsync(IReadOnlyList<IBrowserFile> files)
     {
         _dangTaiAnh = true;
-        foreach (var f in files.Take(3 - _anhXuat.Count))
+        foreach (var f in files.Take(10 - _anhXuat.Count))
         {
             try { _anhXuat.Add(await LuuTruAnh.LuuAsync(f)); }
             catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }

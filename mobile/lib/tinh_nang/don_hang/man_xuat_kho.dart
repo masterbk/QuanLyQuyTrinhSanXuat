@@ -63,7 +63,7 @@ class ManXuatKho extends ConsumerStatefulWidget {
 }
 
 class _ManXuatKhoState extends ConsumerState<ManXuatKho> {
-  static const _toiDaAnh = 3;
+  static const _toiDaAnh = 10;
 
   List<_ODong>? _dong;
   String? _loiTai;
@@ -213,7 +213,7 @@ class _ManXuatKhoState extends ConsumerState<ManXuatKho> {
                         decoration: const InputDecoration(labelText: 'Ghi chú', border: OutlineInputBorder()),
                       ),
                       const SizedBox(height: 14),
-                      Text('Ảnh tổng quan (tối đa $_toiDaAnh) - gửi kèm sang HanoiCheck',
+                      Text('Ảnh tổng quan (tối đa $_toiDaAnh; 3 ảnh đầu gửi kèm sang HanoiCheck)',
                           style: Theme.of(context).textTheme.titleSmall),
                       const SizedBox(height: 8),
                       Row(

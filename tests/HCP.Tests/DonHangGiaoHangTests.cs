@@ -189,4 +189,30 @@ public class DonHangGiaoHangTests
         Assert.Null(await svc.TimTheoQrAsync("LSX:LSX-20260918-001"));               // QR của lệnh sản xuất
         Assert.Null(await svc.TimTheoQrAsync(""));
     }
+
+    [Fact]
+    public async Task Giao_Hang_Luu_Nhieu_Anh_Nhung_Gui_HanoiCheck_Toi_Da_3()
+    {
+        Seed();
+        var id = await DonDangGiaoAsync("DH-HNC-5");
+
+        var anhDaGui = new List<string>();
+        _hnc.XuLyDon = (_, noiDung) => { anhDaGui.AddRange(noiDung.DanhSachAnh ?? new List<string>()); return OrderCommandResult.Ok(); };
+        _hnc.DoiTrangThai = (_, _) => OrderCommandResult.Ok();
+
+        var namAnh = Enumerable.Range(1, 5)
+            .Select(i => new AnhDauVao($"giao-{i}.jpg", $"https://app.vn/uploads/giao-{i}.jpg")).ToList();
+
+        using (var db = MoDb()) Assert.True((await Svc(db).NhanDonAsync(id, "NS01")).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).HoanTatGiaoAsync(id, namAnh)).ThanhCong);
+
+        // Lưu nội bộ đủ 5 ảnh giao làm bằng chứng.
+        using (var db = MoDb())
+        {
+            var don = await db.DonHangBans.Include(d => d.AnhTongQuan).SingleAsync();
+            Assert.Equal(5, don.AnhTongQuan.Count(a => a.Loai == LoaiAnhDonHang.Giao));
+        }
+        // Nhưng gửi sang HanoiCheck tối đa 3 ảnh (giới hạn API HnC).
+        Assert.Equal(3, anhDaGui.Count);
+    }
 }

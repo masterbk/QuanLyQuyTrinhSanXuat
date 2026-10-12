@@ -579,7 +579,7 @@ public sealed class DonHangBanService : IDonHangBanService
             {
                 MaNguoiGiao = maNguoiGiao,
                 GhiChu = ghiChu,
-                DanhSachAnh = anhTongQuan?.Select(a => a.DuongDan).ToList(),
+                DanhSachAnh = anhTongQuan?.Select(a => a.DuongDan).Take(SoAnhGuiHnC).ToList(),
                 ChiTiet = chiTiet
             }, ct);
             if (!ketXuLy.ThanhCong && !ketXuLy.ChuaCauHinh)
@@ -638,8 +638,12 @@ public sealed class DonHangBanService : IDonHangBanService
             : $"Đã xuất kho đơn \"{don.MaDonHang}\" ({soLo} lô), chuyển sang Đang giao.");
     }
 
-    /// <summary>Số ảnh tối đa HanoiCheck nhận cho một đơn (danh_sach_anh).</summary>
-    public const int SoAnhToiDa = 3;
+    /// <summary>Số ảnh tối đa cho một đơn (upload + lưu nội bộ làm bằng chứng).</summary>
+    public const int SoAnhToiDa = 10;
+
+    /// <summary>Số ảnh tối đa gửi sang HanoiCheck cho một đơn (danh_sach_anh): API HnC chỉ nhận 1-3 ảnh,
+    /// nên dù lưu nhiều hơn vẫn chỉ gửi 3 ảnh đầu.</summary>
+    public const int SoAnhGuiHnC = 3;
 
     public async Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, IReadOnlyList<AnhDauVao> anhGiao,
                                                       CancellationToken ct = default)
@@ -660,7 +664,7 @@ public sealed class DonHangBanService : IDonHangBanService
         {
             var duongDanAnh = anh.Select(a => a.DuongDan)
                 .Concat(don.AnhTongQuan.Where(a => a.Loai == LoaiAnhDonHang.TongQuan).Select(a => a.DuongDan))
-                .Distinct().Take(SoAnhToiDa).ToList();
+                .Distinct().Take(SoAnhGuiHnC).ToList();
 
             var ketAnh = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
             {

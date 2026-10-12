@@ -22,7 +22,7 @@ class ManXacNhanGiao extends ConsumerStatefulWidget {
 }
 
 class _ManXacNhanGiaoState extends ConsumerState<ManXacNhanGiao> {
-  static const _toiDa = 3;
+  static const _toiDa = 10;
   final _anh = <AnhDaChon>[];
   bool _dangGui = false;
 
