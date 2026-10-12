@@ -320,6 +320,7 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             {
                 KieuTruongBieuMau.ChonNhanSu => nhanSu.GetValueOrDefault(v, v),
                 KieuTruongBieuMau.ChonSanPham => sanPham.GetValueOrDefault(v, v),
+                KieuTruongBieuMau.ChonNguyenLieu => sanPham.GetValueOrDefault(v, v),
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(v, v),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(v, v),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(v, out var d) ? d.ToString("dd/MM/yyyy") : v,

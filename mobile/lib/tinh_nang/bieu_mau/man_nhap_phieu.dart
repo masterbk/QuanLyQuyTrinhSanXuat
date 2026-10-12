@@ -180,6 +180,7 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
     ref.watch(nhanSuBmProvider);
     ref.watch(coSoBmProvider);
     ref.watch(thanhPhamBmProvider);
+    ref.watch(nguyenLieuBmProvider);
     ref.watch(nccBmProvider);
     final m = widget.mau;
 
@@ -442,6 +443,8 @@ class _ManNhapPhieuState extends ConsumerState<ManNhapPhieu> {
         return _oChon(dong, t, nhan, ref.watch(coSoBmProvider));
       case 'ChonSanPham':
         return _oChon(dong, t, nhan, ref.watch(thanhPhamBmProvider));
+      case 'ChonNguyenLieu':
+        return _oChon(dong, t, nhan, ref.watch(nguyenLieuBmProvider));
       case 'ChonNcc':
         return _oChon(dong, t, nhan, ref.watch(nccBmProvider));
       case 'LuaChon':

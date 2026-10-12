@@ -34,5 +34,8 @@ public enum KieuTruongBieuMau
     Anh = 9,
 
     /// <summary>Chọn một giá trị từ danh sách tuỳ biến (khai ở TuyChonCsv).</summary>
-    LuaChon = 10
+    LuaChon = 10,
+
+    /// <summary>Chọn một nguyên liệu từ danh mục sản phẩm (LoaiSanPham = NguyenLieu).</summary>
+    ChonNguyenLieu = 11
 }

@@ -73,6 +73,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
             {
                 KieuTruongBieuMau.ChonNhanSu => nhanSu.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonSanPham => sanPham.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.ChonNguyenLieu => sanPham.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(raw, out var d) ? d.ToString("dd/MM/yyyy") : raw,
@@ -235,6 +236,7 @@ public sealed class PhieuPdfService : IPhieuPdfService
             {
                 KieuTruongBieuMau.ChonNhanSu => nhanSu.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonSanPham => sanPham.GetValueOrDefault(raw, raw),
+                KieuTruongBieuMau.ChonNguyenLieu => sanPham.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonNcc => ncc.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.ChonCoSo => coSo.GetValueOrDefault(raw, raw),
                 KieuTruongBieuMau.Ngay => DateOnly.TryParse(raw, out var d) ? d.ToString("dd/MM/yyyy") : raw,
