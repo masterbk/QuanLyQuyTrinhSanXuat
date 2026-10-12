@@ -133,7 +133,11 @@ class KhoBieuMau {
   Future<List<MucChon>> nhanSu() => _dm('nhan-su', (j) => MucChon(j['maNhanSu'] as String? ?? '', j['hoTen'] as String? ?? ''));
   Future<List<MucChon>> coSo() => _dm('co-so', (j) => MucChon(j['maCoSo'] as String? ?? '', j['tenCoSo'] as String? ?? ''));
   Future<List<MucChon>> thanhPham() => _dm('thanh-pham-ban', (j) => MucChon(j['maSanPham'] as String? ?? '', j['tenSanPham'] as String? ?? ''));
-  Future<List<MucChon>> nguyenLieu() => _dm('nguyen-lieu', (j) => MucChon(j['maSanPham'] as String? ?? '', j['tenSanPham'] as String? ?? ''));
+  Future<List<MucChon>> nguyenLieu() => _dm('nguyen-lieu', (j) {
+        final ten = j['tenSanPham'] as String? ?? '';
+        final dv = (j['donViTinh'] as String? ?? '').trim();
+        return MucChon(j['maSanPham'] as String? ?? '', dv.isEmpty ? ten : '$ten ($dv)');
+      });
   Future<List<MucChon>> kho() => _dm('kho', (j) => MucChon(j['maKho'] as String? ?? '', j['tenKho'] as String? ?? ''));
   Future<List<MucChon>> ncc() => _dm('ncc', (j) => MucChon(j['ma'] as String? ?? '', j['ten'] as String? ?? ''));
 

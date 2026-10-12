@@ -280,6 +280,10 @@ else
     /// <summary>Đọc/hiển thị ngày theo dd/MM/yyyy bất kể ngôn ngữ trình duyệt/máy chủ.</summary>
     private static readonly System.Globalization.CultureInfo VN = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
 
+    /// <summary>Tên sản phẩm kèm đơn vị tính cho danh sách chọn, vd "Bột mì (kg)".</summary>
+    private static string TenKemDonVi(Product p) =>
+        string.IsNullOrWhiteSpace(p.DonViTinh) ? p.TenSanPham : $"{p.TenSanPham} ({p.DonViTinh})";
+
     private bool LaChecklist => _mau?.BoCuc == BoCucBieuMau.Checklist;
     private List<TruongBieuMau> TruongDau => _mau?.Truong.Where(t => t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList() ?? new();
     private List<TruongBieuMau> TruongDong => _mau?.Truong.Where(t => !t.LaDauPhieu).OrderBy(t => t.ThuTu).ToList() ?? new();
@@ -296,8 +300,9 @@ else
         var tatCaSp = await SanPhamService.LayTatCaAsync();
         _sanPham = tatCaSp.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham)
             .GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
+        // Danh sách chọn nguyên liệu kèm đơn vị tính (vd "Bột mì (kg)") cho dễ chọn; giá trị lưu vẫn là mã.
         _nguyenLieu = tatCaSp.Where(p => p.LoaiSanPham == LoaiSanPham.NguyenLieu)
-            .GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
+            .GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => TenKemDonVi(g.First()));
         _ncc = (await NccService.LayTatCaAsync()).GroupBy(n => n.MaNccDauVao).ToDictionary(g => g.Key, g => g.First().Ten);
         _coSo = (await CoSoService.LayTatCaAsync()).GroupBy(c => c.MaCoSo).ToDictionary(g => g.Key, g => g.First().TenCoSo);
         _kho = (await KhoService.LayTatCaAsync()).GroupBy(k => k.MaKho).ToDictionary(g => g.Key, g => g.First().TenKho);
