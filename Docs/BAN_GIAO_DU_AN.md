@@ -155,8 +155,16 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
 
 ### Các module khác (xem memory nếu cần chi tiết)
 - **Kho + sản xuất nội bộ:** tồn theo lô, lệnh SX trừ định mức, khách hàng. GĐ1 xong.
+  - **Danh sách Lệnh SX (12/10/2026, `2359bbd`):** lọc + phân trang **trên DB** (trước đây tải toàn bộ lịch sử
+    vào RAM → chậm). `LenhSanXuatService.LayTheoLocAsync` (ngày+trạng thái), `LayTrangAsync` (phân trang+đếm;
+    "của tôi" khớp mã NV CHÍNH XÁC trong CSV bằng 4 điều kiện =/StartsWith/EndsWith/Contains). API app phân
+    trang DB. **Màn web `/app/lenh-san-xuat` mặc định lọc 30 NGÀY GẦN NHẤT** (có ô Từ/Đến ngày + Trạng thái) —
+    không thấy lệnh cũ là do bộ lọc, mở rộng khoảng ngày. Danh mục nạp 1 lần (tách khỏi nạp danh sách).
 - **Bán hàng NCC / đơn hàng:** đơn bán thống nhất; đơn HnC tự thành đơn bán; công tắc HanoiCheck tổng & từng
   bản ghi; nhân viên giao hàng trên app; QR in được (web+app). Đồng bộ đơn kéo về từ cổng NCC (ký HMAC).
+  - **Ảnh đơn hàng (12/10/2026, `ecce20f`):** upload/lưu nội bộ tối đa **10 ảnh** (xuất kho + xác nhận giao,
+    cả web lẫn app). Nhưng gửi **HanoiCheck tối đa 3** ảnh/đơn (API HnC chỉ nhận 1-3) — `DonHangBanService`:
+    `SoAnhToiDa=10` (lưu), `SoAnhGuiHnC=3` (cap payload ở cả 2 nơi gửi: xuất kho + giao).
 - **App mobile:** màn Lệnh SX (tham gia khâu), Đơn hàng (giao hàng, quét QR, chụp ảnh), Kho, Biểu mẫu. Còn:
   chạy thử máy thật đầy đủ.
 - **Thông báo đẩy FCM**, **giờ VN**, **audit form Sửa có tải lại dữ liệu** (còn vài màn) — xem memory.
