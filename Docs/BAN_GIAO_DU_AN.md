@@ -106,6 +106,14 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
   A/B/C/D + bẫy côn trùng `BM-GMP-ISO-02-04`) idempotent theo MaHieu (`NapMauMacDinhAsync`, KHÔNG seed ở DbSeeder;
   mẫu đã có KHÔNG bị cập nhật khi nạp lại), app nhập phiếu form động (`mobile/lib/tinh_nang/bieu_mau/`), lưu nháp/
   nhập tiếp, trường đầu phiếu, **khóa phiếu theo ngày** (MotPhieuMoiNgay), **trường Ảnh**, **nhắc hạn** thiết bị.
+- **Kiểu trường Chọn nguyên liệu/Chọn kho + tự đẩy vào kho (12/10/2026, `58de7bd`+`edef80b`):**
+  `KieuTruongBieuMau.ChonNguyenLieu=11` (danh mục NguyenLieu), `ChonKho=12`. **`BieuMau.DayVaoKho`** (migration):
+  mẫu NhieuDongTuDo bật → khi HOÀN THÀNH phiếu, mỗi dòng Đạt tạo 1 nhập kho nguyên liệu
+  (`PhieuGhiNhanService.DayNguyenLieuVaoKhoAsync`, nhận `IKhoNoiBoService` optional; nhận diện trường theo KIỂU;
+  mã lô tự sinh; bỏ qua dòng "Không đạt"; lỗi nhập kho không làm hỏng hoàn thành phiếu). Seed `BM-GMP-ISO-01-01`
+  đã cấu hình sẵn. **PROD cần làm tay:** seed không ghi đè mẫu cũ → xoá mẫu "Tiếp nhận NL" rồi "Nạp biểu mẫu mẫu",
+  hoặc sửa tay (đổi kiểu + thêm Kho nhập + tick Đẩy vào kho). Danh sách chọn nguyên liệu hiện kèm đơn vị tính
+  "Tên (đv)" (chỉ dropdown, giá trị lưu vẫn là mã).
 - **PDF (QuestPDF, `PhieuPdfService`):** header giống bản giấy `KhungHeader` = [logo | TÊN CÔNG TY + Đ/c | Mã hiệu /
   Ngày BH / Lần BH]; logo+tên+địa chỉ ở entity `CaiDatInBieuMau` (1 dòng/cơ sở, sửa ở màn Biểu mẫu kiểm soát →
   "Thông tin in"). **Báo cáo tháng mọi mẫu**: mẫu thường = bảng phẳng; Checklist = **ma trận hạng mục × ngày**
