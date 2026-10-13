@@ -106,7 +106,17 @@ public static class HnCPayloadMapper
             gtin = p.Gtin,
             quoc_gia = p.QuocGia,
             mo_ta = p.MoTa,
-            ma_quy_trinh = p.MaQuyTrinh
+            ma_quy_trinh = p.MaQuyTrinh,
+            // v2.6: cấu hình đơn vị tính. Chưa chọn đơn vị -> bỏ hẳn (HnC giữ nguyên cấu hình đang có).
+            food_config = p.DonViTinhHnCId is { } measureId
+                ? new
+                {
+                    measure_id = measureId,
+                    gam_exchange = p.QuyDoiGam,
+                    extrude_factor = p.HeSoThaiBoPhanTram,
+                    extrude_factor_g = p.HeSoThaiBoGam
+                }
+                : null
         }
     };
 

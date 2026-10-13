@@ -1296,6 +1296,24 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.ToTable("DonHangNhanPhanBo", (string)null);
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.DonViTinhHnC", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CapNhatLucUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Ten")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DonViTinhHnCs", (string)null);
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.DongGhiNhan", b =>
                 {
                     b.Property<int>("Id")
@@ -2158,12 +2176,23 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int?>("DonViTinhHnCId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("DongBoHnC")
                         .HasColumnType("bit");
 
                     b.Property<string>("Gtin")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("HeSoThaiBoGam")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal?>("HeSoThaiBoPhanTram")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<int>("LoaiSanPham")
                         .HasColumnType("int");
@@ -2193,6 +2222,10 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<string>("QuocGia")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("QuyDoiGam")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<string>("TenSanPham")
                         .IsRequired()

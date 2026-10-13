@@ -234,6 +234,25 @@ public class HnCPayloadMapperTests
         Assert.False(e.TryGetProperty("ma_thuc_pham_chuan", out _));
         Assert.False(e.TryGetProperty("quoc_gia", out _));
         Assert.False(e.TryGetProperty("mo_ta", out _));
+        // Chưa chọn đơn vị tính HnC -> không gửi food_config (HnC giữ nguyên cấu hình đang có).
+        Assert.False(e.TryGetProperty("food_config", out _));
+    }
+
+    [Fact]
+    public void ThucPham_Co_Don_Vi_Tinh_Thi_Gui_Food_Config()
+    {
+        var e = Ser(HnCPayloadMapper.ThucPham(new Product
+        {
+            MaSanPham = "BANH_MI", TenSanPham = "Bánh mì", MaLoaiSp = "6798", MaQuyTrinh = "QT001",
+            DonViTinhHnCId = 3, QuyDoiGam = 80m, HeSoThaiBoPhanTram = 2.5m
+            // HeSoThaiBoGam để null
+        }));
+
+        var cfg = e.GetProperty("food_config");
+        Assert.Equal(3, cfg.GetProperty("measure_id").GetInt32());
+        Assert.Equal(80m, cfg.GetProperty("gam_exchange").GetDecimal());
+        Assert.Equal(2.5m, cfg.GetProperty("extrude_factor").GetDecimal());
+        Assert.False(cfg.TryGetProperty("extrude_factor_g", out _));
     }
 
     [Fact]

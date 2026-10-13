@@ -7,4 +7,7 @@ namespace HCP.Infrastructure.HanoiCheck;
 public interface IHanoiCheckStandardFoodsClient
 {
     Task<StandardFoodsResult> LayDanhMucAsync(string baseUrl, string accessToken, CancellationToken ct = default);
+
+    /// <summary>GET /supplier/measures - danh mục đơn vị tính (đặc tả v2.6, Phần V mục 4). Không cần ký.</summary>
+    Task<MeasuresResult> LayDonViTinhAsync(string baseUrl, string accessToken, CancellationToken ct = default);
 }

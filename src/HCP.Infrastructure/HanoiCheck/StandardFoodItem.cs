@@ -22,6 +22,25 @@ public sealed class StandardFoodsResponse
     [JsonPropertyName("data")] public List<StandardFoodItem>? Data { get; set; }
 }
 
+/// <summary>Một dòng danh mục đơn vị tính trả về từ GET /supplier/measures.</summary>
+public sealed class MeasureItem
+{
+    [JsonPropertyName("id")] public int? Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+}
+
+public sealed class MeasuresResponse
+{
+    [JsonPropertyName("success")] public bool Success { get; set; }
+    [JsonPropertyName("data")] public List<MeasureItem>? Data { get; set; }
+}
+
+public sealed record MeasuresResult(bool ThanhCong, IReadOnlyList<MeasureItem> Items, string? ThongBao)
+{
+    public static MeasuresResult Ok(IReadOnlyList<MeasureItem> items) => new(true, items, null);
+    public static MeasuresResult Loi(string thongBao) => new(false, Array.Empty<MeasureItem>(), thongBao);
+}
+
 /// <summary>Kết quả lấy danh mục thực phẩm chuẩn.</summary>
 public sealed record StandardFoodsResult(bool ThanhCong, IReadOnlyList<StandardFoodItem> Items, string? ThongBao)
 {

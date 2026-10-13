@@ -232,4 +232,33 @@ public class DongBoHnCTests
             Assert.True((await svc.ThemAsync(Banh(false))).ThanhCong);     // bỏ tick đồng bộ thì không bắt
         }
     }
+
+    [Fact]
+    public async Task Cau_Hinh_Don_Vi_Tinh_HnC_Phai_Hop_Le()
+    {
+        Product Banh(string ma) => new()
+        {
+            MaSanPham = ma, TenSanPham = "Bánh", MaLoaiSp = "6798", LoaiSanPham = LoaiSanPham.ThanhPham
+        };
+
+        using var db = MoDb();
+        var svc = new ThucPhamService(db, Writer(db));
+
+        var thieuDonVi = Banh("SP-1"); thieuDonVi.QuyDoiGam = 1000m;
+        Assert.Contains("chọn đơn vị tính", (await svc.ThemAsync(thieuDonVi)).ThongBao);
+
+        var gamAm = Banh("SP-2"); gamAm.DonViTinhHnCId = 1; gamAm.QuyDoiGam = 0m;
+        Assert.Contains("lớn hơn 0", (await svc.ThemAsync(gamAm)).ThongBao);
+
+        var quaTram = Banh("SP-3"); quaTram.DonViTinhHnCId = 1; quaTram.HeSoThaiBoPhanTram = 120m;
+        Assert.Contains("0 đến 100", (await svc.ThemAsync(quaTram)).ThongBao);
+
+        var hopLe = Banh("SP-4"); hopLe.DonViTinhHnCId = 1; hopLe.QuyDoiGam = 1000m; hopLe.HeSoThaiBoPhanTram = 5m;
+        Assert.True((await svc.ThemAsync(hopLe)).ThanhCong);
+
+        // Sửa: bỏ đơn vị tính thì các chỉ số đi kèm cũng phải bỏ (form web tự làm) - lưu lại được.
+        var sua = Banh("SP-4"); sua.Id = hopLe.Id;
+        Assert.True((await svc.CapNhatAsync(sua)).ThanhCong);
+        Assert.Null(db.Products.Single(p => p.Id == hopLe.Id).DonViTinhHnCId);
+    }
 }

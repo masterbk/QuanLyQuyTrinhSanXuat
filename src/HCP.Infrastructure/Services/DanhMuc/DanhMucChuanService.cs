@@ -12,6 +12,12 @@ public interface IDanhMucChuanService
     /// <summary>Ghi đè danh mục chuẩn bằng dữ liệu mới lấy từ HanoiCheck.</summary>
     Task<KetQuaThaoTac> CapNhatTuHnCAsync(IEnumerable<StandardFoodCategory> danhMuc,
                                           CancellationToken ct = default);
+
+    /// <summary>Danh mục đơn vị tính HnC (GET /measures), sắp theo tên. Có thể rỗng nếu chưa tải về.</summary>
+    Task<IReadOnlyList<DonViTinhHnC>> LayDonViTinhAsync(CancellationToken ct = default);
+
+    /// <summary>Ghi đè danh mục đơn vị tính bằng dữ liệu mới lấy từ HanoiCheck.</summary>
+    Task<KetQuaThaoTac> CapNhatDonViTinhTuHnCAsync(IEnumerable<DonViTinhHnC> danhMuc, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -91,5 +97,44 @@ public class DanhMucChuanService : IDanhMucChuanService
         _cache.Remove(KhoaCache);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} danh mục thực phẩm chuẩn.");
+    }
+
+    private const string KhoaCacheDonViTinh = "danh-muc-don-vi-tinh-hnc";
+
+    public async Task<IReadOnlyList<DonViTinhHnC>> LayDonViTinhAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(KhoaCacheDonViTinh, out IReadOnlyList<DonViTinhHnC>? daCo) && daCo is not null)
+        {
+            return daCo;
+        }
+
+        var danhSach = await _db.DonViTinhHnCs.AsNoTracking().OrderBy(d => d.Ten).ToListAsync(ct);
+        _cache.Set(KhoaCacheDonViTinh, (IReadOnlyList<DonViTinhHnC>)danhSach, TimeSpan.FromHours(12));
+        return danhSach;
+    }
+
+    public async Task<KetQuaThaoTac> CapNhatDonViTinhTuHnCAsync(IEnumerable<DonViTinhHnC> danhMuc,
+                                                                CancellationToken ct = default)
+    {
+        var dsMoi = danhMuc.Where(d => d.Id > 0 && !string.IsNullOrWhiteSpace(d.Ten))
+            .GroupBy(d => d.Id).Select(g => g.First()).ToList();
+
+        // Chốt an toàn như danh mục chuẩn: HnC trả rỗng thì giữ nguyên danh mục đang có.
+        if (dsMoi.Count == 0) return KetQuaThaoTac.Loi("HanoiCheck không trả về đơn vị tính nào.");
+
+        // Thay thế toàn bộ theo id (Id là id của HnC nên không xoá-rồi-thêm được - EF báo trùng khoá):
+        // sửa tên cái đã có, thêm cái mới, bỏ cái HnC không còn trả. Thực phẩm chỉ lưu bản sao id, không có khoá ngoại.
+        var hienCo = await _db.DonViTinhHnCs.ToDictionaryAsync(d => d.Id, ct);
+        var now = DateTime.UtcNow;
+        foreach (var moi in dsMoi)
+        {
+            if (hienCo.Remove(moi.Id, out var cu)) { cu.Ten = moi.Ten.Trim(); cu.CapNhatLucUtc = now; }
+            else _db.DonViTinhHnCs.Add(new DonViTinhHnC { Id = moi.Id, Ten = moi.Ten.Trim(), CapNhatLucUtc = now });
+        }
+        _db.DonViTinhHnCs.RemoveRange(hienCo.Values);
+        await _db.SaveChangesAsync(ct);
+        _cache.Remove(KhoaCacheDonViTinh);
+
+        return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} đơn vị tính.");
     }
 }

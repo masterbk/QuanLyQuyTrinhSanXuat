@@ -113,6 +113,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
 
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
+    public DbSet<DonViTinhHnC> DonViTinhHnCs => Set<DonViTinhHnC>();
 
     // TODO (Giai đoạn 3+): Staff, Product, Batch, Dish, Order...
     // Mỗi entity nghiệp vụ PHẢI kế thừa TenantEntity và gọi .IsMultiTenant() ở dưới.
@@ -302,6 +303,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         product.Property(p => p.MaQuyTrinh).HasMaxLength(255);
         product.Property(p => p.DonViTinh).HasMaxLength(50);
         product.Property(p => p.TonToiThieu).HasPrecision(18, 3);
+        product.Property(p => p.QuyDoiGam).HasPrecision(18, 3);
+        product.Property(p => p.HeSoThaiBoPhanTram).HasPrecision(5, 2);
+        product.Property(p => p.HeSoThaiBoGam).HasPrecision(18, 3);
         product.HasMany(p => p.DanhSachDinhMuc).WithOne(d => d.Product!)
                .HasForeignKey(d => d.ProductId).OnDelete(DeleteBehavior.Cascade);
         product.HasIndex(p => p.MaSanPham).IsUnique();
@@ -629,6 +633,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dhPhanBo.HasIndex(p => p.DonHangNhanDongId);
 
         // Danh mục chuẩn của HanoiCheck: dùng chung, KHÔNG gọi IsMultiTenant().
+        // Danh mục đơn vị tính HnC (dùng chung, không theo tenant). Id = id của HnC, không tự tăng.
+        var donViTinh = builder.Entity<DonViTinhHnC>();
+        donViTinh.ToTable("DonViTinhHnCs");
+        donViTinh.Property(d => d.Id).ValueGeneratedNever();
+        donViTinh.Property(d => d.Ten).HasMaxLength(255).IsRequired();
+
         var standardFood = builder.Entity<StandardFoodCategory>();
         standardFood.ToTable("StandardFoodCategories");
         standardFood.Property(c => c.Code).HasMaxLength(100).IsRequired();

@@ -20,10 +20,33 @@ public sealed class HanoiCheckStandardFoodsClient : IHanoiCheckStandardFoodsClie
     public async Task<StandardFoodsResult> LayDanhMucAsync(
         string baseUrl, string accessToken, CancellationToken ct = default)
     {
-        var url = baseUrl.TrimEnd('/') + "/api/supplier/standard-foods";
+        var (data, loi) = await GetAsync<StandardFoodsResponse>(
+            baseUrl, "/api/supplier/standard-foods", accessToken, "danh mục thực phẩm chuẩn", ct);
+        if (loi is not null) return StandardFoodsResult.Loi(loi);
+        return data?.Data is null
+            ? StandardFoodsResult.Loi("Phản hồi standard-foods không đúng định dạng.")
+            : StandardFoodsResult.Ok(data.Data);
+    }
+
+    public async Task<MeasuresResult> LayDonViTinhAsync(
+        string baseUrl, string accessToken, CancellationToken ct = default)
+    {
+        var (data, loi) = await GetAsync<MeasuresResponse>(
+            baseUrl, "/api/supplier/measures", accessToken, "danh mục đơn vị tính", ct);
+        if (loi is not null) return MeasuresResult.Loi(loi);
+        return data?.Data is null
+            ? MeasuresResult.Loi("Phản hồi measures không đúng định dạng.")
+            : MeasuresResult.Ok(data.Data);
+    }
+
+    /// <summary>GET danh mục dùng chung: chỉ cần Bearer token, không ký HMAC.</summary>
+    private async Task<(T? Data, string? Loi)> GetAsync<T>(
+        string baseUrl, string path, string accessToken, string tenDanhMuc, CancellationToken ct)
+    {
+        var url = baseUrl.TrimEnd('/') + path;
         if (!Uri.TryCreate(url, UriKind.Absolute, out _))
         {
-            return StandardFoodsResult.Loi("Base URL không hợp lệ.");
+            return (default, "Base URL không hợp lệ.");
         }
 
         try
@@ -37,25 +60,23 @@ public sealed class HanoiCheckStandardFoodsClient : IHanoiCheckStandardFoodsClie
 
             if (!response.IsSuccessStatusCode)
             {
-                return StandardFoodsResult.Loi($"HanoiCheck trả về HTTP {(int)response.StatusCode}.");
+                return (default, $"HanoiCheck trả về HTTP {(int)response.StatusCode}.");
             }
 
-            var parsed = JsonSerializer.Deserialize<StandardFoodsResponse>(body);
-            if (parsed?.Data is null)
-            {
-                return StandardFoodsResult.Loi("Phản hồi standard-foods không đúng định dạng.");
-            }
-
-            return StandardFoodsResult.Ok(parsed.Data);
+            return (JsonSerializer.Deserialize<T>(body), null);
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
-            return StandardFoodsResult.Loi("Hết thời gian chờ khi lấy danh mục thực phẩm chuẩn.");
+            return (default, $"Hết thời gian chờ khi lấy {tenDanhMuc}.");
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogWarning(ex, "Lỗi mạng khi lấy standard-foods.");
-            return StandardFoodsResult.Loi("Lỗi mạng khi lấy danh mục thực phẩm chuẩn: " + ex.Message);
+            _logger.LogWarning(ex, "Lỗi mạng khi lấy {Path}.", path);
+            return (default, $"Lỗi mạng khi lấy {tenDanhMuc}: " + ex.Message);
+        }
+        catch (JsonException)
+        {
+            return (default, $"Phản hồi {tenDanhMuc} không đúng định dạng.");
         }
     }
 }

@@ -49,6 +49,20 @@ public class Product : TenantEntity, ICoDongBoHnC
     /// <summary>Mức tồn tối thiểu để cảnh báo "sắp hết" trên dashboard (null = không cảnh báo).</summary>
     public decimal? TonToiThieu { get; set; }
 
+    // ----- Cấu hình đơn vị tính gửi HanoiCheck (food_config, đặc tả v2.6). Chỉ gửi khi đã chọn đơn vị. -----
+
+    /// <summary>food_config.measure_id - id đơn vị tính trong danh mục GET /measures (bảng DonViTinhHnC).</summary>
+    public int? DonViTinhHnCId { get; set; }
+
+    /// <summary>food_config.gam_exchange - 1 đơn vị tính quy đổi ra bao nhiêu gam.</summary>
+    public decimal? QuyDoiGam { get; set; }
+
+    /// <summary>food_config.extrude_factor - hệ số thải bỏ, tính theo phần trăm.</summary>
+    public decimal? HeSoThaiBoPhanTram { get; set; }
+
+    /// <summary>food_config.extrude_factor_g - hệ số thải bỏ, tính theo gam.</summary>
+    public decimal? HeSoThaiBoGam { get; set; }
+
     /// <summary>Định mức (công thức) - chỉ có ý nghĩa với thành phẩm.</summary>
     public List<DinhMucNguyenLieu> DanhSachDinhMuc { get; set; } = new();
 }

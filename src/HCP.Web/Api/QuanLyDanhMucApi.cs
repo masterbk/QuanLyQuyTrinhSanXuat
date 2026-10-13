@@ -48,7 +48,16 @@ public static class QuanLyDanhMucApi
 
         nhom.MapPut("/thuc-pham/{id:int}", async (int id, SanPhamLuuRequest req, IDanhMucService<Product> svc) =>
         {
-            var kq = await svc.CapNhatAsync(TuRequest(new Product { Id = id }, req));
+            // App chưa có ô cấu hình đơn vị tính HnC (food_config, chỉ sửa trên web) -> giữ nguyên giá trị đang lưu,
+            // không thì mỗi lần sửa trên app sẽ xoá mất.
+            var cu = await svc.LayTheoIdAsync(id);
+            var sp = TuRequest(new Product
+            {
+                Id = id,
+                DonViTinhHnCId = cu?.DonViTinhHnCId, QuyDoiGam = cu?.QuyDoiGam,
+                HeSoThaiBoPhanTram = cu?.HeSoThaiBoPhanTram, HeSoThaiBoGam = cu?.HeSoThaiBoGam
+            }, req);
+            var kq = await svc.CapNhatAsync(sp);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao)) : Results.BadRequest(new LoiDto(kq.ThongBao));
         });
 

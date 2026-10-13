@@ -82,6 +82,20 @@ public sealed class StandardFoodsSyncJob : IStandardFoodsSyncJob
         await _danhMucChuan.CapNhatTuHnCAsync(danhMuc, ct);
         var soLuong = ketQua.Items.Count(i => i.Id.HasValue);
         _logger.LogInformation("Đã cập nhật {SoLuong} danh mục thực phẩm chuẩn từ HnC.", soLuong);
+
+        // Kèm danh mục đơn vị tính (food_config.measure_id). Lỗi phần này không làm hỏng phần trên.
+        var donViTinh = await _client.LayDonViTinhAsync(cauHinh.BaseUrl, token.AccessToken!, ct);
+        if (donViTinh.ThanhCong)
+        {
+            var kq = await _danhMucChuan.CapNhatDonViTinhTuHnCAsync(donViTinh.Items
+                .Where(i => i.Id.HasValue)
+                .Select(i => new DonViTinhHnC { Id = i.Id!.Value, Ten = i.Name ?? "" }), ct);
+            _logger.LogInformation("Danh mục đơn vị tính HnC: {ThongBao}", kq.ThongBao);
+        }
+        else
+        {
+            _logger.LogWarning("Lấy danh mục đơn vị tính thất bại: {Loi}", donViTinh.ThongBao);
+        }
         return soLuong;
     }
 }

@@ -79,6 +79,10 @@ public class ThucPhamService : IDanhMucService<Product>
         hienTai.LoaiSanPham = entity.LoaiSanPham;
         hienTai.DonViTinh = entity.DonViTinh;
         hienTai.TonToiThieu = entity.TonToiThieu;
+        hienTai.DonViTinhHnCId = entity.DonViTinhHnCId;
+        hienTai.QuyDoiGam = entity.QuyDoiGam;
+        hienTai.HeSoThaiBoPhanTram = entity.HeSoThaiBoPhanTram;
+        hienTai.HeSoThaiBoGam = entity.HeSoThaiBoGam;
         hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -120,6 +124,17 @@ public class ThucPhamService : IDanhMucService<Product>
                 return "Vui lòng chọn quy trình sản xuất - HanoiCheck bắt buộc quy trình mẫu cho thực phẩm đồng bộ. "
                        + "Nếu thực phẩm này không gửi HanoiCheck thì bỏ tick \"Đồng bộ HanoiCheck\".";
         }
+
+        // Cấu hình đơn vị tính (food_config): measure_id bắt buộc khi có food_config, nên các chỉ số còn lại
+        // chỉ có nghĩa khi đã chọn đơn vị.
+        if (p.DonViTinhHnCId is null && (p.QuyDoiGam ?? p.HeSoThaiBoPhanTram ?? p.HeSoThaiBoGam) is not null)
+            return "Vui lòng chọn đơn vị tính HanoiCheck trước khi khai quy đổi gam / hệ số thải bỏ.";
+        if (p.QuyDoiGam is <= 0)
+            return "Quy đổi ra gam phải lớn hơn 0.";
+        if (p.HeSoThaiBoPhanTram is < 0 or > 100)
+            return "Hệ số thải bỏ (%) phải từ 0 đến 100.";
+        if (p.HeSoThaiBoGam is < 0)
+            return "Hệ số thải bỏ (gam) không được âm.";
 
         if (!string.IsNullOrWhiteSpace(p.MaQuyTrinh))
         {

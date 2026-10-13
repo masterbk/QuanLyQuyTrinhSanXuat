@@ -157,6 +157,43 @@ else
                                           Required="@_input.DongBoHnC" RequiredError="Vui lòng nhập mã loại" />
                         }
                     </MudItem>
+
+                    @* food_config (đặc tả v2.6): tuỳ chọn. Không chọn đơn vị -> không gửi, HnC giữ cấu hình đang có. *@
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle2" Class="mt-2">Đơn vị tính gửi HanoiCheck (tuỳ chọn)</MudText>
+                        @if (_donViTinh.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Chưa có danh mục đơn vị tính - bấm "Cập nhật danh mục chuẩn" để tải về.
+                            </MudText>
+                        }
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int?" @bind-Value="_input.DonViTinhHnCId" Label="Đơn vị tính HanoiCheck"
+                                   Variant="Variant.Outlined" Clearable="true" Disabled="@(_donViTinh.Count == 0)"
+                                   HelperText="@GoiYDonViTinh()">
+                            @foreach (var d in _donViTinh)
+                            {
+                                <MudSelectItem T="int?" Value="@d.Id">@d.Ten</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="_input.QuyDoiGam" Label="Quy đổi ra gam"
+                                         Variant="Variant.Outlined" Min="0m" Clearable="true"
+                                         Disabled="@(_input.DonViTinhHnCId is null)"
+                                         HelperText="1 đơn vị tính bằng bao nhiêu gam, vd Kg = 1000." />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="_input.HeSoThaiBoPhanTram" Label="Hệ số thải bỏ (%)"
+                                         Variant="Variant.Outlined" Min="0m" Max="100m" Clearable="true"
+                                         Disabled="@(_input.DonViTinhHnCId is null)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField @bind-Value="_input.HeSoThaiBoGam" Label="Hệ số thải bỏ (gam)"
+                                         Variant="Variant.Outlined" Min="0m" Clearable="true"
+                                         Disabled="@(_input.DonViTinhHnCId is null)" />
+                    </MudItem>
                 }
                 </ChiKhiBatHnC>
                 <MudItem xs="12" sm="6">
@@ -204,6 +241,7 @@ else
 @code {
     private List<Product> _danhSach = new();
     private List<StandardFoodCategory> _danhMucChuan = new();
+    private List<DonViTinhHnC> _donViTinh = new();
     private List<ProductionProcess> _quyTrinh = new();
 
     private bool _dangTai = true;
@@ -224,6 +262,7 @@ else
         _dangTai = true;
         _danhSach = (await ThucPhamService.LayTatCaAsync()).ToList();
         _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
+        _donViTinh = (await DanhMucChuanService.LayDonViTinhAsync()).ToList();
         _quyTrinh = (await QuyTrinhService.LayTatCaAsync()).ToList();
         _dangTai = false;
     }
@@ -238,6 +277,7 @@ else
             {
                 Snackbar.Add($"Đã cập nhật {soLuong} danh mục thực phẩm chuẩn từ HanoiCheck.", Severity.Success);
                 _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
+                _donViTinh = (await DanhMucChuanService.LayDonViTinhAsync()).ToList();
             }
             else
             {
@@ -261,6 +301,15 @@ else
         if (string.IsNullOrEmpty(code)) return string.Empty;
         var dm = _danhMucChuan.FirstOrDefault(x => x.Code == code);
         return dm is null ? code : dm.Name;
+    }
+
+    /// <summary>Gợi ý đơn vị theo danh mục chuẩn đã chọn (standard-foods trả kèm measure_name).</summary>
+    private string GoiYDonViTinh()
+    {
+        var dvChuan = _danhMucChuan.FirstOrDefault(x => x.Code == _input.MaLoaiSp)?.MeasureName;
+        return string.IsNullOrWhiteSpace(dvChuan)
+            ? "Để trống nếu không cần khai."
+            : $"Danh mục chuẩn đang dùng đơn vị: {dvChuan}.";
     }
 
     /// <summary>Lọc danh mục chuẩn theo mã hoặc tên; giới hạn 100 kết quả để dropdown mở nhanh.</summary>
@@ -295,7 +344,11 @@ else
                 MaQuyTrinh = sp.MaQuyTrinh,
                 LoaiSanPham = sp.LoaiSanPham,
                 DonViTinh = sp.DonViTinh,
-                TonToiThieu = sp.TonToiThieu
+                TonToiThieu = sp.TonToiThieu,
+                DonViTinhHnCId = sp.DonViTinhHnCId,
+                QuyDoiGam = sp.QuyDoiGam,
+                HeSoThaiBoPhanTram = sp.HeSoThaiBoPhanTram,
+                HeSoThaiBoGam = sp.HeSoThaiBoGam
             };
 
         _hienForm = true;
@@ -307,6 +360,12 @@ else
         {
             await _form.Validate();
             if (!_form.IsValid) return;
+        }
+
+        // Bỏ chọn đơn vị tính HnC thì các chỉ số đi kèm (đang bị khoá trên form) cũng bỏ theo.
+        if (_input.DonViTinhHnCId is null)
+        {
+            _input.QuyDoiGam = _input.HeSoThaiBoPhanTram = _input.HeSoThaiBoGam = null;
         }
 
         _dangLuu = true;
