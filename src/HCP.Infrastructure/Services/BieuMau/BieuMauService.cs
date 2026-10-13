@@ -322,6 +322,7 @@ public sealed class BieuMauService : IBieuMauService
         {
             MaHieu = "BM-GMP-ISO-01-01", Ten = "Kiểm tra, tiếp nhận nguyên liệu NCC", BoCuc = BoCucBieuMau.NhieuDongTuDo,
             TanSuat = "Mỗi lần nhập", NhomQuyen = AppRoles.QuyenNhapLieu, ThuTu = 5, DayVaoKho = true,
+            MotPhieuMoiNgay = false,
             GhiChuChan = "Cảm quan: Đạt / Không đạt. Dòng Đạt sẽ tự nhập vào kho nguyên liệu khi hoàn thành.",
             Truong =
             {
