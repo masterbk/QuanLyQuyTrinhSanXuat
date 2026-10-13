@@ -79,7 +79,8 @@ class _ManSuaLenhState extends ConsumerState<ManSuaLenh> {
     _ghiChu = TextEditingController(text: l?.ghiChu ?? '');
     _maKho = l?.maKho;
     _ngaySanXuat = l?.ngaySanXuat ?? bayGioVietNam();
-    _taoLoDongBo = l?.taoLoDongBo ?? false;
+    // Lệnh mới mặc định tích đồng bộ HanoiCheck (giống web); lệnh đang sửa giữ giá trị đã lưu.
+    _taoLoDongBo = l?.taoLoDongBo ?? true;
     _dong = _dongBanDau();
 
     // Dựng sẵn khâu theo quy trình (lệnh cũ chưa có khâu, hoặc dòng điền sẵn từ đơn hàng).
