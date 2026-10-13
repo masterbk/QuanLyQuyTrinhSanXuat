@@ -5,7 +5,7 @@ using HCP.Infrastructure.Sync;
 namespace HCP.Tests;
 
 /// <summary>
-/// Quy định đường dẫn tệp của HanoiCheck (đặc tả v2.2, Phần III mục 5) và bước đổi đường dẫn tương đối
+/// Quy định đường dẫn tệp của HanoiCheck (đặc tả v2.6, Phần III mục 5) và bước đổi đường dẫn tương đối
 /// "/uploads/..." thành URL tuyệt đối trước khi gửi.
 /// </summary>
 public class DuongDanTepTests
@@ -23,10 +23,12 @@ public class DuongDanTepTests
     [Theory]
     [InlineData("https://a.vn/x.png", true)]
     [InlineData("https://a.vn/giay.PDF", true)]
-    [InlineData("https://a.vn/hd.docx", true)]
-    [InlineData("https://drive.google.com/file/d/abc/view", true)]
+    [InlineData("https://a.vn/hd.docx", false)]                        // v2.6 bỏ Word
+    [InlineData("https://a.vn/hd.doc", false)]
+    [InlineData("https://drive.google.com/file/d/abc/view", false)]   // v2.6 bỏ Google Drive
+    [InlineData("https://drive.google.com/file/d/abc/x.pdf", false)]
     [InlineData("https://a.vn/bang.xlsx", false)]
-    public void Tep_Khau_Nhan_Anh_Pdf_Word_Hoac_Google_Drive(string duongDan, bool hopLe) =>
+    public void Tep_Khau_Chi_Nhan_Anh_Hoac_Pdf(string duongDan, bool hopLe) =>
         Assert.Equal(hopLe, HnCPayloadMapper.LaDuongDanTepKhau(duongDan));
 
     private const string Payload =

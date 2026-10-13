@@ -189,8 +189,8 @@ public class LoSanXuatService : IDanhMucService<Batch>
                 if (!maBuocCuaLo.Contains(f.MaBuocSx!.Trim()))
                     return $"File \"{f.TenFile}\": mã bước SX \"{f.MaBuocSx}\" không có trong các khâu của lô.";
                 if (!HnCPayloadMapper.LaDuongDanTepKhau(f.DuongDan))
-                    return $"File \"{f.TenFile}\": tệp minh chứng phải là ảnh, PDF, Word (.pdf, .doc, .docx) "
-                           + "hoặc đường dẫn Google Drive.";
+                    return $"File \"{f.TenFile}\": tệp minh chứng phải là đường dẫn ảnh hoặc PDF (.jpg, .jpeg, .png, "
+                           + ".gif, .webp, .pdf). HanoiCheck không còn nhận Word và Google Drive.";
             }
         }
 

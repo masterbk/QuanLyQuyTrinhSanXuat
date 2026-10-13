@@ -110,13 +110,14 @@ public static class HnCPayloadMapper
         }
     };
 
-    // ---------- Quy định đường dẫn tệp (đặc tả v2.2, Phần III mục 5) ----------
+    // ---------- Quy định đường dẫn tệp (đặc tả v2.6, Phần III mục 5) ----------
 
     private static readonly HashSet<string> DuoiAnh =
         new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
 
+    // v2.6 bỏ .doc/.docx và đường dẫn Google Drive cho tệp khâu.
     private static readonly HashSet<string> DuoiTepKhau =
-        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".doc", ".docx" };
+        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf" };
 
     /// <summary>Đuôi file của đường dẫn, bỏ phần sau dấu ? hoặc # (đặc tả cho phép kèm query).</summary>
     public static string DuoiDuongDan(string? duongDan)
@@ -129,13 +130,16 @@ public static class HnCPayloadMapper
     private static bool LaGoogleDrive(string? duongDan) =>
         duongDan?.Contains("drive.google.com", StringComparison.OrdinalIgnoreCase) == true;
 
-    /// <summary>Ảnh album của lô: đuôi ảnh, KHÔNG nhận Google Drive.</summary>
+    /// <summary>
+    /// Ảnh album của lô: đuôi ảnh, KHÔNG nhận Google Drive. (v2.6 cho thêm .pdf nhưng cố ý không nhận:
+    /// album còn hiện dạng ảnh ở trang tra cứu công khai.)
+    /// </summary>
     public static bool LaDuongDanAnhLo(string? duongDan) =>
         DuoiAnh.Contains(DuoiDuongDan(duongDan)) && !LaGoogleDrive(duongDan);
 
-    /// <summary>Tệp minh chứng theo khâu: ảnh, PDF, Word, hoặc đường dẫn Google Drive.</summary>
+    /// <summary>Tệp minh chứng theo khâu: ảnh hoặc PDF, KHÔNG nhận Google Drive.</summary>
     public static bool LaDuongDanTepKhau(string? duongDan) =>
-        DuoiTepKhau.Contains(DuoiDuongDan(duongDan)) || LaGoogleDrive(duongDan);
+        DuoiTepKhau.Contains(DuoiDuongDan(duongDan)) && !LaGoogleDrive(duongDan);
 
     /// <summary>
     /// File thuộc album ảnh chung của lô = file KHÔNG gắn bước sản xuất. File có mã bước SX là tệp minh

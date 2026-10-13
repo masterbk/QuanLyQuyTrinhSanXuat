@@ -266,9 +266,10 @@ else
                                OnClick="ThemFile">Thêm file</MudButton>
                 </div>
                 <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
-                    Theo đặc tả HanoiCheck v2.2: <b>ảnh chung của lô</b> (bắt buộc 1–3 ảnh) là file để trống Mã bước SX,
+                    Theo đặc tả HanoiCheck v2.6: <b>ảnh chung của lô</b> (bắt buộc 1–3 ảnh) là file để trống Mã bước SX,
                     đường dẫn là URL ảnh .jpg/.jpeg/.png/.gif/.webp. <b>Tệp minh chứng</b> (giấy kiểm dịch, chứng nhận…)
-                    thì chọn Mã bước SX của khâu tương ứng, tối đa 3 tệp mỗi khâu, nhận ảnh/PDF/Word/Google Drive.
+                    thì chọn Mã bước SX của khâu tương ứng, tối đa 3 tệp mỗi khâu, chỉ nhận ảnh hoặc PDF
+                    (không nhận Word, Google Drive).
                 </MudAlert>
                 @if (_input.DanhSachFile.Count == 0)
                 {

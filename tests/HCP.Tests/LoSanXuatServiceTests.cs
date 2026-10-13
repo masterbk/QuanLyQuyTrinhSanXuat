@@ -92,7 +92,10 @@ public class LoSanXuatServiceTests
     {
         Seed();
         Assert.Contains("không có trong các khâu", await ThemLoiAsync(Lo(Anh("A1"), Tep("F1", "B9"))));
-        Assert.Contains("ảnh, PDF, Word", await ThemLoiAsync(Lo(Anh("A1"), Tep("F1", "B1", "https://app.vn/bang.xlsx"))));
+        Assert.Contains("ảnh hoặc PDF", await ThemLoiAsync(Lo(Anh("A1"), Tep("F1", "B1", "https://app.vn/bang.xlsx"))));
+        Assert.Contains("ảnh hoặc PDF", await ThemLoiAsync(Lo(Anh("A1"), Tep("F1", "B1", "https://app.vn/hd.docx"))));
+        Assert.Contains("ảnh hoặc PDF", await ThemLoiAsync(
+            Lo(Anh("A1"), Tep("F1", "B1", "https://drive.google.com/file/d/abc/view"))));
         Assert.Contains("tối đa 3 tệp", await ThemLoiAsync(
             Lo(Anh("A1"), Tep("F1", "B1"), Tep("F2", "B1"), Tep("F3", "B1"), Tep("F4", "B1"))));
     }
@@ -102,7 +105,7 @@ public class LoSanXuatServiceTests
     {
         Seed();
         var b = Lo(Anh("A1", "https://app.vn/uploads/a.webp?x=1"), Anh("A2"),
-                   Tep("F1", "B1", "https://drive.google.com/file/d/abc/view"), Tep("F2", "B1", "https://app.vn/hd.docx"));
+                   Tep("F1", "B1", "https://app.vn/kiem-dich.pdf"), Tep("F2", "B1", "https://app.vn/hd.png?v=2"));
         using var db = MoDb();
         var kq = await new LoSanXuatService(db, new NoOpOutbox(), new MaTuSinhService(db)).ThemAsync(b);
 
