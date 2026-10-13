@@ -110,6 +110,33 @@ public class DinhMucServiceTests
     }
 
     [Fact]
+    public async Task Dem_Dinh_Muc_Theo_Thanh_Pham()
+    {
+        var id = SeedThanhPham();
+        int idChuaCo;
+        using (var db = MoDb())
+        {
+            var tp2 = new Product { MaSanPham = "BANH_NGOT", TenSanPham = "Bánh ngọt", MaLoaiSp = "x",
+                                    LoaiSanPham = LoaiSanPham.ThanhPham };
+            db.Products.Add(tp2);
+            db.SaveChanges();
+            idChuaCo = tp2.Id;
+
+            await new DinhMucService(db).LuuAsync(id, new[]
+            {
+                new DinhMucNguyenLieu { MaNguyenLieu = "BOT_MI", SoLuong = 0.1m },
+                new DinhMucNguyenLieu { MaNguyenLieu = "DUONG", SoLuong = 0.02m }
+            });
+        }
+        using (var db = MoDb())
+        {
+            var dem = await new DinhMucService(db).DemTheoThanhPhamAsync();
+            Assert.Equal(2, dem[id]);
+            Assert.False(dem.ContainsKey(idChuaCo));   // chưa có định mức -> không có mặt
+        }
+    }
+
+    [Fact]
     public async Task Chan_Hao_Hut_Ngoai_Khoang()
     {
         var id = SeedThanhPham();

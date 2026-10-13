@@ -141,12 +141,8 @@ else
         _thanhPham = tatCa.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham).ToList();
         _nguyenLieu = tatCa.Where(p => p.LoaiSanPham == LoaiSanPham.NguyenLieu).ToList();
 
-        _soDinhMuc = new Dictionary<int, int>();
-        foreach (var tp in _thanhPham)
-        {
-            var dm = await DinhMucService.LayTheoThanhPhamAsync(tp.Id);
-            _soDinhMuc[tp.Id] = dm.Count;
-        }
+        var dem = await DinhMucService.DemTheoThanhPhamAsync();
+        _soDinhMuc = _thanhPham.ToDictionary(tp => tp.Id, tp => dem.GetValueOrDefault(tp.Id));
         _dangTai = false;
     }
 

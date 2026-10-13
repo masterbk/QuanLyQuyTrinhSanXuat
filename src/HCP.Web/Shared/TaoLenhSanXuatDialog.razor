@@ -242,12 +242,9 @@
             .ToDictionary(g => g.Key, g => g.First().TenKhau);
 
         var tatCaSp = await ThucPhamService.LayTatCaAsync();
-        _thanhPham = new List<Product>();
-        foreach (var p in tatCaSp.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham))
-        {
-            var dm = await DinhMucService.LayTheoThanhPhamAsync(p.Id);
-            if (dm.Count > 0) _thanhPham.Add(p);   // chỉ thành phẩm đã có định mức
-        }
+        var coDinhMuc = await DinhMucService.DemTheoThanhPhamAsync();
+        _thanhPham = tatCaSp   // chỉ thành phẩm đã có định mức
+            .Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham && coDinhMuc.ContainsKey(p.Id)).ToList();
 
         // Mặc định tick sẵn "tạo Lô + đồng bộ HanoiCheck" khi lập lệnh mới (ô chỉ hiện khi cơ sở đã bật HnC).
         _input = new LenhSanXuat { MaKho = _kho.Count == 1 ? _kho[0].MaKho : "", TaoLoDongBo = true };

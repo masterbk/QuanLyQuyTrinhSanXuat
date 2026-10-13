@@ -19,6 +19,12 @@ public sealed class DinhMucService : IDinhMucService
             .OrderBy(d => d.MaNguyenLieu)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyDictionary<int, int>> DemTheoThanhPhamAsync(CancellationToken ct = default) =>
+        await _db.DinhMucNguyenLieus.AsNoTracking()
+            .GroupBy(d => d.ProductId)
+            .Select(g => new { g.Key, SoDong = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.SoDong, ct);
+
     public async Task<KetQuaThaoTac> LuuAsync(int productId, IEnumerable<DinhMucNguyenLieu> dongDinhMuc,
                                               CancellationToken ct = default)
     {

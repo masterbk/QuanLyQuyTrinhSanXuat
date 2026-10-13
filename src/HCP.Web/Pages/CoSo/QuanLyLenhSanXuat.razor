@@ -570,12 +570,9 @@ else
 
         var tatCaSp = await ThucPhamService.LayTatCaAsync();
         _tenThanhPham = tatCaSp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
-        _thanhPham = new List<Product>();
-        foreach (var p in tatCaSp.Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham))
-        {
-            var dm = await DinhMucService.LayTheoThanhPhamAsync(p.Id);
-            if (dm.Count > 0) _thanhPham.Add(p);   // chỉ hiện thành phẩm đã có định mức
-        }
+        var coDinhMuc = await DinhMucService.DemTheoThanhPhamAsync();
+        _thanhPham = tatCaSp   // chỉ hiện thành phẩm đã có định mức
+            .Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham && coDinhMuc.ContainsKey(p.Id)).ToList();
     }
 
     // Nạp lại DANH SÁCH lệnh theo bộ lọc (khoảng ngày + trạng thái) - lọc trên DB, không tải toàn bộ lịch sử.

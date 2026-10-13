@@ -257,12 +257,11 @@ public static class LenhSanXuatApi
         // Chỉ thành phẩm ĐÃ có định mức mới sản xuất được.
         dm.MapGet("/thanh-pham", async (IDanhMucService<Product> sp, IDinhMucService dinhMuc) =>
         {
-            var ds = new List<ThanhPhamDto>();
-            foreach (var p in (await sp.LayTatCaAsync()).Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham))
-            {
-                if ((await dinhMuc.LayTheoThanhPhamAsync(p.Id)).Count > 0)
-                    ds.Add(new ThanhPhamDto(p.MaSanPham, p.TenSanPham, p.DonViTinh, p.MaQuyTrinh));
-            }
+            var coDinhMuc = await dinhMuc.DemTheoThanhPhamAsync();
+            var ds = (await sp.LayTatCaAsync())
+                .Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham && coDinhMuc.ContainsKey(p.Id))
+                .Select(p => new ThanhPhamDto(p.MaSanPham, p.TenSanPham, p.DonViTinh, p.MaQuyTrinh))
+                .ToList();
             return Results.Ok(ds);
         });
 
