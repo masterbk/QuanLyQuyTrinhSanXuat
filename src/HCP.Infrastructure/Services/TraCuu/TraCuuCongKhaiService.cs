@@ -153,9 +153,16 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
         var sanPham = maSp.Count == 0
             ? new Dictionary<string, Product>()
             : await _db.Products.AsNoTracking().Where(p => maSp.Contains(p.MaSanPham)).ToDictionaryAsync(p => p.MaSanPham, ct);
+        var maMon = don.Dong.Where(l => l.LaMonAn).Select(l => l.MaThanhPham).Distinct().ToList();
+        var monAn = maMon.Count == 0
+            ? new Dictionary<string, string>()
+            : await _db.Dishes.AsNoTracking().Where(d => maMon.Contains(d.MaMonAn)).ToDictionaryAsync(d => d.MaMonAn, d => d.TenMonAn, ct);
 
         var dong = don.Dong.OrderBy(l => l.Id).Select(l =>
         {
+            // Dòng suất ăn: tên món, đơn vị "suất".
+            if (l.LaMonAn)
+                return $"{monAn.GetValueOrDefault(l.MaThanhPham) ?? l.MaThanhPham} × {l.SoLuong.ToString("#,0.###")} suất";
             sanPham.TryGetValue(l.MaThanhPham, out var sp);
             var dvt = sp?.DonViTinh;
             return $"{sp?.TenSanPham ?? l.MaThanhPham} × {l.SoLuong.ToString("#,0.###")}{(string.IsNullOrWhiteSpace(dvt) ? "" : " " + dvt)}";
@@ -226,6 +233,11 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
             .Where(p => p.TenantId == tenantId && maSp.Contains(p.MaSanPham))
             .ToDictionaryAsync(p => p.MaSanPham, ct);
 
+        var maMon = don.Dong.Where(l => l.LaMonAn).Select(l => l.MaThanhPham).Distinct().ToList();
+        var monAn = await _db.Dishes.IgnoreQueryFilters().AsNoTracking()
+            .Where(d => d.TenantId == tenantId && maMon.Contains(d.MaMonAn))
+            .ToDictionaryAsync(d => d.MaMonAn, d => d.TenMonAn, ct);
+
         var maLo = don.Dong.SelectMany(l => l.XuatLo).Select(x => x.MaLo).Distinct().ToList();
         var lo = await _db.Batches.IgnoreQueryFilters().AsNoTracking()
             .Where(b => b.TenantId == tenantId && maLo.Contains(b.MaLo))
@@ -244,6 +256,9 @@ public sealed class TraCuuCongKhaiService : ITraCuuCongKhaiService
                 lo.TryGetValue(x.MaLo, out var b);
                 return new TraCuuLoTomTat(x.MaLo, b?.NgaySanXuat, x.HanSuDung ?? b?.HanSuDung, x.SoLuong, b?.MaTraCuu);
             }).ToList();
+            if (l.LaMonAn)
+                return new TraCuuDongDon(l.MaThanhPham, monAn.GetValueOrDefault(l.MaThanhPham) ?? l.MaThanhPham, "suất",
+                                         l.SoLuong, cacLo);
             return new TraCuuDongDon(l.MaThanhPham, sp?.TenSanPham ?? l.MaThanhPham, sp?.DonViTinh, l.SoLuong, cacLo);
         }).ToList();
 

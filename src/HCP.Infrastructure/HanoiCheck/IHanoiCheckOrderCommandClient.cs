@@ -3,9 +3,13 @@ namespace HCP.Infrastructure.HanoiCheck;
 /// <summary>Một dòng ảnh gửi kèm process (đơn giản hoá còn mỗi đường dẫn - loại/tên không cần với HnC).</summary>
 public sealed record ProcessOrderAllocation(string MaLo, string MaKho, decimal SoLuong);
 
+/// <summary>Nguồn hàng của một nguyên liệu trong dòng suất ăn (chi_tiet[].nguyen_lieu[]).</summary>
+public sealed record ProcessOrderIngredient(string MaThucPham, List<ProcessOrderAllocation> PhanBo);
+
 /// <summary>
-/// Một dòng hàng cần khai nguồn hàng của đơn thực phẩm. Định danh bằng <see cref="TraceCode"/>; đơn cũ chưa lấy được
-/// mã truy vết thì dùng <see cref="MaThucPham"/> (đặc tả cho phép, với điều kiện mã đó chỉ xuất hiện một lần trong đơn).
+/// Một dòng hàng cần khai nguồn hàng. Định danh bằng <see cref="TraceCode"/>; đơn cũ chưa lấy được mã truy vết thì dùng
+/// <see cref="MaThucPham"/> / <see cref="MaMonAn"/> (đặc tả cho phép, với điều kiện mã đó chỉ xuất hiện một lần trong đơn).
+/// Đơn thực phẩm khai <see cref="PhanBo"/>; đơn suất ăn/thực đơn khai <see cref="NguyenLieu"/> - KHÔNG được có cả hai.
 /// </summary>
 public sealed class ProcessOrderLine
 {
@@ -13,7 +17,12 @@ public sealed class ProcessOrderLine
 
     public string? MaThucPham { get; set; }
 
+    public string? MaMonAn { get; set; }
+
     public List<ProcessOrderAllocation> PhanBo { get; set; } = new();
+
+    /// <summary>Có giá trị = dòng suất ăn (dish_ingredient_fulfillment): phải gửi ĐỦ và ĐÚNG các nguyên liệu của món.</summary>
+    public List<ProcessOrderIngredient>? NguyenLieu { get; set; }
 }
 
 /// <summary>Nội dung gửi lên POST /api/supplier/orders/{code}/process.</summary>

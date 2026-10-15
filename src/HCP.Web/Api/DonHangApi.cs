@@ -77,7 +77,7 @@ public static class DonHangApi
         // bất kể trạng thái - đang giao hoặc đã giao xong. Lọc + phân trang ở CSDL (IDonHangBanService.LayTrangAsync)
         // - KHÔNG tải cả bảng đơn hàng vào bộ nhớ rồi mới cắt trang, vì API này bị app gọi lại liên tục (đổi
         // tab, kéo thêm trang, pull-to-refresh).
-        ban.MapGet("", async (IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp,
+        ban.MapGet("", async (IDonHangBanService svc, IKhachHangService kh, IDanhMucService<Product> sp, IDanhMucService<Dish> mon,
                               IDanhMucService<Staff> ns, ClaimsPrincipal user, AppDbContext db,
                               string? trangThai, bool canGiao = false, bool cuaToi = false,
                               DateOnly? tuNgay = null, DateOnly? denNgay = null, string? maKhachHang = null,
@@ -97,17 +97,17 @@ public static class DonHangApi
 
             var (t, n) = LenhSanXuatApi.ChuanHoaTrang(trang, soDong);
             var (trangDs, tongSo) = await svc.LayTrangAsync(tt, canGiao, maNguoiGiao, tuNgay, denNgay, maKhachHang, t, n);
-            var ten = await LayTenAsync(kh, sp, ns);
+            var ten = await LayTenAsync(kh, sp, mon, ns);
             return Results.Ok(new TrangDuLieu<DonHangBanDto>(
                 trangDs.Select(d => MapDonBan(d, ten)).ToList(), t, n, tongSo));
         });
 
         ban.MapGet("/{id:int}", async (int id, IDonHangBanService svc, IKhachHangService kh,
-                                       IDanhMucService<Product> sp, IDanhMucService<Staff> ns) =>
+                                       IDanhMucService<Product> sp, IDanhMucService<Dish> mon, IDanhMucService<Staff> ns) =>
         {
             var don = await svc.LayTheoIdAsync(id);
             if (don is null) return Results.NotFound(new LoiDto("Không tìm thấy đơn hàng."));
-            return Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, ns)));
+            return Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, mon, ns)));
         });
 
         // Ảnh QR (PNG, kèm dòng chữ mã đơn dưới mã QR) để xem/tải trên app - cùng nội dung QR với web.
@@ -125,12 +125,12 @@ public static class DonHangApi
 
         // Quét mã QR trên phiếu giao (QR tra cứu của hệ thống hoặc link truy xuất HanoiCheck) -> mở đúng đơn.
         ban.MapGet("/quet", async (string? noiDung, IDonHangBanService svc, IKhachHangService kh,
-                                   IDanhMucService<Product> sp, IDanhMucService<Staff> ns) =>
+                                   IDanhMucService<Product> sp, IDanhMucService<Dish> mon, IDanhMucService<Staff> ns) =>
         {
             var don = await svc.TimTheoQrAsync(noiDung ?? "");
             return don is null
                 ? Results.NotFound(new LoiDto("Mã QR này không phải của đơn hàng nào trong cơ sở."))
-                : Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, ns)));
+                : Results.Ok(MapDonBan(don, await LayTenAsync(kh, sp, mon, ns)));
         });
 
         // Việc của quản lý/nhập liệu (Tạo/Sửa/Xoá/Huỷ/Xuất kho) - KHÔNG phải shipper, dù nhân viên
@@ -305,9 +305,12 @@ public static class DonHangApi
                                      IReadOnlyDictionary<string, string> NhanSu);
 
     private static async Task<BangTenDon> LayTenAsync(IKhachHangService kh, IDanhMucService<Product> sp,
-                                                      IDanhMucService<Staff> ns) => new(
+                                                      IDanhMucService<Dish> mon, IDanhMucService<Staff> ns) => new(
         (await kh.LayTatCaAsync()).GroupBy(k => k.MaKhachHang).ToDictionary(g => g.Key, g => g.First().TenKhachHang),
-        (await sp.LayTatCaAsync()).GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham),
+        // Đơn suất ăn: dòng hàng là món ăn -> tra cả tên món (thành phẩm được ưu tiên khi trùng mã).
+        (await sp.LayTatCaAsync()).Select(p => (Ma: p.MaSanPham, Ten: p.TenSanPham))
+            .Concat((await mon.LayTatCaAsync()).Select(d => (Ma: d.MaMonAn, Ten: d.TenMonAn)))
+            .GroupBy(x => x.Ma).ToDictionary(g => g.Key, g => g.First().Ten),
         (await ns.LayTatCaAsync()).GroupBy(n => n.MaNhanSu).ToDictionary(g => g.Key, g => g.First().HoTen));
 
     private static DonHangBanDto MapDonBan(DonHangBan d, BangTenDon ten) => new(

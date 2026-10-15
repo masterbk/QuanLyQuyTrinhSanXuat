@@ -53,9 +53,14 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
                 {
                     TraceCode = l.TraceCode,
                     MaThucPham = l.MaThucPham,
-                    PhanBo = l.PhanBo.Select(p => new ProcessPayloadAllocation
+                    MaMonAn = l.MaMonAn,
+                    // phan_bo và nguyen_lieu KHÔNG được có mặt cùng nhau, kể cả để null (đặc tả v2.6 mục 11.k) -
+                    // dòng suất ăn bỏ hẳn khoá phan_bo, dòng thực phẩm bỏ hẳn khoá nguyen_lieu.
+                    PhanBo = l.NguyenLieu is not null ? null : l.PhanBo.Select(MapPhanBo).ToList(),
+                    NguyenLieu = l.NguyenLieu?.Select(n => new ProcessPayloadIngredient
                     {
-                        MaLo = p.MaLo, MaKho = p.MaKho, SoLuong = p.SoLuong
+                        MaThucPham = n.MaThucPham,
+                        PhanBo = n.PhanBo.Select(MapPhanBo).ToList()
                     }).ToList()
                 }).ToList()
         };
@@ -168,6 +173,15 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
         [JsonPropertyName("so_luong")] public decimal SoLuong { get; set; }
     }
 
+    private static ProcessPayloadAllocation MapPhanBo(ProcessOrderAllocation p) =>
+        new() { MaLo = p.MaLo, MaKho = p.MaKho, SoLuong = p.SoLuong };
+
+    private sealed class ProcessPayloadIngredient
+    {
+        [JsonPropertyName("ma_thuc_pham")] public string MaThucPham { get; set; } = string.Empty;
+        [JsonPropertyName("phan_bo")] public List<ProcessPayloadAllocation> PhanBo { get; set; } = new();
+    }
+
     private sealed class ProcessPayloadLine
     {
         [JsonPropertyName("trace_code"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -177,7 +191,15 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
         [JsonPropertyName("ma_thuc_pham"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? MaThucPham { get; set; }
 
-        [JsonPropertyName("phan_bo")] public List<ProcessPayloadAllocation> PhanBo { get; set; } = new();
+        /// <summary>Dùng thay trace_code với dòng suất ăn khi chưa có mã truy vết.</summary>
+        [JsonPropertyName("ma_mon_an"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MaMonAn { get; set; }
+
+        [JsonPropertyName("phan_bo"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<ProcessPayloadAllocation>? PhanBo { get; set; }
+
+        [JsonPropertyName("nguyen_lieu"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<ProcessPayloadIngredient>? NguyenLieu { get; set; }
     }
 
     private sealed class ProcessPayload

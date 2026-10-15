@@ -12,12 +12,17 @@ namespace HCP.Infrastructure.Services.BanHang;
 /// <summary>Một lô có thể xuất cho một dòng đơn: tồn hiện tại của lô và số lượng hệ thống gợi ý (FEFO).</summary>
 public sealed record LoCoTheXuatDto(string MaLo, DateOnly? HanSuDung, decimal Ton, decimal GoiY);
 
-/// <summary>Bảng phân bổ lô cho một dòng đơn khi xuất kho.</summary>
+/// <summary>
+/// Bảng phân bổ lô cho một dòng đơn khi xuất kho. <see cref="MaThanhPham"/> là mã hàng trừ kho: chính thành phẩm,
+/// hoặc - với dòng món ăn - một NGUYÊN LIỆU của món (khi đó <see cref="MaNguyenLieu"/> có giá trị, <see cref="SoLuong"/>
+/// = định lượng × số suất và mỗi nguyên liệu là một bảng riêng cùng <see cref="DongId"/>).
+/// </summary>
 public sealed record DongXuatKhoDto(int DongId, string MaThanhPham, string TenThanhPham, string? DonViTinh,
-                                    decimal SoLuong, IReadOnlyList<LoCoTheXuatDto> Lo);
+                                    decimal SoLuong, IReadOnlyList<LoCoTheXuatDto> Lo,
+                                    string? MaNguyenLieu = null, string? TenMonAn = null, decimal? SoSuat = null);
 
-/// <summary>Người dùng chốt: lấy bao nhiêu từ lô nào cho dòng nào.</summary>
-public sealed record PhanBoLoRequest(int DongId, string MaLo, decimal SoLuong);
+/// <summary>Người dùng chốt: lấy bao nhiêu từ lô nào cho dòng nào (dòng món ăn: kèm nguyên liệu của lô).</summary>
+public sealed record PhanBoLoRequest(int DongId, string MaLo, decimal SoLuong, string? MaNguyenLieu = null);
 
 /// <summary>Số lượng mới cho một dòng của đơn đã xuất kho (sửa số lượng đơn đang giao).</summary>
 public sealed record SuaSoLuongDongRequest(int DongId, decimal SoLuongMoi);
@@ -207,10 +212,16 @@ public sealed class DonHangBanService : IDonHangBanService
         goc.HnCCoThayDoi = false;   // NCC đã xem lại đơn
         goc.UpdatedAtUtc = DateTime.UtcNow;
 
+        // Giữ trace_code HanoiCheck của dòng cũ cùng mã (lần lượt theo thứ tự): form sửa không mang mã này, mà thiếu nó
+        // thì không đẩy được nguồn hàng cho mặt hàng xuất hiện nhiều dòng (vd cùng món ở bữa sáng và bữa trưa).
+        var traceCu = goc.Dong.Where(l => l.MaTruyVetHnC is not null).OrderBy(l => l.Id)
+            .GroupBy(l => l.MaThanhPham).ToDictionary(g => g.Key, g => new Queue<string>(g.Select(l => l.MaTruyVetHnC!)));
         _db.DonHangBanDongs.RemoveRange(goc.Dong);
         goc.Dong = don.Dong.Select(l => new DonHangBanDong
         {
-            MaThanhPham = l.MaThanhPham, SoLuong = l.SoLuong, DonGia = l.DonGia, GhiChu = l.GhiChu
+            MaThanhPham = l.MaThanhPham, SoLuong = l.SoLuong, DonGia = l.DonGia, GhiChu = l.GhiChu, LaMonAn = l.LaMonAn,
+            MaTruyVetHnC = l.MaTruyVetHnC
+                           ?? (traceCu.TryGetValue(l.MaThanhPham, out var q) && q.Count > 0 ? q.Dequeue() : null)
         }).ToList();
 
         await _db.SaveChangesAsync(ct);
@@ -225,6 +236,8 @@ public sealed class DonHangBanService : IDonHangBanService
         if (don.ThoiGianXuatKhoUtc is null
             || don.TrangThai is not (TrangThaiDonHangBan.DangGiao or TrangThaiDonHangBan.ChoGiaoHang))
             return KetQuaThaoTac.Loi("Chỉ sửa số lượng được đơn đã xuất kho và đang giao / chờ giao hàng.");
+        if (don.Dong.Any(l => l.LaMonAn))
+            return KetQuaThaoTac.Loi("Đơn suất ăn chưa hỗ trợ sửa số suất sau khi xuất kho (số suất do trường đặt).");
 
         var theoId = don.Dong.ToDictionary(l => l.Id);
         var doi = new List<(DonHangBanDong Dong, decimal Moi, decimal Delta)>();
@@ -376,14 +389,27 @@ public sealed class DonHangBanService : IDonHangBanService
         var ma = don.Dong.Select(l => l.MaThanhPham.Trim()).Distinct().ToList();
         var sanPham = await _db.Products.AsNoTracking().Where(p => ma.Contains(p.MaSanPham))
             .ToDictionaryAsync(p => p.MaSanPham, ct);
+        var monAn = await _db.Dishes.AsNoTracking().Where(d => ma.Contains(d.MaMonAn))
+            .ToDictionaryAsync(d => d.MaMonAn, d => d.TenMonAn, ct);
         foreach (var l in don.Dong)
         {
             l.MaThanhPham = l.MaThanhPham.Trim();
             l.GhiChu = string.IsNullOrWhiteSpace(l.GhiChu) ? null : l.GhiChu.Trim();
-            if (!sanPham.TryGetValue(l.MaThanhPham, out var sp) || sp.LoaiSanPham != LoaiSanPham.ThanhPham)
-                return $"\"{l.MaThanhPham}\" không phải thành phẩm hợp lệ.";
-            if (l.SoLuong <= 0) return $"Số lượng của \"{sp.TenSanPham}\" phải lớn hơn 0.";
-            if (l.DonGia < 0) return $"Đơn giá của \"{sp.TenSanPham}\" không được âm.";
+            // Loại dòng suy theo danh mục (form sửa đơn không mang cờ LaMonAn): thành phẩm trước, rồi món ăn.
+            string ten;
+            if (sanPham.TryGetValue(l.MaThanhPham, out var sp) && sp.LoaiSanPham == LoaiSanPham.ThanhPham)
+            {
+                l.LaMonAn = false;
+                ten = sp.TenSanPham;
+            }
+            else if (monAn.TryGetValue(l.MaThanhPham, out var tenMon))
+            {
+                l.LaMonAn = true;
+                ten = tenMon;
+            }
+            else return $"\"{l.MaThanhPham}\" không phải thành phẩm hay món ăn hợp lệ.";
+            if (l.SoLuong <= 0) return $"Số lượng của \"{ten}\" phải lớn hơn 0.";
+            if (l.DonGia < 0) return $"Đơn giá của \"{ten}\" không được âm.";
         }
         return null;
     }
@@ -419,6 +445,7 @@ public sealed class DonHangBanService : IDonHangBanService
                 var maThanhPham = (await _db.Products.AsNoTracking()
                         .Where(p => p.LoaiSanPham == LoaiSanPham.ThanhPham).Select(p => p.MaSanPham).ToListAsync(ct))
                     .ToHashSet(StringComparer.Ordinal);
+                maThanhPham.UnionWith(await _db.Dishes.AsNoTracking().Select(d => d.MaMonAn).ToListAsync(ct));
                 var thieu = nhan.Dong
                     .Where(l => l.SoLuong is > 0 && maThanhPham.Contains(l.MaSanPham) && !maDaCo.Contains(l.MaSanPham))
                     .Select(l => string.IsNullOrWhiteSpace(l.TenSanPham) ? l.MaSanPham : $"{l.MaSanPham} ({l.TenSanPham})")
@@ -453,14 +480,49 @@ public sealed class DonHangBanService : IDonHangBanService
         return await DungGoiYAsync(don, ct);
     }
 
+    /// <summary>
+    /// Một "nhu cầu xuất" của đơn: dòng thực phẩm cần chính thành phẩm; dòng món ăn tách thành từng nguyên liệu với
+    /// lượng = định lượng/suất × số suất (làm tròn 5 chữ số thập phân - giới hạn của HanoiCheck).
+    /// </summary>
+    private sealed record NhuCauXuat(DonHangBanDong Dong, string MaHang, decimal SoLuong, string? MaNguyenLieu);
+
+    /// <summary>Tách đơn thành các nhu cầu xuất. Trả thông báo lỗi nếu có dòng món ăn không tìm thấy công thức.</summary>
+    private async Task<(List<NhuCauXuat> NhuCau, Dictionary<string, Dish> MonAn, string? Loi)> TachNhuCauAsync(
+        DonHangBan don, CancellationToken ct)
+    {
+        var maMon = don.Dong.Where(l => l.LaMonAn).Select(l => l.MaThanhPham).Distinct().ToList();
+        var monAn = maMon.Count == 0
+            ? new Dictionary<string, Dish>()
+            : await _db.Dishes.AsNoTracking().Include(d => d.DanhSachNguyenLieu)
+                .Where(d => maMon.Contains(d.MaMonAn)).ToDictionaryAsync(d => d.MaMonAn, ct);
+
+        var nhuCau = new List<NhuCauXuat>();
+        foreach (var l in don.Dong.OrderBy(x => x.Id))
+        {
+            if (!l.LaMonAn)
+            {
+                nhuCau.Add(new NhuCauXuat(l, l.MaThanhPham, l.SoLuong, null));
+                continue;
+            }
+            if (!monAn.TryGetValue(l.MaThanhPham, out var mon) || mon.DanhSachNguyenLieu.Count == 0)
+                return (nhuCau, monAn, $"Món \"{l.MaThanhPham}\" không có trong danh mục món ăn hoặc chưa có công thức - "
+                                       + "không tính được nguyên liệu cần xuất.");
+            foreach (var nl in mon.DanhSachNguyenLieu.OrderBy(x => x.Id))
+                nhuCau.Add(new NhuCauXuat(l, nl.MaNguyenLieu, decimal.Round(nl.DinhLuong * l.SoLuong, 5), nl.MaNguyenLieu));
+        }
+        return (nhuCau, monAn, null);
+    }
+
     private async Task<List<DongXuatKhoDto>> DungGoiYAsync(DonHangBan don, CancellationToken ct)
     {
-        var ma = don.Dong.Select(l => l.MaThanhPham).Distinct().ToList();
+        var (nhuCau, monAn, _) = await TachNhuCauAsync(don, ct);
+        var ma = nhuCau.Select(n => n.MaHang).Distinct().ToList();
         var sanPham = await _db.Products.AsNoTracking().Where(p => ma.Contains(p.MaSanPham))
             .ToDictionaryAsync(p => p.MaSanPham, ct);
 
-        // Tồn còn lại theo lô, trừ dần khi phân bổ cho từng dòng -> các dòng cùng thành phẩm không gợi ý trùng.
-        // Đơn từ HanoiCheck: ưu tiên đúng các lô HnC đã phân bổ (để khớp truy xuất bên trường), còn lại theo FEFO.
+        // Tồn còn lại theo lô, trừ dần khi phân bổ cho từng nhu cầu -> các dòng/nguyên liệu dùng chung một mã hàng
+        // không gợi ý trùng. Đơn từ HanoiCheck: ưu tiên đúng các lô HnC đã phân bổ (để khớp truy xuất bên trường),
+        // còn lại theo FEFO.
         var loHnC = new Dictionary<string, List<string>>();
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
@@ -485,23 +547,26 @@ public sealed class DonHangBanService : IDonHangBanService
         var daGoiY = new Dictionary<(string, string), decimal>();
 
         var ket = new List<DongXuatKhoDto>();
-        foreach (var l in don.Dong.OrderBy(x => x.Id))
+        foreach (var n in nhuCau)
         {
-            var canPhanBo = l.SoLuong;
+            var canPhanBo = n.SoLuong;
             var lo = new List<LoCoTheXuatDto>();
-            foreach (var lot in conLai[l.MaThanhPham])
+            foreach (var lot in conLai[n.MaHang])
             {
-                var daDung = daGoiY.GetValueOrDefault((l.MaThanhPham, lot.MaLo));
+                var daDung = daGoiY.GetValueOrDefault((n.MaHang, lot.MaLo));
                 var goiY = Math.Min(canPhanBo, Math.Max(0, lot.Ton - daDung));
                 if (goiY > 0)
                 {
-                    daGoiY[(l.MaThanhPham, lot.MaLo)] = daDung + goiY;
+                    daGoiY[(n.MaHang, lot.MaLo)] = daDung + goiY;
                     canPhanBo -= goiY;
                 }
                 lo.Add(new LoCoTheXuatDto(lot.MaLo, lot.Hsd, lot.Ton, goiY));
             }
-            var sp = sanPham.GetValueOrDefault(l.MaThanhPham);
-            ket.Add(new DongXuatKhoDto(l.Id, l.MaThanhPham, sp?.TenSanPham ?? l.MaThanhPham, sp?.DonViTinh, l.SoLuong, lo));
+            var sp = sanPham.GetValueOrDefault(n.MaHang);
+            ket.Add(new DongXuatKhoDto(n.Dong.Id, n.MaHang, sp?.TenSanPham ?? n.MaHang, sp?.DonViTinh, n.SoLuong, lo,
+                n.MaNguyenLieu,
+                n.Dong.LaMonAn ? monAn.GetValueOrDefault(n.Dong.MaThanhPham)?.TenMonAn ?? n.Dong.MaThanhPham : null,
+                n.Dong.LaMonAn ? n.Dong.SoLuong : null));
         }
         return ket;
     }
@@ -519,37 +584,53 @@ public sealed class DonHangBanService : IDonHangBanService
         if (maNguoiGiao is not null && !await _db.Staff.AnyAsync(s => s.MaNhanSu == maNguoiGiao, ct))
             return KetQuaThaoTac.Loi($"Không có nhân sự \"{maNguoiGiao}\".");
 
+        var (_, _, loiCongThuc) = await TachNhuCauAsync(don, ct);
+        if (loiCongThuc is not null) return KetQuaThaoTac.Loi(loiCongThuc);
+
         // Không truyền phân bổ -> lấy đúng gợi ý FEFO.
         var goiY = await DungGoiYAsync(don, ct);
         var chot = phanBo is { Count: > 0 }
-            ? phanBo.Where(p => p.SoLuong > 0).Select(p => new PhanBoLoRequest(p.DongId, p.MaLo.Trim(), p.SoLuong)).ToList()
-            : goiY.SelectMany(g => g.Lo.Where(x => x.GoiY > 0).Select(x => new PhanBoLoRequest(g.DongId, x.MaLo, x.GoiY)))
+            ? phanBo.Where(p => p.SoLuong > 0)
+                .Select(p => new PhanBoLoRequest(p.DongId, p.MaLo.Trim(), p.SoLuong,
+                                                 string.IsNullOrWhiteSpace(p.MaNguyenLieu) ? null : p.MaNguyenLieu.Trim()))
+                .ToList()
+            : goiY.SelectMany(g => g.Lo.Where(x => x.GoiY > 0)
+                    .Select(x => new PhanBoLoRequest(g.DongId, x.MaLo, x.GoiY, g.MaNguyenLieu)))
                   .ToList();
 
         var dongTheoId = don.Dong.ToDictionary(l => l.Id);
         if (chot.FirstOrDefault(p => !dongTheoId.ContainsKey(p.DongId)) is { } la)
             return KetQuaThaoTac.Loi($"Phân bổ gắn với dòng #{la.DongId} không thuộc đơn này.");
 
-        // Mỗi dòng phải được phân bổ đủ, không thừa không thiếu.
-        foreach (var l in don.Dong)
+        // Mỗi nhu cầu (dòng thực phẩm, hoặc một nguyên liệu của dòng món ăn) phải được phân bổ đủ, không thừa không thiếu.
+        // HanoiCheck cũng bắt tổng phân bổ BẰNG ĐÚNG lượng phải cung ứng.
+        static (int, string) Khoa(int dongId, string? maNguyenLieu) => (dongId, maNguyenLieu ?? "");
+        var canCo = goiY.ToDictionary(g => Khoa(g.DongId, g.MaNguyenLieu));
+        if (chot.FirstOrDefault(p => !canCo.ContainsKey(Khoa(p.DongId, p.MaNguyenLieu))) is { } thua)
+            return KetQuaThaoTac.Loi($"Nguyên liệu \"{thua.MaNguyenLieu}\" không thuộc công thức món của dòng #{thua.DongId}.");
+        foreach (var g in goiY)
         {
-            var tong = chot.Where(p => p.DongId == l.Id).Sum(p => p.SoLuong);
-            if (tong != l.SoLuong)
-                return KetQuaThaoTac.Loi(phanBo is not { Count: > 0 }
-                    ? $"Không đủ tồn \"{l.MaThanhPham}\" để xuất {l.SoLuong:0.###} (các lô còn {tong:0.###})."
-                    : $"\"{l.MaThanhPham}\": đã phân bổ {tong:0.###}, cần đúng {l.SoLuong:0.###}.");
+            var tong = chot.Where(p => Khoa(p.DongId, p.MaNguyenLieu) == Khoa(g.DongId, g.MaNguyenLieu)).Sum(p => p.SoLuong);
+            if (tong == g.SoLuong) continue;
+            var ten = g.MaNguyenLieu is null ? $"\"{g.MaThanhPham}\"" : $"nguyên liệu \"{g.TenThanhPham}\" của món \"{g.TenMonAn}\"";
+            return KetQuaThaoTac.Loi(phanBo is not { Count: > 0 }
+                ? $"Không đủ tồn {ten} để xuất {g.SoLuong:0.#####} (các lô còn {tong:0.#####})."
+                : $"Phân bổ {ten}: đã chọn {tong:0.#####}, cần đúng {g.SoLuong:0.#####}.");
         }
+
+        // Mã hàng thật bị trừ kho: nguyên liệu (dòng món ăn) hoặc chính thành phẩm.
+        string MaHang(PhanBoLoRequest p) => p.MaNguyenLieu ?? dongTheoId[p.DongId].MaThanhPham;
 
         // Tổng lấy từ mỗi lô không vượt tồn thực của lô đó.
         var tonLo = goiY.SelectMany(g => g.Lo.Select(x => (g.MaThanhPham, x.MaLo, x.HanSuDung, x.Ton)))
             .DistinctBy(x => (x.MaThanhPham, x.MaLo))
             .ToDictionary(x => (x.MaThanhPham, x.MaLo), x => (x.HanSuDung, x.Ton));
-        foreach (var nhom in chot.GroupBy(p => (dongTheoId[p.DongId].MaThanhPham, p.MaLo)))
+        foreach (var nhom in chot.GroupBy(p => (MaHang(p), p.MaLo)))
         {
             var can = nhom.Sum(p => p.SoLuong);
             var ton = tonLo.TryGetValue(nhom.Key, out var t) ? t.Ton : 0;
             if (can > ton)
-                return KetQuaThaoTac.Loi($"Lô \"{nhom.Key.MaLo}\" của \"{nhom.Key.MaThanhPham}\" chỉ còn {ton:0.###}, "
+                return KetQuaThaoTac.Loi($"Lô \"{nhom.Key.MaLo}\" của \"{nhom.Key.Item1}\" chỉ còn {ton:0.###}, "
                                          + $"không xuất được {can:0.###}.");
         }
 
@@ -562,25 +643,12 @@ public sealed class DonHangBanService : IDonHangBanService
         // lại an toàn).
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
-            // Dòng hàng định danh bằng trace_code; đơn kéo về trước khi hệ thống lưu mã truy vết (hoặc chưa lấy được
-            // chi tiết đơn) thì đặc tả cho dùng ma_thuc_pham thay thế - gộp theo mã để mỗi thực phẩm chỉ một dòng.
-            var chiTiet = chot
-                .GroupBy(p => dongTheoId[p.DongId].MaTruyVetHnC is { } truyVet
-                    ? (TruyVet: truyVet, MaThucPham: (string?)null)
-                    : (TruyVet: (string?)null, MaThucPham: dongTheoId[p.DongId].MaThanhPham))
-                .Select(g => new ProcessOrderLine
-                {
-                    TraceCode = g.Key.TruyVet,
-                    MaThucPham = g.Key.MaThucPham,
-                    PhanBo = g.Select(p => new ProcessOrderAllocation(p.MaLo, don.MaKho, p.SoLuong)).ToList()
-                }).ToList();
-
             var ketXuLy = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
             {
                 MaNguoiGiao = maNguoiGiao,
                 GhiChu = ghiChu,
                 DanhSachAnh = anhTongQuan?.Select(a => a.DuongDan).Take(SoAnhGuiHnC).ToList(),
-                ChiTiet = chiTiet
+                ChiTiet = ChiTietXuLy(chot, dongTheoId, don.MaKho)
             }, ct);
             if (!ketXuLy.ThanhCong && !ketXuLy.ChuaCauHinh)
                 return KetQuaThaoTac.Loi($"Không đẩy được xử lý đơn sang HanoiCheck: {ketXuLy.ThongBao}");
@@ -597,13 +665,15 @@ public sealed class DonHangBanService : IDonHangBanService
         foreach (var p in chot)
         {
             var dong = dongTheoId[p.DongId];
-            var hsd = tonLo[(dong.MaThanhPham, p.MaLo)].HanSuDung;
+            var maHang = MaHang(p);
+            var hsd = tonLo[(maHang, p.MaLo)].HanSuDung;
             _db.KhoGiaoDichs.Add(new KhoGiaoDich
             {
-                MaSanPham = dong.MaThanhPham, MaKho = don.MaKho, MaLo = p.MaLo, SoLuong = -p.SoLuong,
-                HanSuDung = hsd, Loai = LoaiGiaoDichKho.XuatBan, ChungTu = don.MaDonHang, ThoiGianUtc = now
+                MaSanPham = maHang, MaKho = don.MaKho, MaLo = p.MaLo, SoLuong = -p.SoLuong,
+                HanSuDung = hsd, Loai = LoaiGiaoDichKho.XuatBan, ChungTu = don.MaDonHang, ThoiGianUtc = now,
+                GhiChu = dong.LaMonAn ? $"Nguyên liệu món {dong.MaThanhPham} × {dong.SoLuong:0.###} suất" : null
             });
-            dong.XuatLo.Add(new DonHangBanXuatLo { MaLo = p.MaLo, HanSuDung = hsd, SoLuong = p.SoLuong });
+            dong.XuatLo.Add(new DonHangBanXuatLo { MaNguyenLieu = p.MaNguyenLieu, MaLo = p.MaLo, HanSuDung = hsd, SoLuong = p.SoLuong });
         }
 
         don.MaNguoiGiao = maNguoiGiao;
@@ -637,6 +707,36 @@ public sealed class DonHangBanService : IDonHangBanService
             ? $"Đã xuất kho đơn \"{don.MaDonHang}\" ({soLo} lô), chờ nhân viên nhận giao."
             : $"Đã xuất kho đơn \"{don.MaDonHang}\" ({soLo} lô), chuyển sang Đang giao.");
     }
+
+    /// <summary>
+    /// chi_tiet của "process". Dòng thực phẩm: phan_bo (lô + kho + số lượng). Dòng suất ăn/thực đơn: nguyen_lieu, mỗi
+    /// nguyên liệu kèm phan_bo riêng (dish_ingredient_fulfillment). Dòng định danh bằng trace_code; đơn kéo về trước khi
+    /// có mã truy vết thì dùng ma_thuc_pham / ma_mon_an (gộp theo mã để mỗi mã chỉ một dòng, như đặc tả yêu cầu).
+    /// </summary>
+    private static List<ProcessOrderLine> ChiTietXuLy(IEnumerable<PhanBoLoRequest> chot,
+                                                      IReadOnlyDictionary<int, DonHangBanDong> dongTheoId, string maKho) =>
+        chot.GroupBy(p =>
+            {
+                var d = dongTheoId[p.DongId];
+                return (TruyVet: d.MaTruyVetHnC, Ma: d.MaTruyVetHnC is null ? d.MaThanhPham : null, d.LaMonAn);
+            })
+            .Select(g => g.Key.LaMonAn
+                ? new ProcessOrderLine
+                {
+                    TraceCode = g.Key.TruyVet,
+                    MaMonAn = g.Key.Ma,
+                    NguyenLieu = g.GroupBy(p => p.MaNguyenLieu!)
+                        .Select(n => new ProcessOrderIngredient(n.Key,
+                            n.Select(p => new ProcessOrderAllocation(p.MaLo, maKho, p.SoLuong)).ToList()))
+                        .ToList()
+                }
+                : new ProcessOrderLine
+                {
+                    TraceCode = g.Key.TruyVet,
+                    MaThucPham = g.Key.Ma,
+                    PhanBo = g.Select(p => new ProcessOrderAllocation(p.MaLo, maKho, p.SoLuong)).ToList()
+                })
+            .ToList();
 
     /// <summary>Số ảnh tối đa cho một đơn (upload + lưu nội bộ làm bằng chứng).</summary>
     public const int SoAnhToiDa = 10;
@@ -805,7 +905,7 @@ public sealed class DonHangBanService : IDonHangBanService
             {
                 _db.KhoGiaoDichs.Add(new KhoGiaoDich
                 {
-                    MaSanPham = l.MaThanhPham, MaKho = don.MaKho, MaLo = x.MaLo, SoLuong = x.SoLuong,
+                    MaSanPham = x.MaNguyenLieu ?? l.MaThanhPham, MaKho = don.MaKho, MaLo = x.MaLo, SoLuong = x.SoLuong,
                     HanSuDung = x.HanSuDung, Loai = LoaiGiaoDichKho.HoanTacXuatBan, ChungTu = don.MaDonHang,
                     GhiChu = $"Trả về kho do huỷ đơn {don.MaDonHang}: {lyDo}", ThoiGianUtc = now
                 });

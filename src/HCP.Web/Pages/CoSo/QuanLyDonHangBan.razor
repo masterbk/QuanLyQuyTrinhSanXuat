@@ -12,6 +12,7 @@
 @inject IDonHangBanService DonHangService
 @inject IKhachHangService KhachHangService
 @inject IDanhMucService<Product> ThucPhamService
+@inject IDanhMucService<Dish> MonAnService
 @inject IDanhMucService<Warehouse> KhoDanhMucService
 @inject IDanhMucService<Staff> NhanSuService
 @inject ILuuTruAnhService LuuTruAnh
@@ -222,9 +223,12 @@ else
                                      AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                                 @if (context.TrangThai is TrangThaiDonHangBan.DangGiao or TrangThaiDonHangBan.ChoGiaoHang)
                                 {
-                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit"
-                                                 OnClick="@(() => MoSuaSoLuongAsync(context))">Sửa số lượng (điều chỉnh tồn kho)</MudMenuItem>
-                                    <MudDivider />
+                                    @if (!context.Dong.Any(l => l.LaMonAn))
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Edit"
+                                                     OnClick="@(() => MoSuaSoLuongAsync(context))">Sửa số lượng (điều chỉnh tồn kho)</MudMenuItem>
+                                        <MudDivider />
+                                    }
                                     <MudMenuItem Icon="@Icons.Material.Filled.Undo" IconColor="Color.Error"
                                                  OnClick="@(() => MoHuy(context))">Huỷ đơn (trả hàng về kho)</MudMenuItem>
                                 }
@@ -273,7 +277,7 @@ else
                             {
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                                     Lô đã xuất:
-                                    @string.Join("; ", context.Dong.SelectMany(l => l.XuatLo.Select(x => $"{TenThanhPham(l.MaThanhPham)} lô {x.MaLo} × {x.SoLuong:0.###}")))
+                                    @string.Join("; ", context.Dong.SelectMany(l => l.XuatLo.Select(x => $"{TenThanhPham(x.MaNguyenLieu ?? l.MaThanhPham)} lô {x.MaLo} × {x.SoLuong:0.###}")))
                                 </MudText>
                             }
                         </td>
@@ -343,7 +347,7 @@ else
         </div>
         <MudTable Items="_input.Dong" Dense="true" Elevation="0">
             <HeaderContent>
-                <MudTh>Thành phẩm</MudTh>
+                <MudTh>Thành phẩm / món ăn</MudTh>
                 <MudTh Style="width:120px">Số lượng</MudTh>
                 <MudTh Style="width:150px">Đơn giá (đ)</MudTh>
                 <MudTh Style="width:130px;text-align:right">Thành tiền</MudTh>
@@ -355,6 +359,10 @@ else
                         @foreach (var tp in _thanhPham)
                         {
                             <MudSelectItem T="string" Value="@tp.MaSanPham">@tp.TenSanPham (@tp.MaSanPham)</MudSelectItem>
+                        }
+                        @foreach (var mon in _monAn)
+                        {
+                            <MudSelectItem T="string" Value="@mon.MaMonAn">Món: @mon.TenMonAn (@mon.MaMonAn) - suất</MudSelectItem>
                         }
                     </MudSelect>
                 </MudTd>
@@ -421,15 +429,21 @@ else
         {
             var daChon = dong.Lo.Sum(x => x.SoLuong);
             <MudPaper Outlined="true" Class="pa-3 mb-3">
+                @if (dong.TenMonAn is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Món @dong.TenMonAn × @dong.SoSuat?.ToString("0.###") suất — nguyên liệu theo công thức
+                    </MudText>
+                }
                 <div class="d-flex justify-space-between">
-                    <MudText Typo="Typo.subtitle2">@dong.TenThanhPham × @dong.SoLuong.ToString("0.###") @dong.DonViTinh</MudText>
+                    <MudText Typo="Typo.subtitle2">@dong.TenThanhPham × @dong.SoLuong.ToString("0.#####") @dong.DonViTinh</MudText>
                     <MudText Typo="Typo.subtitle2" Color="@(daChon == dong.SoLuong ? Color.Success : Color.Error)">
                         Đã chọn @daChon.ToString("0.###") / @dong.SoLuong.ToString("0.###")
                     </MudText>
                 </div>
                 @if (dong.Lo.Count == 0)
                 {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Kho không còn lô nào của thành phẩm này.</MudAlert>
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Kho không còn lô nào của @(dong.TenMonAn is null ? "thành phẩm" : "nguyên liệu") này.</MudAlert>
                 }
                 else
                 {
@@ -551,6 +565,10 @@ else
     private sealed class ODongXuat
     {
         public int DongId { get; init; }
+        /// <summary>Dòng món ăn: mã nguyên liệu của bảng lô này (null với dòng thực phẩm).</summary>
+        public string? MaNguyenLieu { get; init; }
+        public string? TenMonAn { get; init; }
+        public decimal? SoSuat { get; init; }
         public string TenThanhPham { get; init; } = "";
         public string? DonViTinh { get; init; }
         public decimal SoLuong { get; init; }
@@ -560,6 +578,7 @@ else
     private List<DonHangBan> _danhSach = new();
     private List<KhachHang> _khachHang = new();
     private List<Product> _thanhPham = new();
+    private List<Dish> _monAn = new();
     private List<Warehouse> _kho = new();
     private List<Staff> _nguoiGiao = new();
     private Dictionary<string, string> _tenKhach = new();
@@ -648,7 +667,8 @@ else
     {
         var dsChon = _danhSach.Where(d => _chon.Contains(d.Id) && CoTheTaoLenh(d)).ToList();
         var tong = dsChon.SelectMany(d => d.Dong)
-            .Where(l => !string.IsNullOrWhiteSpace(l.MaThanhPham) && l.SoLuong > 0)
+            // Dòng suất ăn (món ăn) không sản xuất qua lệnh SX - bếp xuất thẳng nguyên liệu lúc xuất kho.
+            .Where(l => !l.LaMonAn && !string.IsNullOrWhiteSpace(l.MaThanhPham) && l.SoLuong > 0)
             .GroupBy(l => l.MaThanhPham)
             .ToDictionary(g => g.Key, g => g.Sum(l => l.SoLuong));
         if (tong.Count == 0)
@@ -686,6 +706,13 @@ else
                                  .ToDictionary(g => g.Key, g => g.First().DiaChi ?? string.Empty);
         _tenThanhPham = sp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().TenSanPham);
         _donViThanhPham = sp.GroupBy(p => p.MaSanPham).ToDictionary(g => g.Key, g => g.First().DonViTinh);
+        // Đơn suất ăn: dòng hàng là món ăn, số lượng tính theo suất.
+        _monAn = (await MonAnService.LayTatCaAsync()).OrderBy(m => m.TenMonAn).ToList();
+        foreach (var mon in _monAn)
+        {
+            _tenThanhPham.TryAdd(mon.MaMonAn, mon.TenMonAn);
+            _donViThanhPham.TryAdd(mon.MaMonAn, "suất");
+        }
         _dangTai = false;
     }
 
@@ -800,6 +827,7 @@ else
         _xuatKho = goiY.Select(g => new ODongXuat
         {
             DongId = g.DongId, TenThanhPham = g.TenThanhPham, DonViTinh = g.DonViTinh, SoLuong = g.SoLuong,
+            MaNguyenLieu = g.MaNguyenLieu, TenMonAn = g.TenMonAn, SoSuat = g.SoSuat,
             Lo = g.Lo.Select(x => new OLo { MaLo = x.MaLo, HanSuDung = x.HanSuDung, Ton = x.Ton, SoLuong = x.GoiY }).ToList()
         }).ToList();
         _hienXuat = true;
@@ -850,7 +878,7 @@ else
     {
         if (_donXuat is null) return;
         var phanBo = _xuatKho.SelectMany(d => d.Lo.Where(x => x.SoLuong > 0)
-            .Select(x => new PhanBoLoRequest(d.DongId, x.MaLo, x.SoLuong))).ToList();
+            .Select(x => new PhanBoLoRequest(d.DongId, x.MaLo, x.SoLuong, d.MaNguyenLieu))).ToList();
         var anh = _anhXuat.Count == 0 ? null : (IReadOnlyList<AnhDauVao>)_anhXuat.Select(a => new AnhDauVao(a.TenFile, a.DuongDan)).ToList();
         await ChayAsync(() => DonHangService.XuatKhoAsync(_donXuat.Id, phanBo, _nguoiGiaoXuat, _ghiChuXuat, anh),
                         () => _hienXuat = false);

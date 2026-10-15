@@ -987,6 +987,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<bool>("LaMonAn")
+                        .HasColumnType("bit");
+
                     b.Property<string>("MaThanhPham")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -1044,6 +1047,9 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("MaNguyenLieu")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("SoLuong")
                         .HasPrecision(18, 3)
