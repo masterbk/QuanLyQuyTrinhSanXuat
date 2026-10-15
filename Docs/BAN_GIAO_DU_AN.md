@@ -1,7 +1,7 @@
 # Bàn giao dự án HanoiCheckPlatform — để Claude (phiên/tài khoản khác) làm tiếp
 
 > Tài liệu này gói đủ ngữ cảnh để một phiên Claude mới tiếp tục phát triển mà không cần trí nhớ cũ.
-> Cập nhật lần cuối: 08/10/2026 (tối - thêm tự đổi mật khẩu, ký tay + QR đối chiếu, lọc khoảng ngày + xuất zip PDF).
+> Cập nhật lần cuối: 15/10/2026 (đối chiếu đặc tả HnC v2.6: quy trình food/dish, Món ăn, Thực đơn).
 
 ## 1. Tổng quan
 - **Sản phẩm:** phần mềm quản lý quy trình sản xuất cho **tiệm bánh Tuấn Nghĩa**: quy trình sản xuất,
@@ -13,7 +13,7 @@
 - **Web/API:** .NET 8, Blazor Server + MudBlazor, EF Core (SqlServer), Finbuckle MultiTenant, QuestPDF (PDF).
   - `src/HCP.Domain` (entity + enum + helper), `src/HCP.Infrastructure` (service + EF + migration),
     `src/HCP.Web` (Blazor pages `Pages/CoSo/`, minimal API `Api/`, `Program.cs` DI ~dòng 189, `Shared/NavMenu.razor`).
-  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **259 test** pass.
+  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **289 test** pass.
 - **App mobile:** Flutter ở `mobile/` (package `hcp_mobile`), Riverpod + dio (`lib/loi/api.dart`).
   Tính năng theo `lib/tinh_nang/<ten>/`. **46 test** pass.
 
@@ -160,6 +160,8 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
 - **CÒN LẠI:** **QC thẩm tra** (duyệt/ký phiếu) — đã để sẵn cột/trạng thái, **người dùng chủ động tạm BỎ**.
 - **Việc thủ công trên prod:** gán role "Nhân viên nhập biểu mẫu" cho nhân viên (màn Nhân sự); tải logo + kiểm tên/
   địa chỉ ở "Thông tin in"; nhập Ngày/Lần ban hành cho mẫu cũ (cột "Ban hành" báo "Chưa khai"); cài APK mới.
+  Từ 15/10: bấm "Cập nhật danh mục chuẩn" (tải nhóm tuổi + bữa ăn ngay, không chờ job 0h) và "Tải danh sách trường"
+  ở màn Thực đơn.
 
 ### Các module khác (xem memory nếu cần chi tiết)
 - **Kho + sản xuất nội bộ:** tồn theo lô, lệnh SX trừ định mức, khách hàng. GĐ1 xong.
@@ -173,6 +175,27 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
   - **Ảnh đơn hàng (12/10/2026, `ecce20f`):** upload/lưu nội bộ tối đa **10 ảnh** (xuất kho + xác nhận giao,
     cả web lẫn app). Nhưng gửi **HanoiCheck tối đa 3** ảnh/đơn (API HnC chỉ nhận 1-3) — `DonHangBanService`:
     `SoAnhToiDa=10` (lưu), `SoAnhGuiHnC=3` (cap payload ở cả 2 nơi gửi: xuất kho + giao).
+- **Đồng bộ HanoiCheck theo đặc tả v2.6** (`Docs/HanoiCheck API Đồng bộ dữ liệu NCC_v2.6.pdf` + Postman `..._v2.6.json`,
+  đặc tả dành cho đơn vị cung cấp thực phẩm/**suất ăn trường học**):
+  - **Thực phẩm** (`3d56705`): `food_config` (đơn vị tính HnC từ GET /measures, quy đổi gam, hệ số thải bỏ).
+    **Tệp khâu** của lô/món chỉ nhận ảnh + PDF, không Word/Google Drive (`aa0a0c6`).
+  - **Quy trình** (`b6184fa`): `ProductionProcess.LoaiApDung` = `food`/`dish` (gửi `loai_san_pham`), bỏ
+    `ma_danh_muc_thuc_pham`. Thực phẩm + Lệnh SX chỉ chọn quy trình food, Món ăn chỉ chọn dish; không đổi loại khi
+    đang được dùng. API app: request bỏ trống loại = giữ loại cũ.
+  - **Món ăn** (`b6184fa`): nhóm tuổi chọn từ GET /student-groups (bảng `NhomTuoiHnCs`); `DishFile.MaKhau` trống =
+    **album ảnh món** (bắt buộc 1-3), có mã khâu = tệp minh chứng khâu (≤3); khâu bắt buộc 1-50; nguyên liệu phải là
+    thực phẩm loại Thành phẩm (đã gửi HnC). Quy định riêng HnC chỉ áp khi món gửi HnC (công tắc tổng + tick), giống Lô.
+  - **Thực đơn** (`8e808e7`, chỉ web `/app/thuc-don`, app mobile **chưa cần** theo người dùng): `Menu`/`MenuItem`
+    (thứ trong tuần 0=CN, bữa ăn + món cùng nhóm tuổi, phạm vi trường). Bữa ăn từ GET /meal-types (`BuaAnHnCs`, dùng
+    chung); trường từ GET /schools **ký HMAC, theo cơ sở** (`TruongHocHnCs`, nút "Tải danh sách trường", KHÔNG tự chạy).
+    HnC không có dịch vụ xoá → xoá thực đơn = gửi `trang_thai:false` rồi mới xoá. Món đang trong thực đơn: không
+    xoá/không đổi mã, nhóm tuổi.
+  - Danh mục chuẩn (thực phẩm, đơn vị tính, nhóm tuổi, bữa ăn) tải cùng job `StandardFoodsSyncJob` lúc 0h hoặc nút
+    "Cập nhật danh mục chuẩn" (màn Thực phẩm/Món ăn/Thực đơn).
+  - **CHƯA làm:** đơn suất ăn/thực đơn khai nguồn theo **nguyên liệu** (`update_mode = dish_ingredient_fulfillment`,
+    `chi_tiet[].nguyen_lieu[].phan_bo`) — `HanoiCheckOrderCommandClient` mới có `phan_bo` của đơn thực phẩm.
+  - Rủi ro đã biết: bản ghi phụ thuộc (lô sau thực phẩm mới, thực đơn sau món mới) gửi sát nhau có thể bị 422 vì
+    HnC ghi bất đồng bộ vài giây → bấm "Gửi lại" ở Nhật ký đồng bộ.
 - **App mobile:** màn Lệnh SX (tham gia khâu), Đơn hàng (giao hàng, quét QR, chụp ảnh), Kho, Biểu mẫu. Còn:
   chạy thử máy thật đầy đủ.
 - **Thông báo đẩy FCM**, **giờ VN**, **audit form Sửa có tải lại dữ liệu** (còn vài màn) — xem memory.
@@ -199,5 +222,11 @@ Thư mục `C:\Users\thuyb\.claude\projects\E--TuanNghia\memory\` có các file 
 - `sqlcmd` chạy file .sql: thêm `-I` (QUOTED_IDENTIFIER, bảng có filtered index) và `-f 65001` (chữ tiếng Việt).
 - Kiểm UI web thật: Playwright cài ở `E:\pwlib` (`PYTHONPATH=/e/pwlib`), `chromium.launch(channel='msedge')` dùng
   Edge sẵn có (không tải trình duyệt vì ổ C gần đầy). Tài khoản dev thử: `coso-sx@example.vn` (mật khẩu hỏi người dùng/xem memory máy này).
+- `dotnet ef migrations add` phải kèm `--context AppDbContext` (có 2 DbContext). Thêm migration xong phải **build lại
+  HCP.Web** rồi mới `dotnet run --no-build`, nếu không app chạy bản cũ chưa có migration.
+- Máy dev **không có kết nối HnC** → muốn thử nhánh "gửi HanoiCheck" thì chèn tạm 1 dòng `TenantHnCCredentials`
+  (BaseUrl rỗng, `BatDongBo=1`) cho tenant dev, thử xong XOÁ (kèm các dòng `SyncOutbox` vừa sinh).
+- MudSelect `MultiSelection` với giá trị số (id) phải có `ToStringFunc` để hiện tên, không thì ô hiện "101".
+  `HelperText="...&quot;..."` hiện nguyên `&quot;` → dùng `HelperText="@("...\"...\"")"`.
 - Flutter: `TextFormField/DropdownButtonFormField.initialValue` chỉ áp lần đầu → đổi dữ liệu phải đổi `Key`
   để dựng lại ô (xem `_napLan`/`_khoaO` trong `man_nhap_phieu.dart`). Riverpod 3 dùng `asyncValue.value`.
