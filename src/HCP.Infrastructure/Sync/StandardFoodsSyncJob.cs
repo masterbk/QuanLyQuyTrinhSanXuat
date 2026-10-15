@@ -96,6 +96,20 @@ public sealed class StandardFoodsSyncJob : IStandardFoodsSyncJob
         {
             _logger.LogWarning("Lấy danh mục đơn vị tính thất bại: {Loi}", donViTinh.ThongBao);
         }
+
+        // Kèm danh mục nhóm tuổi (nhom_tuoi_id của Món ăn). Lỗi phần này cũng không làm hỏng phần trên.
+        var nhomTuoi = await _client.LayNhomTuoiAsync(cauHinh.BaseUrl, token.AccessToken!, ct);
+        if (nhomTuoi.ThanhCong)
+        {
+            var kq = await _danhMucChuan.CapNhatNhomTuoiTuHnCAsync(nhomTuoi.Items
+                .Where(i => i.Id.HasValue)
+                .Select(i => new NhomTuoiHnC { Id = i.Id!.Value, Ten = i.Name ?? "" }), ct);
+            _logger.LogInformation("Danh mục nhóm tuổi HnC: {ThongBao}", kq.ThongBao);
+        }
+        else
+        {
+            _logger.LogWarning("Lấy danh mục nhóm tuổi thất bại: {Loi}", nhomTuoi.ThongBao);
+        }
         return soLuong;
     }
 }

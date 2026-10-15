@@ -61,7 +61,7 @@ class _TheQuyTrinh extends ConsumerWidget {
         margin: EdgeInsets.zero,
         child: ListTile(
           title: Text('${qt.maQuyTrinh} — ${qt.tenQuyTrinh}', style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(qt.tomTatKhau),
+          subtitle: Text(qt.laMonAn ? 'Món ăn · ${qt.tomTatKhau}' : qt.tomTatKhau),
           isThreeLine: qt.tomTatKhau.length > 40,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,

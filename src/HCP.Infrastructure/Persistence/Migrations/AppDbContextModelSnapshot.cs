@@ -556,10 +556,6 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<bool>("DongBoHnC")
                         .HasColumnType("bit");
 
-                    b.Property<string>("MaCoSo")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
                     b.Property<string>("MaMonAn")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -630,10 +626,6 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("MaBuocSx")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
                     b.Property<string>("MaFile")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -691,9 +683,6 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<int>("DishId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("DonViTinhId")
-                        .HasColumnType("int");
-
                     b.Property<string>("MaNguyenLieu")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -746,20 +735,12 @@ namespace HCP.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<string>("MaBuocSx")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
                     b.Property<string>("MaCoSo")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
                     b.Property<string>("MaKhau")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("MaNccDauVao")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
@@ -1958,6 +1939,24 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.NhomTuoiHnC", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CapNhatLucUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Ten")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NhomTuoiHnCs", (string)null);
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.PhanQuyenBieuMau", b =>
                 {
                     b.Property<int>("Id")
@@ -2275,8 +2274,12 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Property<bool>("DongBoHnC")
                         .HasColumnType("bit");
 
-                    b.Property<int?>("MaDanhMucThucPham")
-                        .HasColumnType("int");
+                    b.Property<string>("LoaiApDung")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("food");
 
                     b.Property<string>("MaQuyTrinh")
                         .IsRequired()

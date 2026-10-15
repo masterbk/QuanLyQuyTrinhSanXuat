@@ -2,7 +2,10 @@ using HCP.Domain.Entities.Common;
 
 namespace HCP.Domain.Entities.Business;
 
-/// <summary>File minh chứng gắn theo khâu của món ăn - phần tử của danh_sach_file.</summary>
+/// <summary>
+/// Ảnh/tệp của món ăn. <see cref="MaKhau"/> trống = ảnh album của món (danh_sach_anh);
+/// có mã khâu = tệp minh chứng của khâu đó (danh_sach_khau[].danh_sach_files).
+/// </summary>
 public class DishFile : TenantEntity
 {
     public int Id { get; set; }
@@ -22,6 +25,6 @@ public class DishFile : TenantEntity
     /// <summary>loai - vd HINH_ANH, GIAY_KIEM_DICH.</summary>
     public string Loai { get; set; } = string.Empty;
 
+    /// <summary>Mã khâu sở hữu tệp; trống = ảnh album của món.</summary>
     public string? MaKhau { get; set; }
-    public string? MaBuocSx { get; set; }
 }

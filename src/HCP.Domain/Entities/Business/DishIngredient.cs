@@ -15,9 +15,9 @@ public class DishIngredient : TenantEntity
     /// <summary>ma_nguyen_lieu - mã thực phẩm (SKU) làm nguyên liệu.</summary>
     public string MaNguyenLieu { get; set; } = string.Empty;
 
-    /// <summary>dinh_luong - định lượng cho một suất, ≥ 0.</summary>
+    /// <summary>
+    /// dinh_luong - định lượng cho một suất, tính theo đơn vị tính HanoiCheck của chính thực phẩm đó
+    /// (v2.6 bỏ don_vi_tinh_id trên dòng công thức).
+    /// </summary>
     public decimal DinhLuong { get; set; }
-
-    /// <summary>don_vi_tinh_id - mã đơn vị tính (nếu có).</summary>
-    public int? DonViTinhId { get; set; }
 }

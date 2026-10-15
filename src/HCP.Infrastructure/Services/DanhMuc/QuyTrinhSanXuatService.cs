@@ -8,7 +8,8 @@ namespace HCP.Infrastructure.Services.DanhMuc;
 
 /// <summary>
 /// Quản lý Quy trình sản xuất (chuỗi khâu có thứ tự) của cơ sở đang đăng nhập.
-/// Đồng bộ sang HanoiCheck qua POST /supplier/processes/merge.
+/// Đồng bộ sang HanoiCheck qua POST /supplier/processes/merge. Mỗi quy trình thuộc một loại
+/// (<see cref="LoaiQuyTrinh"/>): thực phẩm chỉ gắn quy trình loại food, món ăn chỉ gắn loại dish.
 /// </summary>
 public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
 {
@@ -45,6 +46,10 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
         var loi = await KiemTraDanhSachKhauAsync(entity.DanhSachKhau, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
+        // Không chọn loại = thực phẩm (giống mặc định của HanoiCheck).
+        if (string.IsNullOrWhiteSpace(entity.LoaiApDung)) entity.LoaiApDung = LoaiQuyTrinh.ThucPham;
+        if (!LoaiQuyTrinh.HopLe(entity.LoaiApDung)) return KetQuaThaoTac.Loi("Loại quy trình không hợp lệ.");
+
         entity.TenQuyTrinh = entity.TenQuyTrinh.Trim();
         ChuanHoaThuTu(entity.DanhSachKhau);
 
@@ -71,9 +76,18 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
         var loi = await KiemTraDanhSachKhauAsync(entity.DanhSachKhau, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
+        // Không gửi loại (vd app bản cũ) = giữ nguyên loại đang có.
+        var loaiMoi = string.IsNullOrWhiteSpace(entity.LoaiApDung) ? hienTai.LoaiApDung : entity.LoaiApDung;
+        if (!LoaiQuyTrinh.HopLe(loaiMoi)) return KetQuaThaoTac.Loi("Loại quy trình không hợp lệ.");
+        if (loaiMoi != hienTai.LoaiApDung)
+        {
+            loi = await KiemTraDoiLoaiAsync(hienTai.MaQuyTrinh, loaiMoi, ct);
+            if (loi is not null) return KetQuaThaoTac.Loi(loi);
+        }
+
         hienTai.MaQuyTrinh = maMoi;
         hienTai.TenQuyTrinh = entity.TenQuyTrinh.Trim();
-        hienTai.MaDanhMucThucPham = entity.MaDanhMucThucPham;
+        hienTai.LoaiApDung = loaiMoi;
         hienTai.DongBoHnC = entity.DongBoHnC;
         hienTai.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -145,6 +159,22 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// HanoiCheck chỉ cho thực phẩm gắn quy trình food và món ăn gắn quy trình dish, nên không đổi loại khi quy
+    /// trình đang được dùng ở phía bên kia - nếu không lần gửi kế tiếp của thực phẩm/món đó sẽ bị 422.
+    /// </summary>
+    private async Task<string?> KiemTraDoiLoaiAsync(string maQuyTrinh, string loaiMoi, CancellationToken ct)
+    {
+        var dangDung = loaiMoi == LoaiQuyTrinh.MonAn
+            ? await _db.Products.Where(p => p.MaQuyTrinh == maQuyTrinh).Select(p => p.MaSanPham).Take(5).ToListAsync(ct)
+            : await _db.Dishes.Where(d => d.MaQuyTrinh == maQuyTrinh).Select(d => d.MaMonAn).Take(5).ToListAsync(ct);
+        if (dangDung.Count == 0) return null;
+
+        var noiDung = loaiMoi == LoaiQuyTrinh.MonAn ? "thực phẩm" : "món ăn";
+        return $"Không đổi được sang loại \"{LoaiQuyTrinh.Ten(loaiMoi)}\": quy trình đang được {noiDung} "
+               + string.Join(", ", dangDung) + " dùng. Đổi quy trình của các " + noiDung + " đó trước.";
     }
 
     /// <summary>Đánh lại thứ tự 1..n theo đúng vị trí hiện tại của danh sách.</summary>

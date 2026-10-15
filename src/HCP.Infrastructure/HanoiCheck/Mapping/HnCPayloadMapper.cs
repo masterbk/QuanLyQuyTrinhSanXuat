@@ -45,7 +45,8 @@ public static class HnCPayloadMapper
         {
             ma_quy_trinh = p.MaQuyTrinh,
             ten_quy_trinh = p.TenQuyTrinh,
-            ma_danh_muc_thuc_pham = p.MaDanhMucThucPham, // int? - bỏ nếu null (xem điểm cần hỏi HnC)
+            // v2.6: "food" (thực phẩm) hoặc "dish" (món ăn); ma_danh_muc_thuc_pham đã bỏ khỏi đặc tả.
+            loai_san_pham = LoaiQuyTrinh.HopLe(p.LoaiApDung) ? p.LoaiApDung : LoaiQuyTrinh.ThucPham,
             danh_sach_khau = p.DanhSachKhau
                 .OrderBy(l => l.ThuTu)
                 .Select(l => new { ma_khau = l.MaKhau, thu_tu = l.ThuTu })
@@ -223,6 +224,13 @@ public static class HnCPayloadMapper
         return tep.Length == 0 ? null : tep;
     }
 
+    /// <summary>File thuộc album ảnh của món = file KHÔNG gắn mã khâu; có mã khâu là tệp minh chứng của khâu đó.</summary>
+    public static bool LaAnhMon(DishFile f) => string.IsNullOrWhiteSpace(f.MaKhau);
+
+    /// <summary>
+    /// Món ăn theo đặc tả v2.6 (dịch vụ 9): không còn ma_co_so cấp món, don_vi_tinh_id trên dòng công thức,
+    /// ma_buoc_sx/ma_ncc_dau_vao trên khâu; album ảnh danh_sach_anh bắt buộc 1-3; tệp minh chứng nằm trong khâu.
+    /// </summary>
     public static object MonAn(Dish d) => new[]
     {
         new
@@ -231,22 +239,25 @@ public static class HnCPayloadMapper
             ten_mon_an = d.TenMonAn,
             nhom_tuoi_id = d.NhomTuoiId,
             mo_ta = d.MoTa,
-            ma_co_so = d.MaCoSo,
             ma_quy_trinh = d.MaQuyTrinh,
 
-            // Công thức bắt buộc ≥1 (service đã kiểm tra), luôn gửi.
+            // Công thức bắt buộc 1-100 dòng, THAY THẾ TOÀN BỘ -> luôn gửi đủ.
             danh_sach_nguyen_lieu = d.DanhSachNguyenLieu.Select(i => new
             {
                 ma_nguyen_lieu = i.MaNguyenLieu,
-                dinh_luong = i.DinhLuong,
-                don_vi_tinh_id = i.DonViTinhId
+                dinh_luong = i.DinhLuong
             }).ToArray(),
 
-            danh_sach_khau = d.DanhSachKhau.Count == 0 ? null : d.DanhSachKhau
+            // Album ảnh của món: BẮT BUỘC 1-3, THAY THẾ TOÀN BỘ -> luôn gửi đủ (service chặn khi thiếu).
+            danh_sach_anh = d.DanhSachFile.Where(LaAnhMon)
+                .Select(f => new { ten_anh = f.TenFile, duong_dan = f.DuongDan, loai = MimeTep(f.DuongDan) })
+                .ToArray(),
+
+            // Khâu chế biến: BẮT BUỘC 1-50 (service chặn khi thiếu), luôn gửi.
+            danh_sach_khau = d.DanhSachKhau
                 .OrderBy(s => s.ThuTu)
                 .Select(s => new
                 {
-                    ma_buoc_sx = s.MaBuocSx,
                     ma_khau = s.MaKhau,
                     thu_tu = s.ThuTu,
                     thoi_gian = s.ThoiGian?.ToString("yyyy-MM-dd HH:mm:ss"),   // ThoiGian đã là giờ Việt Nam
@@ -256,23 +267,24 @@ public static class HnCPayloadMapper
                     ma_qr_truy_vet = s.MaQrTruyVet,
                     ghi_chu = s.GhiChu,
                     ma_co_so = s.MaCoSo,
-                    ma_ncc_dau_vao = s.MaNccDauVao
-                })
-                .ToArray(),
-
-            danh_sach_file = d.DanhSachFile.Count == 0 ? null : d.DanhSachFile
-                .Select(f => new
-                {
-                    ma_file = f.MaFile,
-                    ma_khau = f.MaKhau,
-                    ma_buoc_sx = f.MaBuocSx,
-                    ten_file = f.TenFile,
-                    duong_dan = f.DuongDan,
-                    loai = f.Loai
+                    danh_sach_files = TepCuaKhau(d, s)
                 })
                 .ToArray()
         }
     };
+
+    private static object[]? TepCuaKhau(Dish d, DishStep s)
+    {
+        var tep = d.DanhSachFile
+            .Where(f => !LaAnhMon(f) && string.Equals(f.MaKhau!.Trim(), s.MaKhau.Trim(), StringComparison.Ordinal))
+            .Select(f => (object)new { ma_file = f.MaFile, ten_file = f.TenFile, duong_dan = f.DuongDan, loai = f.Loai })
+            .ToArray();
+        return tep.Length == 0 ? null : tep;
+    }
+
+    /// <summary>Loại MIME của ảnh/PDF album món (đặc tả v2.6 cho album nhận cả .pdf).</summary>
+    private static string MimeTep(string duongDan) =>
+        DuoiDuongDan(duongDan) == ".pdf" ? "application/pdf" : MimeAnh(duongDan);
 
     public static object NhanSu(Staff s) => new[]
     {

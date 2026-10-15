@@ -39,6 +39,18 @@ public sealed class HanoiCheckStandardFoodsClient : IHanoiCheckStandardFoodsClie
             : MeasuresResult.Ok(data.Data);
     }
 
+    // Nhóm tuổi trả { id, name } giống hệt đơn vị tính nên dùng chung kiểu dữ liệu MeasureItem.
+    public async Task<MeasuresResult> LayNhomTuoiAsync(
+        string baseUrl, string accessToken, CancellationToken ct = default)
+    {
+        var (data, loi) = await GetAsync<MeasuresResponse>(
+            baseUrl, "/api/supplier/student-groups", accessToken, "danh mục nhóm tuổi", ct);
+        if (loi is not null) return MeasuresResult.Loi(loi);
+        return data?.Data is null
+            ? MeasuresResult.Loi("Phản hồi student-groups không đúng định dạng.")
+            : MeasuresResult.Ok(data.Data);
+    }
+
     /// <summary>GET danh mục dùng chung: chỉ cần Bearer token, không ký HMAC.</summary>
     private async Task<(T? Data, string? Loi)> GetAsync<T>(
         string baseUrl, string path, string accessToken, string tenDanhMuc, CancellationToken ct)

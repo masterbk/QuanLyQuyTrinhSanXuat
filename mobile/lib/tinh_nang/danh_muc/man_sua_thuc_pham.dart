@@ -155,15 +155,17 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
             quyTrinh.when(
               loading: () => const LinearProgressIndicator(),
               error: (e, _) => _LoiNho('Lỗi tải quy trình', () => ref.invalidate(dsQuyTrinhProvider)),
-              data: (ds) => DropdownButtonFormField<String>(
-                initialValue: ds.any((q) => q.maQuyTrinh == _maQuyTrinh) ? _maQuyTrinh : null,
+              // HanoiCheck: thực phẩm chỉ gắn quy trình loại thực phẩm, bỏ quy trình món ăn.
+              data: (tatCa) => DropdownButtonFormField<String>(
+                initialValue: tatCa.any((q) => !q.laMonAn && q.maQuyTrinh == _maQuyTrinh) ? _maQuyTrinh : null,
                 isExpanded: true,
                 decoration: const InputDecoration(
                     labelText: 'Quy trình sản xuất',
                     helperText: 'Bắt buộc với thành phẩm đồng bộ HanoiCheck.', border: OutlineInputBorder()),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('(không chọn)')),
-                  ...ds.map((q) => DropdownMenuItem(value: q.maQuyTrinh, child: Text('${q.maQuyTrinh} — ${q.tenQuyTrinh}'))),
+                  ...tatCa.where((q) => !q.laMonAn)
+                      .map((q) => DropdownMenuItem(value: q.maQuyTrinh, child: Text('${q.maQuyTrinh} — ${q.tenQuyTrinh}'))),
                 ],
                 onChanged: (v) => setState(() => _maQuyTrinh = v),
               ),

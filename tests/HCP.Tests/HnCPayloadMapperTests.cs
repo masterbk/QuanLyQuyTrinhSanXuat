@@ -44,7 +44,7 @@ public class HnCPayloadMapperTests
     {
         var p = new ProductionProcess
         {
-            MaQuyTrinh = "QT001", TenQuyTrinh = "Chế biến thịt", MaDanhMucThucPham = 1,
+            MaQuyTrinh = "QT001", TenQuyTrinh = "Chế biến thịt", LoaiApDung = LoaiQuyTrinh.MonAn,
             DanhSachKhau =
             {
                 new ProcessStepLine { MaKhau = "SO_CHE", ThuTu = 2 },
@@ -54,7 +54,8 @@ public class HnCPayloadMapperTests
         var e = Ser(HnCPayloadMapper.QuyTrinh(p));
 
         Assert.Equal("QT001", e.GetProperty("ma_quy_trinh").GetString());
-        Assert.Equal(1, e.GetProperty("ma_danh_muc_thuc_pham").GetInt32());
+        Assert.Equal("dish", e.GetProperty("loai_san_pham").GetString());
+        Assert.False(e.TryGetProperty("ma_danh_muc_thuc_pham", out _)); // v2.6 đã bỏ
 
         var khau = e.GetProperty("danh_sach_khau");
         Assert.Equal(2, khau.GetArrayLength());
@@ -65,16 +66,15 @@ public class HnCPayloadMapperTests
     }
 
     [Fact]
-    public void QuyTrinh_Khong_Co_Ma_Danh_Muc_Thi_Bo_Han_Field()
+    public void QuyTrinh_Mac_Dinh_Loai_Thuc_Pham()
     {
-        // ma_danh_muc_thuc_pham chưa tra cứu được (điểm cần hỏi HnC) -> để null -> bỏ hẳn.
         var p = new ProductionProcess
         {
-            MaQuyTrinh = "QT002", TenQuyTrinh = "X", MaDanhMucThucPham = null,
+            MaQuyTrinh = "QT002", TenQuyTrinh = "X",
             DanhSachKhau = { new ProcessStepLine { MaKhau = "GIET_MO", ThuTu = 1 } }
         };
         var e = Ser(HnCPayloadMapper.QuyTrinh(p));
-        Assert.False(e.TryGetProperty("ma_danh_muc_thuc_pham", out _));
+        Assert.Equal("food", e.GetProperty("loai_san_pham").GetString());
     }
 
     [Fact]
@@ -183,17 +183,24 @@ public class HnCPayloadMapperTests
         var d = new Dish
         {
             MaMonAn = "MON001", TenMonAn = "Thịt heo kho trứng", NhomTuoiId = 1,
-            MoTa = "Món mặn",
+            MoTa = "Món mặn", MaQuyTrinh = "QT-MON",
             DanhSachNguyenLieu =
             {
-                new DishIngredient { MaNguyenLieu = "SP001", DinhLuong = 0.06m, DonViTinhId = 3 },
-                new DishIngredient { MaNguyenLieu = "SP002", DinhLuong = 0.05m } // không đơn vị
+                new DishIngredient { MaNguyenLieu = "SP001", DinhLuong = 0.06m },
+                new DishIngredient { MaNguyenLieu = "SP002", DinhLuong = 0.05m }
             },
             DanhSachKhau =
             {
+                new DishStep { MaKhau = "CHE_BIEN", ThuTu = 2, MaCoSo = "CS01" },
                 new DishStep { MaKhau = "SO_CHE", ThuTu = 1,
                                ThoiGian = new DateTime(2026, 7, 26, 5, 0, 0),
                                NguoiThucHienCsv = "NV001" }
+            },
+            DanhSachFile =
+            {
+                new DishFile { MaFile = "A1", TenFile = "Ảnh món", DuongDan = "https://x.vn/mon.png", Loai = "HINH_ANH" },
+                new DishFile { MaFile = "T1", TenFile = "Chứng nhận", DuongDan = "https://x.vn/cn.pdf", Loai = "GIAY",
+                               MaKhau = "CHE_BIEN" }
             }
         };
         var e = Ser(HnCPayloadMapper.MonAn(d));
@@ -204,13 +211,28 @@ public class HnCPayloadMapperTests
         var nl = e.GetProperty("danh_sach_nguyen_lieu");
         Assert.Equal(2, nl.GetArrayLength());
         Assert.Equal("SP001", nl[0].GetProperty("ma_nguyen_lieu").GetString());
-        Assert.Equal(3, nl[0].GetProperty("don_vi_tinh_id").GetInt32());
-        Assert.False(nl[1].TryGetProperty("don_vi_tinh_id", out _)); // null -> bỏ
+        Assert.False(nl[0].TryGetProperty("don_vi_tinh_id", out _)); // v2.6 bỏ đơn vị trên dòng công thức
+        Assert.Equal("QT-MON", e.GetProperty("ma_quy_trinh").GetString());
+        Assert.False(e.TryGetProperty("ma_co_so", out _));            // v2.6 bỏ cơ sở cấp món
+        Assert.False(e.TryGetProperty("danh_sach_file", out _));      // tệp nằm trong khâu
 
-        var khau = e.GetProperty("danh_sach_khau")[0];
-        Assert.Equal("SO_CHE", khau.GetProperty("ma_khau").GetString());
-        Assert.Equal("2026-07-26 05:00:00", khau.GetProperty("thoi_gian").GetString());
-        Assert.Equal("NV001", khau.GetProperty("danh_sach_nguoi_thuc_hien")[0].GetString());
+        // Album ảnh: chỉ file không gắn khâu, kèm loại MIME.
+        var anh = e.GetProperty("danh_sach_anh");
+        Assert.Equal(1, anh.GetArrayLength());
+        Assert.Equal("Ảnh món", anh[0].GetProperty("ten_anh").GetString());
+        Assert.Equal("image/png", anh[0].GetProperty("loai").GetString());
+
+        var khau = e.GetProperty("danh_sach_khau");
+        Assert.Equal("SO_CHE", khau[0].GetProperty("ma_khau").GetString()); // sắp theo thu_tu
+        Assert.False(khau[0].TryGetProperty("ma_buoc_sx", out _));
+        Assert.Equal("2026-07-26 05:00:00", khau[0].GetProperty("thoi_gian").GetString());
+        Assert.Equal("NV001", khau[0].GetProperty("danh_sach_nguoi_thuc_hien")[0].GetString());
+        Assert.False(khau[0].TryGetProperty("danh_sach_files", out _));
+
+        Assert.Equal("CS01", khau[1].GetProperty("ma_co_so").GetString());
+        var tep = khau[1].GetProperty("danh_sach_files");
+        Assert.Equal(1, tep.GetArrayLength());
+        Assert.Equal("T1", tep[0].GetProperty("ma_file").GetString());
     }
 
     [Fact]

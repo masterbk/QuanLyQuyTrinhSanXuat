@@ -22,7 +22,7 @@ public sealed class StandardFoodsResponse
     [JsonPropertyName("data")] public List<StandardFoodItem>? Data { get; set; }
 }
 
-/// <summary>Một dòng danh mục đơn vị tính trả về từ GET /supplier/measures.</summary>
+/// <summary>Một dòng danh mục { id, name } - dùng cho GET /supplier/measures và /supplier/student-groups.</summary>
 public sealed class MeasureItem
 {
     [JsonPropertyName("id")] public int? Id { get; set; }

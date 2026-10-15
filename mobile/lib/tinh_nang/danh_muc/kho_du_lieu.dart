@@ -69,14 +69,14 @@ class DanhMucQuanLyData {
     required bool dongBoHnC,
     required String maQuyTrinh,
     required String tenQuyTrinh,
-    int? maDanhMucThucPham,
+    required String loaiSanPham,
     required List<String> danhSachMaKhau,
   }) async {
     final than = {
       'dongBoHnC': dongBoHnC,
       'maQuyTrinh': maQuyTrinh,
       'tenQuyTrinh': tenQuyTrinh,
-      'maDanhMucThucPham': maDanhMucThucPham,
+      'loaiSanPham': loaiSanPham,
       'danhSachKhau': [
         for (var i = 0; i < danhSachMaKhau.length; i++) {'maKhau': danhSachMaKhau[i], 'thuTu': i + 1},
       ],

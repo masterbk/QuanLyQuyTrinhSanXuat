@@ -263,7 +263,8 @@ else
         _danhSach = (await ThucPhamService.LayTatCaAsync()).ToList();
         _danhMucChuan = (await DanhMucChuanService.LayTatCaAsync()).ToList();
         _donViTinh = (await DanhMucChuanService.LayDonViTinhAsync()).ToList();
-        _quyTrinh = (await QuyTrinhService.LayTatCaAsync()).ToList();
+        // HanoiCheck: thực phẩm chỉ gắn quy trình loại thực phẩm (quy trình món ăn dùng ở màn Món ăn).
+        _quyTrinh = (await QuyTrinhService.LayTatCaAsync()).Where(q => q.LoaiApDung == LoaiQuyTrinh.ThucPham).ToList();
         _dangTai = false;
     }
 

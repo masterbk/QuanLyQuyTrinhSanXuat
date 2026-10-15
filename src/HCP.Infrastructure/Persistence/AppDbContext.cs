@@ -114,6 +114,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     /// <summary>Danh mục do HanoiCheck ban hành - dùng chung mọi cơ sở, KHÔNG lọc theo tenant.</summary>
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
     public DbSet<DonViTinhHnC> DonViTinhHnCs => Set<DonViTinhHnC>();
+    public DbSet<NhomTuoiHnC> NhomTuoiHnCs => Set<NhomTuoiHnC>();
 
     // TODO (Giai đoạn 3+): Staff, Product, Batch, Dish, Order...
     // Mỗi entity nghiệp vụ PHẢI kế thừa TenantEntity và gọi .IsMultiTenant() ở dưới.
@@ -229,6 +230,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         process.ToTable("ProductionProcesses");
         process.Property(p => p.MaQuyTrinh).HasMaxLength(255).IsRequired();
         process.Property(p => p.TenQuyTrinh).HasMaxLength(255).IsRequired();
+        process.Property(p => p.LoaiApDung).HasMaxLength(10).IsRequired().HasDefaultValue(LoaiQuyTrinh.ThucPham);
         process.HasMany(p => p.DanhSachKhau)
                .WithOne(l => l.ProductionProcess!)
                .HasForeignKey(l => l.ProductionProcessId)
@@ -519,7 +521,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dish.Property(d => d.MaMonAn).HasMaxLength(255).IsRequired();
         dish.Property(d => d.TenMonAn).HasMaxLength(255).IsRequired();
         dish.Property(d => d.MoTa).HasMaxLength(2000);
-        dish.Property(d => d.MaCoSo).HasMaxLength(255);
         dish.Property(d => d.MaQuyTrinh).HasMaxLength(255);
         dish.HasMany(d => d.DanhSachNguyenLieu).WithOne(i => i.Dish!)
             .HasForeignKey(i => i.DishId).OnDelete(DeleteBehavior.Cascade);
@@ -539,7 +540,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
 
         var dishStep = builder.Entity<DishStep>();
         dishStep.ToTable("DishSteps");
-        dishStep.Property(s => s.MaBuocSx).HasMaxLength(255);
         dishStep.Property(s => s.MaKhau).HasMaxLength(255).IsRequired();
         dishStep.Property(s => s.NguoiThucHienCsv).HasMaxLength(1000);
         dishStep.Property(s => s.DiaChi).HasMaxLength(500);
@@ -547,7 +547,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dishStep.Property(s => s.MaQrTruyVet).HasMaxLength(255);
         dishStep.Property(s => s.GhiChu).HasMaxLength(1000);
         dishStep.Property(s => s.MaCoSo).HasMaxLength(255);
-        dishStep.Property(s => s.MaNccDauVao).HasMaxLength(255);
         dishStep.Ignore(s => s.NguoiThucHien);
         dishStep.HasIndex(s => new { s.DishId, s.ThuTu });
         dishStep.IsMultiTenant().AdjustUniqueIndexes();
@@ -559,7 +558,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         dishFile.Property(f => f.DuongDan).HasMaxLength(1000).IsRequired();
         dishFile.Property(f => f.Loai).HasMaxLength(100).IsRequired();
         dishFile.Property(f => f.MaKhau).HasMaxLength(255);
-        dishFile.Property(f => f.MaBuocSx).HasMaxLength(255);
         dishFile.HasIndex(f => new { f.DishId, f.MaFile }).IsUnique();
         dishFile.IsMultiTenant().AdjustUniqueIndexes();
 
@@ -638,6 +636,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         donViTinh.ToTable("DonViTinhHnCs");
         donViTinh.Property(d => d.Id).ValueGeneratedNever();
         donViTinh.Property(d => d.Ten).HasMaxLength(255).IsRequired();
+
+        // Danh mục nhóm tuổi HnC (dùng chung, không theo tenant). Id = id của HnC, không tự tăng.
+        var nhomTuoi = builder.Entity<NhomTuoiHnC>();
+        nhomTuoi.ToTable("NhomTuoiHnCs");
+        nhomTuoi.Property(d => d.Id).ValueGeneratedNever();
+        nhomTuoi.Property(d => d.Ten).HasMaxLength(255).IsRequired();
 
         var standardFood = builder.Entity<StandardFoodCategory>();
         standardFood.ToTable("StandardFoodCategories");

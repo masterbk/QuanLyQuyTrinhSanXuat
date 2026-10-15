@@ -283,7 +283,9 @@ public static class LenhSanXuatApi
         {
             var tenKhau = (await khau.LayTatCaAsync()).GroupBy(k => k.MaKhau)
                 .ToDictionary(g => g.Key, g => g.First().TenKhau);
-            return Results.Ok((await qt.LayTatCaAsync()).Select(q => new QuyTrinhDto(
+            // Lệnh sản xuất làm ra thực phẩm nên chỉ liệt kê quy trình loại thực phẩm (bỏ quy trình món ăn).
+            return Results.Ok((await qt.LayTatCaAsync()).Where(q => q.LoaiApDung == LoaiQuyTrinh.ThucPham)
+                .Select(q => new QuyTrinhDto(
                 q.MaQuyTrinh, q.TenQuyTrinh,
                 q.DanhSachKhau.OrderBy(k => k.ThuTu)
                     .Select(k => new KhauDto(k.MaKhau, tenKhau.GetValueOrDefault(k.MaKhau), k.ThuTu))

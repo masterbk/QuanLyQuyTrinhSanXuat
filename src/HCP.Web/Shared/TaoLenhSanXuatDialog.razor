@@ -235,7 +235,8 @@
     protected override async Task OnInitializedAsync()
     {
         _kho = (await KhoDanhMucService.LayTatCaAsync()).ToList();
-        _quyTrinh = (await QuyTrinhService.LayTatCaAsync()).Where(q => q.DanhSachKhau.Count > 0).ToList();
+        _quyTrinh = (await QuyTrinhService.LayTatCaAsync())
+            .Where(q => q.DanhSachKhau.Count > 0 && q.LoaiApDung == LoaiQuyTrinh.ThucPham).ToList();
         _coSo = (await CoSoService.LayTatCaAsync()).ToList();
         _nhanSu = (await NhanSuService.LayTatCaAsync()).Where(n => n.TrangThai).ToList();
         _tenKhau = (await KhauService.LayTatCaAsync()).GroupBy(k => k.MaKhau)

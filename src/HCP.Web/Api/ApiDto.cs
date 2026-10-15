@@ -201,14 +201,16 @@ public sealed record KhauQuanLyDto(int Id, bool DongBoHnC, string MaKhau, string
 /// <summary>MaKhau bị bỏ qua: mã do hệ thống cấp.</summary>
 public sealed record KhauLuuRequest(bool DongBoHnC, string TenKhau, string? GhiChu);
 
+/// <summary>LoaiSanPham: "food" (quy trình thực phẩm) hoặc "dish" (quy trình chế biến món ăn).</summary>
 public sealed record QuyTrinhQuanLyDto(
-    int Id, bool DongBoHnC, string MaQuyTrinh, string TenQuyTrinh, int? MaDanhMucThucPham,
+    int Id, bool DongBoHnC, string MaQuyTrinh, string TenQuyTrinh, string LoaiSanPham,
     IReadOnlyList<KhauDto> DanhSachKhau);
 
 public sealed record QuyTrinhKhauRequest(string MaKhau, int ThuTu);
 
+/// <summary>LoaiSanPham "food"/"dish"; bỏ trống khi sửa = giữ nguyên loại đang có.</summary>
 public sealed record QuyTrinhLuuRequest(
-    bool DongBoHnC, string MaQuyTrinh, string TenQuyTrinh, int? MaDanhMucThucPham,
+    bool DongBoHnC, string MaQuyTrinh, string TenQuyTrinh, string? LoaiSanPham,
     IReadOnlyList<QuyTrinhKhauRequest>? DanhSachKhau);
 
 // ==================== Biểu mẫu kiểm soát (GMP/ISO) ====================

@@ -18,6 +18,12 @@ public interface IDanhMucChuanService
 
     /// <summary>Ghi đè danh mục đơn vị tính bằng dữ liệu mới lấy từ HanoiCheck.</summary>
     Task<KetQuaThaoTac> CapNhatDonViTinhTuHnCAsync(IEnumerable<DonViTinhHnC> danhMuc, CancellationToken ct = default);
+
+    /// <summary>Danh mục nhóm tuổi HnC (GET /student-groups), sắp theo id. Có thể rỗng nếu chưa tải về.</summary>
+    Task<IReadOnlyList<NhomTuoiHnC>> LayNhomTuoiAsync(CancellationToken ct = default);
+
+    /// <summary>Ghi đè danh mục nhóm tuổi bằng dữ liệu mới lấy từ HanoiCheck.</summary>
+    Task<KetQuaThaoTac> CapNhatNhomTuoiTuHnCAsync(IEnumerable<NhomTuoiHnC> danhMuc, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -136,5 +142,45 @@ public class DanhMucChuanService : IDanhMucChuanService
         _cache.Remove(KhoaCacheDonViTinh);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} đơn vị tính.");
+    }
+
+    private const string KhoaCacheNhomTuoi = "danh-muc-nhom-tuoi-hnc";
+
+    public async Task<IReadOnlyList<NhomTuoiHnC>> LayNhomTuoiAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(KhoaCacheNhomTuoi, out IReadOnlyList<NhomTuoiHnC>? daCo) && daCo is not null)
+        {
+            return daCo;
+        }
+
+        var danhSach = await _db.NhomTuoiHnCs.AsNoTracking().OrderBy(d => d.Id).ToListAsync(ct);
+        // Bảng chỉ vài dòng: chưa tải về (rỗng) thì không giữ cache để lần mở sau thấy ngay khi đã có.
+        if (danhSach.Count > 0)
+            _cache.Set(KhoaCacheNhomTuoi, (IReadOnlyList<NhomTuoiHnC>)danhSach, TimeSpan.FromHours(12));
+        return danhSach;
+    }
+
+    public async Task<KetQuaThaoTac> CapNhatNhomTuoiTuHnCAsync(IEnumerable<NhomTuoiHnC> danhMuc,
+                                                               CancellationToken ct = default)
+    {
+        var dsMoi = danhMuc.Where(d => d.Id > 0 && !string.IsNullOrWhiteSpace(d.Ten))
+            .GroupBy(d => d.Id).Select(g => g.First()).ToList();
+
+        // Chốt an toàn: HnC trả rỗng thì giữ nguyên danh mục đang có.
+        if (dsMoi.Count == 0) return KetQuaThaoTac.Loi("HanoiCheck không trả về nhóm tuổi nào.");
+
+        // Cùng cách với đơn vị tính: Id là id của HnC nên sửa/thêm/bỏ theo id. Món ăn chỉ lưu bản sao id.
+        var hienCo = await _db.NhomTuoiHnCs.ToDictionaryAsync(d => d.Id, ct);
+        var now = DateTime.UtcNow;
+        foreach (var moi in dsMoi)
+        {
+            if (hienCo.Remove(moi.Id, out var cu)) { cu.Ten = moi.Ten.Trim(); cu.CapNhatLucUtc = now; }
+            else _db.NhomTuoiHnCs.Add(new NhomTuoiHnC { Id = moi.Id, Ten = moi.Ten.Trim(), CapNhatLucUtc = now });
+        }
+        _db.NhomTuoiHnCs.RemoveRange(hienCo.Values);
+        await _db.SaveChangesAsync(ct);
+        _cache.Remove(KhoaCacheNhomTuoi);
+
+        return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} nhóm tuổi.");
     }
 }

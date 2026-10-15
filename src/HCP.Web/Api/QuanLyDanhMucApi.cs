@@ -182,7 +182,7 @@ public static class QuanLyDanhMucApi
         (await khau.LayTatCaAsync()).GroupBy(k => k.MaKhau).ToDictionary(g => g.Key, g => g.First().TenKhau);
 
     private static QuyTrinhQuanLyDto Map(ProductionProcess p, IReadOnlyDictionary<string, string> tenKhau) => new(
-        p.Id, p.DongBoHnC, p.MaQuyTrinh, p.TenQuyTrinh, p.MaDanhMucThucPham,
+        p.Id, p.DongBoHnC, p.MaQuyTrinh, p.TenQuyTrinh, p.LoaiApDung,
         p.DanhSachKhau.OrderBy(k => k.ThuTu)
             .Select(k => new KhauDto(k.MaKhau, tenKhau.GetValueOrDefault(k.MaKhau), k.ThuTu)).ToList());
 
@@ -191,7 +191,8 @@ public static class QuanLyDanhMucApi
         p.DongBoHnC = r.DongBoHnC;
         p.MaQuyTrinh = r.MaQuyTrinh;
         p.TenQuyTrinh = r.TenQuyTrinh;
-        p.MaDanhMucThucPham = r.MaDanhMucThucPham;
+        // Trống = service tự xử lý (thêm mới -> thực phẩm; sửa -> giữ loại cũ) để app bản cũ không đổi nhầm loại.
+        p.LoaiApDung = r.LoaiSanPham?.Trim() ?? "";
         p.DanhSachKhau = (r.DanhSachKhau ?? Array.Empty<QuyTrinhKhauRequest>())
             .Select(k => new ProcessStepLine { MaKhau = k.MaKhau, ThuTu = k.ThuTu }).ToList();
         return p;

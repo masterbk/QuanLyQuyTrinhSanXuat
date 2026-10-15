@@ -139,9 +139,17 @@ public class ThucPhamService : IDanhMucService<Product>
         if (!string.IsNullOrWhiteSpace(p.MaQuyTrinh))
         {
             var maQuyTrinh = p.MaQuyTrinh.Trim();
-            if (!await _db.ProductionProcesses.AnyAsync(q => q.MaQuyTrinh == maQuyTrinh, ct))
+            var loaiQuyTrinh = await _db.ProductionProcesses.Where(q => q.MaQuyTrinh == maQuyTrinh)
+                .Select(q => q.LoaiApDung).FirstOrDefaultAsync(ct);
+            if (loaiQuyTrinh is null)
             {
                 return $"Quy trình \"{maQuyTrinh}\" không có trong danh mục quy trình của cơ sở.";
+            }
+
+            // HanoiCheck: thực phẩm chỉ gắn quy trình loại food.
+            if (loaiQuyTrinh == LoaiQuyTrinh.MonAn)
+            {
+                return $"Quy trình \"{maQuyTrinh}\" là quy trình chế biến món ăn, không dùng cho thực phẩm.";
             }
         }
 

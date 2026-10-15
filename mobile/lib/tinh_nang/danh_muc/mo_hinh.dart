@@ -150,7 +150,9 @@ class QuyTrinhQuanLy {
   final bool dongBoHnC;
   final String maQuyTrinh;
   final String tenQuyTrinh;
-  final int? maDanhMucThucPham;
+
+  /// "food" = quy trình thực phẩm, "dish" = quy trình chế biến món ăn (HanoiCheck v2.6).
+  final String loaiSanPham;
   final List<QuyTrinhKhauDong> danhSachKhau;
 
   const QuyTrinhQuanLy({
@@ -158,9 +160,11 @@ class QuyTrinhQuanLy {
     this.dongBoHnC = true,
     required this.maQuyTrinh,
     required this.tenQuyTrinh,
-    this.maDanhMucThucPham,
+    this.loaiSanPham = 'food',
     this.danhSachKhau = const [],
   });
+
+  bool get laMonAn => loaiSanPham == 'dish';
 
   String get tomTatKhau =>
       danhSachKhau.isEmpty ? '(chưa có khâu)' : danhSachKhau.map((k) => k.tenHienThi).join(' → ');
@@ -170,7 +174,7 @@ class QuyTrinhQuanLy {
         dongBoHnC: j['dongBoHnC'] as bool? ?? true,
         maQuyTrinh: j['maQuyTrinh'] as String? ?? '',
         tenQuyTrinh: j['tenQuyTrinh'] as String? ?? '',
-        maDanhMucThucPham: j['maDanhMucThucPham'] as int?,
+        loaiSanPham: j['loaiSanPham'] as String? ?? 'food',
         danhSachKhau: (j['danhSachKhau'] as List?)
                 ?.map((e) => QuyTrinhKhauDong.tuJson(e as Map<String, dynamic>))
                 .toList() ??

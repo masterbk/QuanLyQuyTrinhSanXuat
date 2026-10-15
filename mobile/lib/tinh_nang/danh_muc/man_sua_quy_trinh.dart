@@ -20,7 +20,7 @@ class _ManSuaQuyTrinhState extends ConsumerState<ManSuaQuyTrinh> {
   final _form = GlobalKey<FormState>();
   late final TextEditingController _maQuyTrinh;
   late final TextEditingController _tenQuyTrinh;
-  late final TextEditingController _maDanhMucThucPham;
+  late String _loaiSanPham;
   late List<QuyTrinhKhauDong> _danhSachKhau;
   late bool _dongBoHnC;
   bool _dangLuu = false;
@@ -33,7 +33,7 @@ class _ManSuaQuyTrinhState extends ConsumerState<ManSuaQuyTrinh> {
     final qt = widget.quyTrinh;
     _maQuyTrinh = TextEditingController(text: qt?.maQuyTrinh ?? '');
     _tenQuyTrinh = TextEditingController(text: qt?.tenQuyTrinh ?? '');
-    _maDanhMucThucPham = TextEditingController(text: qt?.maDanhMucThucPham?.toString() ?? '');
+    _loaiSanPham = qt?.loaiSanPham ?? 'food';
     _danhSachKhau = List.of(qt?.danhSachKhau ?? const []);
     _dongBoHnC = qt?.dongBoHnC ?? true;
   }
@@ -42,7 +42,6 @@ class _ManSuaQuyTrinhState extends ConsumerState<ManSuaQuyTrinh> {
   void dispose() {
     _maQuyTrinh.dispose();
     _tenQuyTrinh.dispose();
-    _maDanhMucThucPham.dispose();
     super.dispose();
   }
 
@@ -67,7 +66,7 @@ class _ManSuaQuyTrinhState extends ConsumerState<ManSuaQuyTrinh> {
             dongBoHnC: _dongBoHnC,
             maQuyTrinh: _maQuyTrinh.text.trim(),
             tenQuyTrinh: _tenQuyTrinh.text.trim(),
-            maDanhMucThucPham: int.tryParse(_maDanhMucThucPham.text.trim()),
+            loaiSanPham: _loaiSanPham,
             danhSachMaKhau: _danhSachKhau.map((k) => k.maKhau).toList(),
           );
       ref.invalidate(dsQuyTrinhProvider);
@@ -104,16 +103,20 @@ class _ManSuaQuyTrinhState extends ConsumerState<ManSuaQuyTrinh> {
               decoration: const InputDecoration(labelText: 'Tên quy trình *', border: OutlineInputBorder()),
               validator: (v) => (v ?? '').trim().isEmpty ? 'Vui lòng nhập tên' : null,
             ),
-            if (hanoiCheckBat) ...[
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _maDanhMucThucPham,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Mã danh mục thực phẩm (HanoiCheck)',
-                    helperText: 'Không bắt buộc - để trống nếu chưa rõ.', border: OutlineInputBorder()),
-              ),
-            ],
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _loaiSanPham,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Dùng cho',
+                  helperText: 'Thực phẩm: gắn cho thực phẩm, lệnh sản xuất. Món ăn: gắn cho món ăn.',
+                  border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'food', child: Text('Thực phẩm')),
+                DropdownMenuItem(value: 'dish', child: Text('Món ăn')),
+              ],
+              onChanged: (v) => setState(() => _loaiSanPham = v ?? 'food'),
+            ),
             const Divider(height: 32),
             Row(
               children: [

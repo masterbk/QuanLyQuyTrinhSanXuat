@@ -140,7 +140,6 @@ public sealed class SyncOutboxWriter : ISyncOutboxWriter
                 {
                     await BatKhauAsync(s.MaKhau, tuBat, ct);
                     await BatCoSoAsync(s.MaCoSo, tuBat, ct);
-                    await BatNccAsync(s.MaNccDauVao, tuBat, ct);
                     foreach (var ns in s.NguoiThucHien) await BatNhanSuAsync(ns, tuBat, ct);
                 }
                 break;
