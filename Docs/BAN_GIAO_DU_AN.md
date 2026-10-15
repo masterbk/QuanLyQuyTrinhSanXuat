@@ -1,7 +1,7 @@
 # Bàn giao dự án HanoiCheckPlatform — để Claude (phiên/tài khoản khác) làm tiếp
 
 > Tài liệu này gói đủ ngữ cảnh để một phiên Claude mới tiếp tục phát triển mà không cần trí nhớ cũ.
-> Cập nhật lần cuối: 15/10/2026 (đối chiếu đặc tả HnC v2.6: quy trình food/dish, Món ăn, Thực đơn, Đơn suất ăn).
+> Cập nhật lần cuối: 15/10/2026 (đối chiếu đặc tả HnC v2.6: quy trình food/dish, Món ăn, Thực đơn, Đơn suất ăn; phân quyền chức năng theo NCC).
 
 ## 1. Tổng quan
 - **Sản phẩm:** phần mềm quản lý quy trình sản xuất cho **tiệm bánh Tuấn Nghĩa**: quy trình sản xuất,
@@ -13,7 +13,7 @@
 - **Web/API:** .NET 8, Blazor Server + MudBlazor, EF Core (SqlServer), Finbuckle MultiTenant, QuestPDF (PDF).
   - `src/HCP.Domain` (entity + enum + helper), `src/HCP.Infrastructure` (service + EF + migration),
     `src/HCP.Web` (Blazor pages `Pages/CoSo/`, minimal API `Api/`, `Program.cs` DI ~dòng 189, `Shared/NavMenu.razor`).
-  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **300 test** pass.
+  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **304 test** pass.
 - **App mobile:** Flutter ở `mobile/` (package `hcp_mobile`), Riverpod + dio (`lib/loi/api.dart`).
   Tính năng theo `lib/tinh_nang/<ten>/`. **46 test** pass.
 
@@ -158,10 +158,28 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
 - **Dữ liệu prod:** phiếu nhập thử đã xoá hết (08/10/2026) - prod chưa có phiếu thật. Cơ sở thử "Hoa Sen" đã xoá
   hẳn (có backup DB trên server trước khi xoá); prod chỉ còn 1 cơ sở.
 - **CÒN LẠI:** **QC thẩm tra** (duyệt/ký phiếu) — đã để sẵn cột/trạng thái, **người dùng chủ động tạm BỎ**.
-- **Việc thủ công trên prod:** gán role "Nhân viên nhập biểu mẫu" cho nhân viên (màn Nhân sự); tải logo + kiểm tên/
+- **Việc thủ công trên prod:** NCC mới duyệt xong chỉ có danh mục cơ bản → mở module ở `/admin/co-so`; gán role "Nhân viên nhập biểu mẫu" cho nhân viên (màn Nhân sự); tải logo + kiểm tên/
   địa chỉ ở "Thông tin in"; nhập Ngày/Lần ban hành cho mẫu cũ (cột "Ban hành" báo "Chưa khai"); cài APK mới.
   Từ 15/10: bấm "Cập nhật danh mục chuẩn" (tải nhóm tuổi + bữa ăn ngay, không chờ job 0h) và "Tải danh sách trường"
   ở màn Thực đơn.
+
+### Phân quyền chức năng theo NCC (15/10/2026, `710a69f`)
+- Super admin bật/tắt **module** cho từng cơ sở ở `/admin/co-so` (nút "Chức năng"). Tầng này **chồng lên role**:
+  màn/API chỉ dùng được khi cơ sở được mở module VÀ người dùng có role phù hợp.
+- Module (`HCP.Domain/Constants/ChucNang.cs`): `LoSanXuat`, `SuatAn` (Món ăn, Thực đơn), `KhoSanXuat` (tồn kho, định
+  mức, lệnh SX), `BanHang` (cần KhoSanXuat), `HanoiCheck` (cần BanHang), `KiemSoatAttp`. Danh mục cơ bản (Tổng quan,
+  Kho, Cơ sở SX, Khâu, Quy trình, NCC đầu vào, Nhân sự, Thực phẩm) luôn có. Gói mẫu: Cơ bản/Tiệm bánh/Suất ăn trường
+  học/Đầy đủ. Bật module tự kéo phụ thuộc (`ChucNang.Ghep`).
+- Lưu cột `Tenants.ChucNangCsv` (TenantStoreDbContext, migration `ChucNangCoSo` ở `MigrationsTenantStore`). Cơ sở có
+  trước bản này được mở đủ; **NCC đăng ký mới mặc định chỉ cơ bản**. Finbuckle đọc tenant mỗi request → đổi xong người
+  dùng chỉ cần tải lại trang/mở lại app.
+- Chặn 3 lớp: menu `<ChiKhiCoChucNang Ma="...">`; trang `[Authorize(Policy = ChucNang.ChinhSach.X)]` (handler
+  `HCP.Web/Services/ChucNangAuthorization.cs`); API app `.RequireAuthorization(ChucNang.ChinhSach.X)` trên nhóm → 403.
+  `/api/v1/auth/*` trả `chucNang`, app ẩn tab (thiếu trường = server cũ = mở hết). **Thêm màn/API mới thì phải gắn
+  module tương ứng**, không thì màn đó luôn mở.
+- Tắt module HanoiCheck: tắt luôn `BatDongBo` + gỡ outbox chưa gửi → job kéo đơn/đẩy dữ liệu tự dừng; cơ sở không
+  tự bật lại được (`DongBoHnCTongService.BatTatAsync`). Tắt module chỉ ẩn/chặn, **không xoá dữ liệu**.
+- Test: `TestMultiTenantContextAccessor.SetTenant(id, chucNangCsv)` mặc định mở hết module.
 
 ### Các module khác (xem memory nếu cần chi tiết)
 - **Kho + sản xuất nội bộ:** tồn theo lô, lệnh SX trừ định mức, khách hàng. GĐ1 xong.
