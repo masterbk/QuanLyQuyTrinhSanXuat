@@ -132,6 +132,7 @@ class KhachHang {
 }
 
 /// Một dòng hàng khi xuất kho: số lượng cần và các lô có thể lấy (gợi ý FEFO).
+/// Đơn suất ăn: mỗi dòng món tách thành nhiều bảng theo nguyên liệu (cùng [dongId], khác [maNguyenLieu]).
 class DongXuatKho {
   final int dongId;
   final String maThanhPham;
@@ -140,6 +141,11 @@ class DongXuatKho {
   final double soLuong;
   final List<LoCoTheXuat> lo;
 
+  /// Dòng món ăn: mã nguyên liệu của bảng lô này (null với dòng thực phẩm) - phải gửi lại khi xuất kho.
+  final String? maNguyenLieu;
+  final String? tenMonAn;
+  final double? soSuat;
+
   const DongXuatKho({
     required this.dongId,
     required this.maThanhPham,
@@ -147,6 +153,9 @@ class DongXuatKho {
     this.donViTinh,
     required this.soLuong,
     this.lo = const [],
+    this.maNguyenLieu,
+    this.tenMonAn,
+    this.soSuat,
   });
 
   factory DongXuatKho.tuJson(Map<String, dynamic> j) => DongXuatKho(
@@ -158,6 +167,9 @@ class DongXuatKho {
         lo: ((j['lo'] as List?) ?? const [])
             .map((e) => LoCoTheXuat.tuJson(e as Map<String, dynamic>))
             .toList(),
+        maNguyenLieu: j['maNguyenLieu'] as String?,
+        tenMonAn: j['tenMonAn'] as String?,
+        soSuat: j['soSuat'] == null ? null : _so(j['soSuat']),
       );
 }
 

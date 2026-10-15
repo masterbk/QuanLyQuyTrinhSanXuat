@@ -11,7 +11,8 @@ import '../xac_thuc/xac_thuc.dart';
 import 'mo_hinh.dart';
 
 /// Một lô đã chốt khi xuất kho: dòng nào, lô nào, lấy bao nhiêu.
-typedef PhanBoLo = ({int dongId, String maLo, double soLuong});
+/// [maNguyenLieu]: dòng suất ăn - nguyên liệu của lô (null với dòng thực phẩm).
+typedef PhanBoLo = ({int dongId, String maLo, double soLuong, String? maNguyenLieu});
 
 /// Gọi nhóm API /api/v1/don-hang-ban và các danh mục liên quan (khách hàng, thành phẩm).
 class KhoDonHang {
@@ -99,7 +100,13 @@ class KhoDonHang {
     final form = FormData();
     if (phanBo.isNotEmpty) {
       form.fields.add(MapEntry('phanBo', jsonEncode(phanBo
-          .map((p) => {'dongId': p.dongId, 'maLo': p.maLo, 'soLuong': p.soLuong}).toList())));
+          .map((p) => {
+                'dongId': p.dongId,
+                'maLo': p.maLo,
+                'soLuong': p.soLuong,
+                if (p.maNguyenLieu != null) 'maNguyenLieu': p.maNguyenLieu,
+              })
+          .toList())));
     }
     if (maNguoiGiao != null) form.fields.add(MapEntry('maNguoiGiao', maNguoiGiao));
     if (ghiChu != null) form.fields.add(MapEntry('ghiChu', ghiChu));

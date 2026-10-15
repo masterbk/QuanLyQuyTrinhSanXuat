@@ -242,4 +242,15 @@ public class DonSuatAnTests
         Assert.True(dong.LaMonAn);
         Assert.Equal("TR-1", dong.MaTruyVetHnC);
     }
+
+    [Fact]
+    public void App_Gui_Phan_Bo_Kem_Ma_Nguyen_Lieu_Doc_Duoc()
+    {
+        // Đúng dạng form "phanBo" app mobile gửi (DonHangApi đọc với PropertyNameCaseInsensitive).
+        var ds = System.Text.Json.JsonSerializer.Deserialize<List<PhanBoLoRequest>>(
+            """[{"dongId":7,"maLo":"LO-P","soLuong":0.00125,"maNguyenLieu":"TP-PATE"},{"dongId":8,"maLo":"LO-1","soLuong":2}]""",
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.Equal(new PhanBoLoRequest(7, "LO-P", 0.00125m, "TP-PATE"), ds[0]);
+        Assert.Null(ds[1].MaNguyenLieu);   // dòng thực phẩm / app bản cũ
+    }
 }

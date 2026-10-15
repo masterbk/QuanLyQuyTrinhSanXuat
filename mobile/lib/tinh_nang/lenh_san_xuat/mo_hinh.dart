@@ -338,9 +338,9 @@ double _so(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryPa
 
 DateTime? _ngay(dynamic v) => (v is String && v.isNotEmpty) ? DateTime.tryParse(v) : null;
 
-/// Bỏ số 0 thừa: 2.000 -> "2", 1.500 -> "1.5"
-String soGon(double v) {
-  final s = v.toStringAsFixed(3);
+/// Bỏ số 0 thừa: 2.000 -> "2", 1.500 -> "1.5". [soLe]: số chữ số thập phân giữ lại (mặc định 3).
+String soGon(double v, [int soLe = 3]) {
+  final s = v.toStringAsFixed(soLe);
   return s.contains('.') ? s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '') : s;
 }
 

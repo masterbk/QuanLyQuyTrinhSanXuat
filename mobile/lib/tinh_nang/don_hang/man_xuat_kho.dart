@@ -15,6 +15,9 @@ import 'mo_hinh.dart';
 
 final _ngayVn = DateFormat('dd/MM/yyyy');
 
+/// Số lượng xuất kho giữ 5 số lẻ: định lượng nguyên liệu đơn suất ăn có thể rất nhỏ (vd 0.00125 kg).
+String _so(double v) => soGon(v, 5);
+
 class _OLo {
   final String maLo;
   final DateTime? hanSuDung;
@@ -22,7 +25,7 @@ class _OLo {
   final TextEditingController soLuong;
 
   _OLo({required this.maLo, this.hanSuDung, required this.ton, required double goiY})
-      : soLuong = TextEditingController(text: soGon(goiY));
+      : soLuong = TextEditingController(text: _so(goiY));
 
   double get soLuongSo => double.tryParse(soLuong.text.replaceAll(',', '.')) ?? 0;
 
@@ -36,8 +39,13 @@ class _ODong {
   final double soLuong;
   final List<_OLo> lo;
 
+  /// Đơn suất ăn: bảng này là một nguyên liệu của món [tenMonAn] × [soSuat] suất.
+  final String? maNguyenLieu;
+  final String? tenMonAn;
+  final double? soSuat;
+
   _ODong({required this.dongId, required this.tenThanhPham, this.donViTinh, required this.soLuong,
-      required this.lo});
+      required this.lo, this.maNguyenLieu, this.tenMonAn, this.soSuat});
 
   factory _ODong.tu(DongXuatKho d) => _ODong(
         dongId: d.dongId,
@@ -45,9 +53,15 @@ class _ODong {
         donViTinh: d.donViTinh,
         soLuong: d.soLuong,
         lo: d.lo.map((l) => _OLo(maLo: l.maLo, hanSuDung: l.hanSuDung, ton: l.ton, goiY: l.goiY)).toList(),
+        maNguyenLieu: d.maNguyenLieu,
+        tenMonAn: d.tenMonAn,
+        soSuat: d.soSuat,
       );
 
   double get daChon => lo.fold(0, (t, l) => t + l.soLuongSo);
+
+  /// So theo 5 chữ số thập phân (định lượng nguyên liệu tới 5 số lẻ; cộng số thực dễ lệch kiểu 0.1 + 0.2).
+  bool get du => (daChon * 100000).round() == (soLuong * 100000).round();
 }
 
 /// Xuất kho: chọn lô (đã gợi ý FEFO, sửa được), người giao, ghi chú + ảnh tổng quan (đơn HanoiCheck).
@@ -140,8 +154,8 @@ class _ManXuatKhoState extends ConsumerState<ManXuatKho> {
 
   String? _kiemTra() {
     for (final d in _dong ?? const <_ODong>[]) {
-      if (d.daChon != d.soLuong) {
-        return '"${d.tenThanhPham}": đã chọn ${soGon(d.daChon)}, cần đúng ${soGon(d.soLuong)}.';
+      if (!d.du) {
+        return '"${d.tenThanhPham}": đã chọn ${_so(d.daChon)}, cần đúng ${_so(d.soLuong)}.';
       }
     }
     return null;
@@ -156,7 +170,8 @@ class _ManXuatKhoState extends ConsumerState<ManXuatKho> {
       final phanBo = <PhanBoLo>[
         for (final d in _dong ?? const <_ODong>[])
           for (final l in d.lo)
-            if (l.soLuongSo > 0) (dongId: d.dongId, maLo: l.maLo, soLuong: l.soLuongSo),
+            if (l.soLuongSo > 0)
+              (dongId: d.dongId, maLo: l.maLo, soLuong: l.soLuongSo, maNguyenLieu: d.maNguyenLieu),
       ];
       final tb = await ref.read(khoDonProvider).xuatKho(widget.don.id, phanBo,
           maNguoiGiao: _maNguoiGiao, ghiChu: _ghiChu.text.trim().isEmpty ? null : _ghiChu.text.trim(),
@@ -288,15 +303,21 @@ class _ManXuatKhoState extends ConsumerState<ManXuatKho> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (d.tenMonAn != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('Món ${d.tenMonAn} × ${_so(d.soSuat ?? 0)} suất — nguyên liệu theo công thức',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor)),
+                ),
               Row(
                 children: [
                   Expanded(
-                    child: Text('${d.tenThanhPham} × ${soGon(d.soLuong)} ${d.donViTinh ?? ''}',
+                    child: Text('${d.tenThanhPham} × ${_so(d.soLuong)} ${d.donViTinh ?? ''}',
                         style: Theme.of(context).textTheme.titleSmall),
                   ),
-                  Text('Đã chọn ${soGon(d.daChon)} / ${soGon(d.soLuong)}',
+                  Text('Đã chọn ${_so(d.daChon)} / ${_so(d.soLuong)}',
                       style: TextStyle(
-                        color: d.daChon == d.soLuong ? Colors.green.shade700 : Theme.of(context).colorScheme.error,
+                        color: d.du ? Colors.green.shade700 : Theme.of(context).colorScheme.error,
                         fontWeight: FontWeight.w600,
                       )),
                 ],
@@ -304,7 +325,7 @@ class _ManXuatKhoState extends ConsumerState<ManXuatKho> {
               if (d.lo.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text('Kho không còn lô nào của thành phẩm này.',
+                  child: Text('Kho không còn lô nào của ${d.tenMonAn == null ? 'thành phẩm' : 'nguyên liệu'} này.',
                       style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 )
               else
@@ -317,7 +338,7 @@ class _ManXuatKhoState extends ConsumerState<ManXuatKho> {
                           flex: 3,
                           child: Text(
                             'Lô ${l.maLo}${l.hanSuDung == null ? '' : ' · HSD ${_ngayVn.format(l.hanSuDung!)}'}'
-                            '\nTồn ${soGon(l.ton)}',
+                            '\nTồn ${_so(l.ton)}',
                           ),
                         ),
                         const SizedBox(width: 8),
