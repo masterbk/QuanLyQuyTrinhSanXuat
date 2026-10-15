@@ -1,7 +1,7 @@
 # Bàn giao dự án HanoiCheckPlatform — để Claude (phiên/tài khoản khác) làm tiếp
 
 > Tài liệu này gói đủ ngữ cảnh để một phiên Claude mới tiếp tục phát triển mà không cần trí nhớ cũ.
-> Cập nhật lần cuối: 15/10/2026 (đối chiếu đặc tả HnC v2.6: quy trình food/dish, Món ăn, Thực đơn).
+> Cập nhật lần cuối: 15/10/2026 (đối chiếu đặc tả HnC v2.6: quy trình food/dish, Món ăn, Thực đơn, Đơn suất ăn).
 
 ## 1. Tổng quan
 - **Sản phẩm:** phần mềm quản lý quy trình sản xuất cho **tiệm bánh Tuấn Nghĩa**: quy trình sản xuất,
@@ -13,7 +13,7 @@
 - **Web/API:** .NET 8, Blazor Server + MudBlazor, EF Core (SqlServer), Finbuckle MultiTenant, QuestPDF (PDF).
   - `src/HCP.Domain` (entity + enum + helper), `src/HCP.Infrastructure` (service + EF + migration),
     `src/HCP.Web` (Blazor pages `Pages/CoSo/`, minimal API `Api/`, `Program.cs` DI ~dòng 189, `Shared/NavMenu.razor`).
-  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **289 test** pass.
+  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **300 test** pass.
 - **App mobile:** Flutter ở `mobile/` (package `hcp_mobile`), Riverpod + dio (`lib/loi/api.dart`).
   Tính năng theo `lib/tinh_nang/<ten>/`. **46 test** pass.
 
@@ -192,8 +192,17 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
     xoá/không đổi mã, nhóm tuổi.
   - Danh mục chuẩn (thực phẩm, đơn vị tính, nhóm tuổi, bữa ăn) tải cùng job `StandardFoodsSyncJob` lúc 0h hoặc nút
     "Cập nhật danh mục chuẩn" (màn Thực phẩm/Món ăn/Thực đơn).
-  - **CHƯA làm:** đơn suất ăn/thực đơn khai nguồn theo **nguyên liệu** (`update_mode = dish_ingredient_fulfillment`,
-    `chi_tiet[].nguyen_lieu[].phan_bo`) — `HanoiCheckOrderCommandClient` mới có `phan_bo` của đơn thực phẩm.
+  - **Đơn suất ăn** (`7da2ef2`, `dish_ingredient_fulfillment`): đơn HnC có dòng khớp **mã món** (không phải thực
+    phẩm) → dòng `DonHangBanDong.LaMonAn = true`, `MaThanhPham` = mã món, `SoLuong` = số suất. Xuất kho
+    (`DonHangBanService.TachNhuCauAsync`) tách nguyên liệu theo công thức: cần = `DinhLuong × suất` (làm tròn 5 số lẻ),
+    gợi ý lô FEFO, trừ tồn **nguyên liệu**; `DonHangBanXuatLo.MaNguyenLieu` ghi nguyên liệu của lô. Gửi
+    `process` dòng suất ăn chỉ có `nguyen_lieu[].phan_bo` (KHÔNG kèm khoá `phan_bo`, đặc tả cấm có cả hai), có
+    `trace_code` (thiếu thì `ma_mon_an`). Món chưa có công thức → chặn xuất kho. Huỷ đơn trả đúng lô nguyên liệu.
+    Đơn suất ăn không cho "Sửa số lượng" sau xuất kho; "Tạo lệnh SX theo đơn" bỏ qua dòng món. "Sửa đơn" nay
+    giữ `MaTruyVetHnC` theo mã hàng (trước đây bị mất).
+    **Giả định CHƯA kiểm với HnC thật:** `required_amount` = định lượng × suất và đơn vị tồn kho nguyên liệu trùng
+    đơn vị tính HnC. Nếu đơn thật bị 422 về số lượng → lấy số từ `fulfillment-options`
+    (`data.ingredients[].required_amount`). Chưa có JSON mẫu đơn suất ăn thật.
   - Rủi ro đã biết: bản ghi phụ thuộc (lô sau thực phẩm mới, thực đơn sau món mới) gửi sát nhau có thể bị 422 vì
     HnC ghi bất đồng bộ vài giây → bấm "Gửi lại" ở Nhật ký đồng bộ.
 - **App mobile:** màn Lệnh SX (tham gia khâu), Đơn hàng (giao hàng, quét QR, chụp ảnh), Kho, Biểu mẫu. Còn:
@@ -226,6 +235,8 @@ Thư mục `C:\Users\thuyb\.claude\projects\E--TuanNghia\memory\` có các file 
   HCP.Web** rồi mới `dotnet run --no-build`, nếu không app chạy bản cũ chưa có migration.
 - Máy dev **không có kết nối HnC** → muốn thử nhánh "gửi HanoiCheck" thì chèn tạm 1 dòng `TenantHnCCredentials`
   (BaseUrl rỗng, `BatDongBo=1`) cho tenant dev, thử xong XOÁ (kèm các dòng `SyncOutbox` vừa sinh).
+- Bảng đơn/kho tên **số ít** (`DonHangBan`, `DonHangBanDong`, `DonHangBanXuatLo`, `KhoGiaoDich`), danh mục số nhiều
+  (`Dishes`, `DishIngredients`, `Menus`) — viết SQL tay hay nhầm.
 - MudSelect `MultiSelection` với giá trị số (id) phải có `ToStringFunc` để hiện tên, không thì ô hiện "101".
   `HelperText="...&quot;..."` hiện nguyên `&quot;` → dùng `HelperText="@("...\"...\"")"`.
 - Flutter: `TextFormField/DropdownButtonFormField.initialValue` chỉ áp lần đầu → đổi dữ liệu phải đổi `Key`
