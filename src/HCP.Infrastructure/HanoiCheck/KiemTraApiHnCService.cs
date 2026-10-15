@@ -34,6 +34,11 @@ public sealed class KiemTraApiHnCService : IKiemTraApiHnCService
             "Nhóm tuổi đang hoạt động { id, name } - nguồn tra nhom_tuoi_id của Món ăn và Thực đơn.",
             Array.Empty<ThamSoApiHnC>()),
 
+        new ApiHnCDinhNghia("meal-types", "Danh mục bữa ăn",
+            "/api/supplier/meal-types", CanKy: false,
+            "Bữa ăn đang áp dụng { id, name }, theo thứ tự trong ngày - nguồn tra buoi_an_id của Thực đơn.",
+            Array.Empty<ThamSoApiHnC>()),
+
         new ApiHnCDinhNghia("schools", "Trường học được phân công",
             "/api/supplier/schools", CanKy: true,
             "Trường cơ sở được phân công phục vụ trong năm học hiện tại { id, name }.",

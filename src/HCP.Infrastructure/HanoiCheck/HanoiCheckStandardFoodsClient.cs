@@ -51,6 +51,17 @@ public sealed class HanoiCheckStandardFoodsClient : IHanoiCheckStandardFoodsClie
             : MeasuresResult.Ok(data.Data);
     }
 
+    public async Task<MeasuresResult> LayBuaAnAsync(
+        string baseUrl, string accessToken, CancellationToken ct = default)
+    {
+        var (data, loi) = await GetAsync<MeasuresResponse>(
+            baseUrl, "/api/supplier/meal-types", accessToken, "danh mục bữa ăn", ct);
+        if (loi is not null) return MeasuresResult.Loi(loi);
+        return data?.Data is null
+            ? MeasuresResult.Loi("Phản hồi meal-types không đúng định dạng.")
+            : MeasuresResult.Ok(data.Data);
+    }
+
     /// <summary>GET danh mục dùng chung: chỉ cần Bearer token, không ký HMAC.</summary>
     private async Task<(T? Data, string? Loi)> GetAsync<T>(
         string baseUrl, string path, string accessToken, string tenDanhMuc, CancellationToken ct)

@@ -83,7 +83,7 @@ public sealed class DongBoHnCTongService : IDongBoHnCTongService
             }
         }
 
-        // Thứ tự theo phụ thuộc của HanoiCheck: kho/cơ sở/khâu → quy trình → NCC/nhân sự → thực phẩm → món ăn → lô.
+        // Thứ tự theo phụ thuộc của HanoiCheck: kho/cơ sở/khâu → quy trình → NCC/nhân sự → thực phẩm → món ăn → lô → thực đơn.
         await GuiAsync(await _db.Warehouses.ToListAsync(ct));
         await GuiAsync(await _db.Facilities.ToListAsync(ct));
         await GuiAsync(await _db.ProductionSteps.ToListAsync(ct));
@@ -100,6 +100,8 @@ public sealed class DongBoHnCTongService : IDongBoHnCTongService
             .Include(d => d.DanhSachFile).ToListAsync(ct));
         await GuiAsync(await _db.Batches.Include(b => b.DanhSachKho).Include(b => b.DanhSachKhau)
             .Include(b => b.DanhSachFile).ToListAsync(ct));
+        // Thực đơn cần món ăn có sẵn (dịch vụ 10 sau dịch vụ 9).
+        await GuiAsync(await _db.Menus.Include(m => m.DanhSachMon).ToListAsync(ct));
 
         return KetQuaThaoTac.Ok($"Đã đưa {soBanGhi} bản ghi vào hàng đợi đồng bộ HanoiCheck.");
     }

@@ -84,6 +84,15 @@ public class MonAnService : IDanhMucService<Dish>
         var loi = await KiemTraAsync(entity, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
+        // Thực đơn tham chiếu món theo mã và yêu cầu cùng nhóm tuổi: không đổi 2 thứ này khi món đang được dùng.
+        if (maMoi != hienTai.MaMonAn || entity.NhomTuoiId != hienTai.NhomTuoiId)
+        {
+            var thucDon = await ThucDonDangDungAsync(hienTai.MaMonAn, ct);
+            if (thucDon.Count > 0)
+                return KetQuaThaoTac.Loi("Không đổi được mã món hoặc nhóm tuổi: món đang có trong thực đơn "
+                                         + string.Join(", ", thucDon) + ". Gỡ món khỏi các thực đơn đó trước.");
+        }
+
         ChuanHoa(entity);
 
         hienTai.MaMonAn = maMoi;
@@ -113,6 +122,11 @@ public class MonAnService : IDanhMucService<Dish>
     {
         var mon = await _db.Dishes.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (mon is null) return KetQuaThaoTac.Loi("Không tìm thấy món ăn cần xoá.");
+
+        var thucDon = await ThucDonDangDungAsync(mon.MaMonAn, ct);
+        if (thucDon.Count > 0)
+            return KetQuaThaoTac.Loi($"Không xoá được món \"{mon.TenMonAn}\": đang có trong thực đơn "
+                                     + string.Join(", ", thucDon) + ". Gỡ món khỏi các thực đơn đó trước.");
 
         _db.Dishes.Remove(mon); // bảng con xoá theo cascade.
         await _db.SaveChangesAsync(ct);
@@ -251,6 +265,10 @@ public class MonAnService : IDanhMucService<Dish>
     }
 
     private sealed record QuyTrinhGon(string Ten, string LoaiApDung);
+
+    private Task<List<string>> ThucDonDangDungAsync(string maMonAn, CancellationToken ct) =>
+        _db.Menus.Where(m => m.DanhSachMon.Any(i => i.MaMonAn == maMonAn))
+            .Select(m => m.MaThucDon).Take(5).ToListAsync(ct);
 
     private static void ChuanHoa(Dish d)
     {

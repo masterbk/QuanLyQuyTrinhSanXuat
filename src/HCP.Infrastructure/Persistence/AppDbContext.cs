@@ -103,6 +103,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<DishIngredient> DishIngredients => Set<DishIngredient>();
     public DbSet<DishStep> DishSteps => Set<DishStep>();
     public DbSet<DishFile> DishFiles => Set<DishFile>();
+    public DbSet<Menu> Menus => Set<Menu>();
+    public DbSet<MenuItem> MenuItems => Set<MenuItem>();
+    public DbSet<TruongHocHnC> TruongHocHnCs => Set<TruongHocHnC>();
     public DbSet<BieuMau> BieuMaus => Set<BieuMau>();
     public DbSet<TruongBieuMau> TruongBieuMaus => Set<TruongBieuMau>();
     public DbSet<HangMucBieuMau> HangMucBieuMaus => Set<HangMucBieuMau>();
@@ -115,6 +118,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
     public DbSet<StandardFoodCategory> StandardFoodCategories => Set<StandardFoodCategory>();
     public DbSet<DonViTinhHnC> DonViTinhHnCs => Set<DonViTinhHnC>();
     public DbSet<NhomTuoiHnC> NhomTuoiHnCs => Set<NhomTuoiHnC>();
+    public DbSet<BuaAnHnC> BuaAnHnCs => Set<BuaAnHnC>();
 
     // TODO (Giai đoạn 3+): Staff, Product, Batch, Dish, Order...
     // Mỗi entity nghiệp vụ PHẢI kế thừa TenantEntity và gọi .IsMultiTenant() ở dưới.
@@ -515,6 +519,31 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         batchFile.HasIndex(f => new { f.BatchId, f.MaFile }).IsUnique();
         batchFile.IsMultiTenant().AdjustUniqueIndexes();
 
+        // --- Thực đơn (đặc tả v2.6, dịch vụ 10) ---
+        var menu = builder.Entity<Menu>();
+        menu.ToTable("Menus");
+        menu.Property(m => m.MaThucDon).HasMaxLength(255).IsRequired();
+        menu.Property(m => m.TenThucDon).HasMaxLength(255).IsRequired();
+        menu.Property(m => m.DanhSachTruongCsv).HasMaxLength(2000);
+        menu.Ignore(m => m.DanhSachTruong);
+        menu.HasMany(m => m.DanhSachMon).WithOne(i => i.Menu!)
+            .HasForeignKey(i => i.MenuId).OnDelete(DeleteBehavior.Cascade);
+        menu.HasIndex(m => m.MaThucDon).IsUnique();
+        menu.IsMultiTenant().AdjustUniqueIndexes();
+
+        var menuItem = builder.Entity<MenuItem>();
+        menuItem.ToTable("MenuItems");
+        menuItem.Property(i => i.MaMonAn).HasMaxLength(255).IsRequired();
+        menuItem.HasIndex(i => i.MaMonAn);
+        menuItem.IsMultiTenant();
+
+        // Trường được phân công: riêng từng cơ sở. TruongId là id của HnC, duy nhất trong một cơ sở.
+        var truongHoc = builder.Entity<TruongHocHnC>();
+        truongHoc.ToTable("TruongHocHnCs");
+        truongHoc.Property(t => t.Ten).HasMaxLength(500).IsRequired();
+        truongHoc.HasIndex(t => t.TruongId).IsUnique();
+        truongHoc.IsMultiTenant().AdjustUniqueIndexes();
+
         // --- Món ăn và các bảng con ---
         var dish = builder.Entity<Dish>();
         dish.ToTable("Dishes");
@@ -636,6 +665,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IMultiTenantDbCo
         donViTinh.ToTable("DonViTinhHnCs");
         donViTinh.Property(d => d.Id).ValueGeneratedNever();
         donViTinh.Property(d => d.Ten).HasMaxLength(255).IsRequired();
+
+        // Danh mục bữa ăn HnC (dùng chung, không theo tenant). Id = id của HnC, không tự tăng.
+        var buaAn = builder.Entity<BuaAnHnC>();
+        buaAn.ToTable("BuaAnHnCs");
+        buaAn.Property(d => d.Id).ValueGeneratedNever();
+        buaAn.Property(d => d.Ten).HasMaxLength(255).IsRequired();
 
         // Danh mục nhóm tuổi HnC (dùng chung, không theo tenant). Id = id của HnC, không tự tăng.
         var nhomTuoi = builder.Entity<NhomTuoiHnC>();

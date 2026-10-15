@@ -110,6 +110,20 @@ public sealed class StandardFoodsSyncJob : IStandardFoodsSyncJob
         {
             _logger.LogWarning("Lấy danh mục nhóm tuổi thất bại: {Loi}", nhomTuoi.ThongBao);
         }
+
+        // Kèm danh mục bữa ăn (buoi_an_id của Thực đơn).
+        var buaAn = await _client.LayBuaAnAsync(cauHinh.BaseUrl, token.AccessToken!, ct);
+        if (buaAn.ThanhCong)
+        {
+            var kq = await _danhMucChuan.CapNhatBuaAnTuHnCAsync(buaAn.Items
+                .Where(i => i.Id.HasValue)
+                .Select(i => new BuaAnHnC { Id = i.Id!.Value, Ten = i.Name ?? "" }).ToList(), ct);
+            _logger.LogInformation("Danh mục bữa ăn HnC: {ThongBao}", kq.ThongBao);
+        }
+        else
+        {
+            _logger.LogWarning("Lấy danh mục bữa ăn thất bại: {Loi}", buaAn.ThongBao);
+        }
         return soLuong;
     }
 }

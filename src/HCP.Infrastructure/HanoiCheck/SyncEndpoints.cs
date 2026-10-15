@@ -20,6 +20,7 @@ public static class SyncEndpoints
         ["Product"] = "/api/supplier/foods/merge",
         ["Batch"] = "/api/supplier/batches/merge",
         ["Dish"] = "/api/supplier/dishes/merge",
+        ["Menu"] = "/api/supplier/menus/merge",
     };
 
     /// <summary>Trả về đường dẫn merge, hoặc null nếu EntityType không hợp lệ.</summary>

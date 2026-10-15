@@ -103,6 +103,7 @@ public sealed class SyncOutboxWriter : ISyncOutboxWriter
         Product p when p.LoaiSanPham == LoaiSanPham.ThanhPham => ("Product", p.MaSanPham, HnCPayloadMapper.ThucPham(p)),
         Batch b => ("Batch", b.MaLo, HnCPayloadMapper.LoSanXuat(b)),
         Dish d => ("Dish", d.MaMonAn, HnCPayloadMapper.MonAn(d)),
+        Menu m => ("Menu", m.MaThucDon, HnCPayloadMapper.ThucDon(m)),
         _ => null
     };
 
@@ -142,6 +143,13 @@ public sealed class SyncOutboxWriter : ISyncOutboxWriter
                     await BatCoSoAsync(s.MaCoSo, tuBat, ct);
                     foreach (var ns in s.NguoiThucHien) await BatNhanSuAsync(ns, tuBat, ct);
                 }
+                break;
+
+            case Menu m:
+                foreach (var ma in m.DanhSachMon.Select(i => i.MaMonAn).Distinct())
+                    await BatAsync(_db.Dishes.Include(x => x.DanhSachNguyenLieu).Include(x => x.DanhSachKhau)
+                                       .Include(x => x.DanhSachFile).AsSplitQuery().Where(x => x.MaMonAn == ma),
+                                   $"món ăn {ma}", tuBat, ct);
                 break;
         }
     }

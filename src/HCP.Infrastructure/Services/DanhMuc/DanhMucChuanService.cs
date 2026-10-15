@@ -24,6 +24,12 @@ public interface IDanhMucChuanService
 
     /// <summary>Ghi đè danh mục nhóm tuổi bằng dữ liệu mới lấy từ HanoiCheck.</summary>
     Task<KetQuaThaoTac> CapNhatNhomTuoiTuHnCAsync(IEnumerable<NhomTuoiHnC> danhMuc, CancellationToken ct = default);
+
+    /// <summary>Danh mục bữa ăn HnC (GET /meal-types), theo thứ tự bữa trong ngày. Có thể rỗng nếu chưa tải về.</summary>
+    Task<IReadOnlyList<BuaAnHnC>> LayBuaAnAsync(CancellationToken ct = default);
+
+    /// <summary>Ghi đè danh mục bữa ăn bằng dữ liệu mới lấy từ HanoiCheck (giữ đúng thứ tự HnC trả về).</summary>
+    Task<KetQuaThaoTac> CapNhatBuaAnTuHnCAsync(IReadOnlyList<BuaAnHnC> danhMuc, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -182,5 +188,42 @@ public class DanhMucChuanService : IDanhMucChuanService
         _cache.Remove(KhoaCacheNhomTuoi);
 
         return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} nhóm tuổi.");
+    }
+
+    private const string KhoaCacheBuaAn = "danh-muc-bua-an-hnc";
+
+    public async Task<IReadOnlyList<BuaAnHnC>> LayBuaAnAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(KhoaCacheBuaAn, out IReadOnlyList<BuaAnHnC>? daCo) && daCo is not null)
+        {
+            return daCo;
+        }
+
+        var danhSach = await _db.BuaAnHnCs.AsNoTracking().OrderBy(d => d.ThuTu).ThenBy(d => d.Id).ToListAsync(ct);
+        if (danhSach.Count > 0)
+            _cache.Set(KhoaCacheBuaAn, (IReadOnlyList<BuaAnHnC>)danhSach, TimeSpan.FromHours(12));
+        return danhSach;
+    }
+
+    public async Task<KetQuaThaoTac> CapNhatBuaAnTuHnCAsync(IReadOnlyList<BuaAnHnC> danhMuc,
+                                                            CancellationToken ct = default)
+    {
+        var dsMoi = danhMuc.Where(d => d.Id > 0 && !string.IsNullOrWhiteSpace(d.Ten))
+            .GroupBy(d => d.Id).Select(g => g.First()).ToList();
+        if (dsMoi.Count == 0) return KetQuaThaoTac.Loi("HanoiCheck không trả về bữa ăn nào.");
+
+        var hienCo = await _db.BuaAnHnCs.ToDictionaryAsync(d => d.Id, ct);
+        var now = DateTime.UtcNow;
+        for (var i = 0; i < dsMoi.Count; i++)
+        {
+            var moi = dsMoi[i];
+            if (hienCo.Remove(moi.Id, out var cu)) { cu.Ten = moi.Ten.Trim(); cu.ThuTu = i + 1; cu.CapNhatLucUtc = now; }
+            else _db.BuaAnHnCs.Add(new BuaAnHnC { Id = moi.Id, Ten = moi.Ten.Trim(), ThuTu = i + 1, CapNhatLucUtc = now });
+        }
+        _db.BuaAnHnCs.RemoveRange(hienCo.Values);
+        await _db.SaveChangesAsync(ct);
+        _cache.Remove(KhoaCacheBuaAn);
+
+        return KetQuaThaoTac.Ok($"Đã cập nhật {dsMoi.Count} bữa ăn.");
     }
 }

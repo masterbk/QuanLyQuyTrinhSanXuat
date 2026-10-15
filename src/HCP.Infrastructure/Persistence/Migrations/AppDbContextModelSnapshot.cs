@@ -443,6 +443,27 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.BuaAnHnC", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CapNhatLucUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Ten")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("ThuTu")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BuaAnHnCs", (string)null);
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.CaiDatInBieuMau", b =>
                 {
                     b.Property<int>("Id")
@@ -1939,6 +1960,115 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.Menu", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DanhSachTruongCsv")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("DongBoHnC")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MaThucDon")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("NhomTuoiId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TenThucDon")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("ThuApDung")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("TrangThai")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MaThucDon", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Menus_MaThucDon");
+
+                    b.ToTable("Menus", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.MenuItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BuoiAnId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MaMonAn")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("MenuId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MaMonAn");
+
+                    b.HasIndex("MenuId");
+
+                    b.ToTable("MenuItems", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.NhomTuoiHnC", b =>
                 {
                     b.Property<int>("Id")
@@ -2724,6 +2854,53 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.HasAnnotation("Finbuckle:MultiTenant", true);
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.TruongHocHnC", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CapNhatLucUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Ten")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("TruongId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TruongId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_TruongHocHnCs_TruongId");
+
+                    b.ToTable("TruongHocHnCs", (string)null);
+
+                    b.HasAnnotation("Finbuckle:MultiTenant", true);
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.Warehouse", b =>
                 {
                     b.Property<int>("Id")
@@ -3478,6 +3655,17 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Navigation("LenhSanXuatSanPham");
                 });
 
+            modelBuilder.Entity("HCP.Domain.Entities.Business.MenuItem", b =>
+                {
+                    b.HasOne("HCP.Domain.Entities.Business.Menu", "Menu")
+                        .WithMany("DanhSachMon")
+                        .HasForeignKey("MenuId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Menu");
+                });
+
             modelBuilder.Entity("HCP.Domain.Entities.Business.PhieuGhiNhan", b =>
                 {
                     b.HasOne("HCP.Domain.Entities.Business.BieuMau", "BieuMau")
@@ -3634,6 +3822,11 @@ namespace HCP.Infrastructure.Persistence.Migrations
                     b.Navigation("Khau");
 
                     b.Navigation("TieuHao");
+                });
+
+            modelBuilder.Entity("HCP.Domain.Entities.Business.Menu", b =>
+                {
+                    b.Navigation("DanhSachMon");
                 });
 
             modelBuilder.Entity("HCP.Domain.Entities.Business.PhieuGhiNhan", b =>

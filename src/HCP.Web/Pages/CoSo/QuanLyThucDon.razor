@@ -1,0 +1,415 @@
+@page "/app/thuc-don"
+@using HCP.Domain.Constants
+@using HCP.Domain.Entities.Business
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Sync
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject IDanhMucService<Menu> ThucDonService
+@inject IDanhMucService<Dish> MonAnService
+@inject IDanhMucChuanService DanhMucChuanService
+@inject ITruongHocService TruongHocService
+@inject IStandardFoodsSyncJob StandardFoodsSyncJob
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Thực đơn</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4 flex-wrap" style="gap:8px">
+    <div>
+        <MudText Typo="Typo.h5">Thực đơn</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Thực đơn theo thứ trong tuần của từng nhóm tuổi: bữa nào ăn món gì. Đồng bộ sang HanoiCheck qua
+            nghiệp vụ "Đồng bộ thực đơn" để trường đặt suất ăn theo thực đơn.
+        </MudText>
+    </div>
+    <div class="d-flex flex-wrap" style="gap:8px">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Sync"
+                   Disabled="_dangTaiDanhMuc" OnClick="CapNhatDanhMucChuanAsync">
+            @(_dangTaiDanhMuc ? "Đang cập nhật..." : "Cập nhật danh mục chuẩn")
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.School"
+                   Disabled="_dangTaiTruong" OnClick="TaiTruongAsync">
+            @(_dangTaiTruong ? "Đang tải..." : $"Tải danh sách trường ({_truong.Count})")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   Disabled="@(_monAn.Count == 0)" OnClick="@(() => MoForm(null, false))">
+            Thêm thực đơn
+        </MudButton>
+    </div>
+</div>
+
+@if (!_dangTai)
+{
+    @if (_monAn.Count == 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Chưa có món ăn nào. Thực đơn gồm các món đã khai ở màn <MudLink Href="/app/mon-an">Món ăn</MudLink>.
+        </MudAlert>
+    }
+    @if (_buaAn.Count == 0 || _nhomTuoi.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Chưa có danh mục @(_buaAn.Count == 0 ? "bữa ăn" : "")@(_buaAn.Count == 0 && _nhomTuoi.Count == 0 ? " và " : "")@(_nhomTuoi.Count == 0 ? "nhóm tuổi" : "")
+            của HanoiCheck. Bấm "Cập nhật danh mục chuẩn" để tải về (cần đã cấu hình kết nối HanoiCheck).
+        </MudAlert>
+    }
+}
+
+@if (_dangTai)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_danhSach.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Chưa có thực đơn nào.</MudAlert>
+}
+else
+{
+    <MudTable Items="_danhSach" Hover="true" Elevation="1" Dense="true">
+        <HeaderContent>
+            <MudTh>Mã</MudTh>
+            <MudTh>Tên thực đơn</MudTh>
+            <MudTh>Nhóm tuổi</MudTh>
+            <MudTh>Thứ</MudTh>
+            <MudTh>Các món</MudTh>
+            <MudTh>Phạm vi</MudTh>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh Style="width:150px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã"><b>@context.MaThucDon</b></MudTd>
+            <MudTd DataLabel="Tên">@context.TenThucDon</MudTd>
+            <MudTd DataLabel="Nhóm tuổi">@TenNhomTuoi(context.NhomTuoiId)</MudTd>
+            <MudTd DataLabel="Thứ">@Menu.TenThu(context.ThuApDung)</MudTd>
+            <MudTd DataLabel="Các món">
+                <div style="max-width:min(420px, 60vw)">
+                    @foreach (var nhom in context.DanhSachMon.GroupBy(i => i.BuoiAnId).OrderBy(g => ThuTuBua(g.Key)))
+                    {
+                        <div><span class="mud-text-secondary">@TenBua(nhom.Key):</span> @string.Join(", ", nhom.Select(i => TenMon(i.MaMonAn)))</div>
+                    }
+                </div>
+            </MudTd>
+            <MudTd DataLabel="Phạm vi">
+                @(context.DanhSachTruong.Count == 0 ? "Mọi trường" : $"{context.DanhSachTruong.Count} trường")
+            </MudTd>
+            <MudTd DataLabel="Trạng thái">
+                <MudChip T="string" Size="Size.Small" Class="ma-0"
+                         Color="@(context.TrangThai ? Color.Success : Color.Default)">
+                    @(context.TrangThai ? "Đang áp dụng" : "Ngừng")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" title="Sửa"
+                               OnClick="@(() => MoForm(context, false))" />
+                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="Sao chép sang ngày khác"
+                               OnClick="@(() => MoForm(context, true))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" title="Xoá"
+                               OnClick="@(() => XacNhanXoaAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Số dòng mỗi trang:" />
+        </PagerContent>
+    </MudTable>
+}
+
+<MudDialog @bind-Visible="_hienForm" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_dangSua ? "Sửa thực đơn" : "Thêm thực đơn")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input">
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudTextField @bind-Value="_input.MaThucDon" Label="Mã thực đơn" Variant="Variant.Outlined"
+                                  MaxLength="255" HelperText="Chữ không dấu, số, _ và -. Vd TD-T2-MN."
+                                  Required="true" RequiredError="Vui lòng nhập mã thực đơn" />
+                </MudItem>
+                <MudItem xs="12" sm="8">
+                    <MudTextField @bind-Value="_input.TenThucDon" Label="Tên thực đơn" Variant="Variant.Outlined"
+                                  MaxLength="255" Required="true" RequiredError="Vui lòng nhập tên thực đơn" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    @if (_nhomTuoi.Count > 0)
+                    {
+                        <MudSelect T="int" Value="_input.NhomTuoiId" ValueChanged="DoiNhomTuoi" Label="Nhóm tuổi"
+                                   Variant="Variant.Outlined" HelperText="Chỉ chọn được món cùng nhóm tuổi.">
+                            @foreach (var nt in _nhomTuoi)
+                            {
+                                <MudSelectItem T="int" Value="@nt.Id">@nt.Ten</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudNumericField T="int" Value="_input.NhomTuoiId" ValueChanged="DoiNhomTuoi" Label="Mã nhóm tuổi"
+                                         Variant="Variant.Outlined" Min="0" />
+                    }
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="int" @bind-Value="_input.ThuApDung" Label="Thứ áp dụng" Variant="Variant.Outlined">
+                        @foreach (var thu in new[] { 1, 2, 3, 4, 5, 6, 0 })
+                        {
+                            <MudSelectItem T="int" Value="@thu">@Menu.TenThu(thu)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4" Class="d-flex align-center">
+                    <MudSwitch T="bool" @bind-Value="_input.TrangThai" Color="Color.Success"
+                               Label="@(_input.TrangThai ? "Đang áp dụng" : "Ngừng áp dụng")" />
+                </MudItem>
+            </MudGrid>
+            <ODongBoHnC @bind-Value="_input.DongBoHnC" />
+        </MudForm>
+
+        <MudDivider Class="my-3" />
+        <div class="d-flex justify-space-between align-center mb-2">
+            <MudText Typo="Typo.subtitle2">Các món theo bữa (@_input.DanhSachMon.Count)</MudText>
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="ThemDong">Thêm món</MudButton>
+        </div>
+        @if (MonCungNhomTuoi.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+                Chưa có món nào thuộc nhóm tuổi này. Khai món ăn với đúng nhóm tuổi ở màn Món ăn trước.
+            </MudAlert>
+        }
+        @foreach (var dong in _input.DanhSachMon)
+        {
+            <div class="d-flex align-center mb-2" style="gap:8px">
+                <div style="width:200px; flex:none">
+                    @if (_buaAn.Count > 0)
+                    {
+                        <MudSelect T="int" @bind-Value="dong.BuoiAnId" Label="Bữa ăn" Variant="Variant.Outlined" Dense="true">
+                            @foreach (var b in _buaAn)
+                            {
+                                <MudSelectItem T="int" Value="@b.Id">@b.Ten</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudNumericField T="int" @bind-Value="dong.BuoiAnId" Label="Mã bữa ăn" Variant="Variant.Outlined"
+                                         Margin="Margin.Dense" Min="0" />
+                    }
+                </div>
+                <div class="flex-grow-1">
+                    <MudSelect T="string" @bind-Value="dong.MaMonAn" Label="Món ăn" Variant="Variant.Outlined" Dense="true">
+                        @foreach (var m in MonCungNhomTuoi)
+                        {
+                            <MudSelectItem T="string" Value="@m.MaMonAn">@m.TenMonAn (@m.MaMonAn)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => _input.DanhSachMon.Remove(dong))" />
+            </div>
+        }
+
+        <MudDivider Class="my-3" />
+        <MudText Typo="Typo.subtitle2" Class="mb-1">Phạm vi áp dụng</MudText>
+        <MudRadioGroup T="bool" @bind-Value="_chiMotSoTruong">
+            <MudRadio T="bool" Value="false" Color="Color.Primary">Dùng chung cho mọi trường được phân công</MudRadio>
+            <MudRadio T="bool" Value="true" Color="Color.Primary" Disabled="@(_truong.Count == 0)">Chỉ một số trường</MudRadio>
+        </MudRadioGroup>
+        @if (_truong.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Chưa có danh sách trường được phân công - bấm "Tải danh sách trường" để chọn trường cụ thể.
+            </MudText>
+        }
+        @if (_chiMotSoTruong && _truong.Count > 0)
+        {
+            <MudSelect T="int" MultiSelection="true" Label="Trường áp dụng" Variant="Variant.Outlined" Class="mt-2"
+                       SelectedValues="_truongChon" SelectedValuesChanged="v => _truongChon = v.ToHashSet()"
+                       ToStringFunc="TenTruong">
+                @foreach (var t in _truong)
+                {
+                    <MudSelectItem T="int" Value="@t.TruongId">@t.Ten</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienForm = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangLuu" OnClick="LuuAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Menu> _danhSach = new();
+    private List<Dish> _monAn = new();
+    private List<NhomTuoiHnC> _nhomTuoi = new();
+    private List<BuaAnHnC> _buaAn = new();
+    private List<TruongHocHnC> _truong = new();
+
+    private bool _dangTai = true;
+    private bool _dangLuu;
+    private bool _dangTaiDanhMuc;
+    private bool _dangTaiTruong;
+
+    private bool _hienForm;
+    private bool _dangSua;
+    private MudForm? _form;
+    private Menu _input = new();
+    private bool _chiMotSoTruong;
+    private HashSet<int> _truongChon = new();
+
+    private readonly DialogOptions _dialogOptions =
+        new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = false };
+
+    private List<Dish> MonCungNhomTuoi => _monAn.Where(m => m.NhomTuoiId == _input.NhomTuoiId).ToList();
+
+    protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
+
+    private async Task TaiDanhSachAsync()
+    {
+        _dangTai = true;
+        _danhSach = (await ThucDonService.LayTatCaAsync()).ToList();
+        _monAn = (await MonAnService.LayTatCaAsync()).OrderBy(m => m.TenMonAn).ToList();
+        _truong = (await TruongHocService.LayTatCaAsync()).ToList();
+        await TaiDanhMucChuanAsync();
+        _dangTai = false;
+    }
+
+    private async Task TaiDanhMucChuanAsync()
+    {
+        _nhomTuoi = (await DanhMucChuanService.LayNhomTuoiAsync()).ToList();
+        _buaAn = (await DanhMucChuanService.LayBuaAnAsync()).ToList();
+    }
+
+    private async Task CapNhatDanhMucChuanAsync()
+    {
+        _dangTaiDanhMuc = true;
+        try
+        {
+            var soLuong = await StandardFoodsSyncJob.DongBoAsync();
+            await TaiDanhMucChuanAsync();
+            if (soLuong > 0)
+                Snackbar.Add($"Đã cập nhật danh mục chuẩn ({_nhomTuoi.Count} nhóm tuổi, {_buaAn.Count} bữa ăn).", Severity.Success);
+            else
+                Snackbar.Add("Chưa lấy được danh mục. Kiểm tra lại kết nối HanoiCheck ở màn Cài đặt kết nối.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Lỗi khi cập nhật danh mục: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _dangTaiDanhMuc = false;
+        }
+    }
+
+    private async Task TaiTruongAsync()
+    {
+        _dangTaiTruong = true;
+        try
+        {
+            var kq = await TruongHocService.CapNhatTuHnCAsync();
+            Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Warning);
+            _truong = (await TruongHocService.LayTatCaAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Lỗi khi tải danh sách trường: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _dangTaiTruong = false;
+        }
+    }
+
+    private string TenNhomTuoi(int id) => _nhomTuoi.FirstOrDefault(n => n.Id == id)?.Ten ?? $"Mã {id}";
+    private string TenBua(int id) => _buaAn.FirstOrDefault(b => b.Id == id)?.Ten ?? $"Bữa {id}";
+    private int ThuTuBua(int id) => _buaAn.FirstOrDefault(b => b.Id == id)?.ThuTu ?? 1000 + id;
+    private string TenTruong(int id) => _truong.FirstOrDefault(t => t.TruongId == id)?.Ten ?? $"Trường {id}";
+    private string TenMon(string ma) => _monAn.FirstOrDefault(m => m.MaMonAn == ma)?.TenMonAn ?? ma;
+
+    private void DoiNhomTuoi(int id)
+    {
+        _input.NhomTuoiId = id;
+        // Món khác nhóm tuổi không hợp lệ nữa -> bỏ chọn để người dùng chọn lại.
+        foreach (var dong in _input.DanhSachMon.Where(d => MonCungNhomTuoi.All(m => m.MaMonAn != d.MaMonAn)))
+            dong.MaMonAn = "";
+    }
+
+    private void ThemDong()
+    {
+        // Bữa mặc định = bữa của dòng cuối (thường thêm nhiều món cho cùng một bữa).
+        var bua = _input.DanhSachMon.LastOrDefault()?.BuoiAnId ?? _buaAn.FirstOrDefault()?.Id ?? 0;
+        _input.DanhSachMon.Add(new MenuItem { BuoiAnId = bua });
+    }
+
+    /// <param name="saoChep">true = tạo thực đơn mới từ thực đơn có sẵn (sang thứ kế tiếp), không sửa bản gốc.</param>
+    private void MoForm(Menu? td, bool saoChep)
+    {
+        _dangSua = td is not null && !saoChep;
+
+        if (td is null)
+        {
+            _input = new Menu { NhomTuoiId = _nhomTuoi.FirstOrDefault()?.Id ?? _monAn.FirstOrDefault()?.NhomTuoiId ?? 0 };
+            _input.DanhSachMon.Add(new MenuItem { BuoiAnId = _buaAn.FirstOrDefault()?.Id ?? 0 });
+        }
+        else
+        {
+            var thu = saoChep ? (td.ThuApDung + 1) % 7 : td.ThuApDung;
+            _input = new Menu
+            {
+                Id = saoChep ? 0 : td.Id,
+                DongBoHnC = td.DongBoHnC,
+                MaThucDon = saoChep ? "" : td.MaThucDon,
+                TenThucDon = saoChep ? td.TenThucDon.Replace(Menu.TenThu(td.ThuApDung), Menu.TenThu(thu)) : td.TenThucDon,
+                NhomTuoiId = td.NhomTuoiId,
+                ThuApDung = thu,
+                TrangThai = saoChep || td.TrangThai,
+                DanhSachTruongCsv = td.DanhSachTruongCsv,
+                DanhSachMon = td.DanhSachMon.Select(i => new MenuItem { BuoiAnId = i.BuoiAnId, MaMonAn = i.MaMonAn }).ToList()
+            };
+        }
+
+        _truongChon = _input.DanhSachTruong.ToHashSet();
+        _chiMotSoTruong = _truongChon.Count > 0;
+        _hienForm = true;
+    }
+
+    private async Task LuuAsync()
+    {
+        if (_form is not null)
+        {
+            await _form.Validate();
+            if (!_form.IsValid) return;
+        }
+
+        if (_chiMotSoTruong && _truongChon.Count == 0)
+        {
+            Snackbar.Add("Chọn ít nhất một trường, hoặc chọn \"Dùng chung cho mọi trường\".", Severity.Warning);
+            return;
+        }
+        _input.DanhSachTruongCsv = _chiMotSoTruong ? string.Join(",", _truongChon) : null;
+
+        _dangLuu = true;
+        var ketQua = _dangSua ? await ThucDonService.CapNhatAsync(_input) : await ThucDonService.ThemAsync(_input);
+        _dangLuu = false;
+
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+        if (ketQua.ThanhCong)
+        {
+            _hienForm = false;
+            await TaiDanhSachAsync();
+        }
+    }
+
+    private async Task XacNhanXoaAsync(Menu td)
+    {
+        var dongY = await DialogService.ShowMessageBox(
+            "Xác nhận xoá",
+            $"Xoá thực đơn \"{td.TenThucDon}\" ({td.MaThucDon})? HanoiCheck không có chức năng xoá thực đơn - phần mềm "
+            + "sẽ gửi \"ngừng áp dụng\" trước khi xoá. Nếu chỉ tạm ngưng thì nên sửa và tắt \"Đang áp dụng\".",
+            yesText: "Xoá", cancelText: "Huỷ");
+        if (dongY != true) return;
+
+        var ketQua = await ThucDonService.XoaAsync(td.Id);
+        Snackbar.Add(ketQua.ThongBao, ketQua.ThanhCong ? Severity.Success : Severity.Error);
+        if (ketQua.ThanhCong) await TaiDanhSachAsync();
+    }
+}

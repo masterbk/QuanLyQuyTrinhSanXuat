@@ -273,6 +273,26 @@ public static class HnCPayloadMapper
         }
     };
 
+    /// <summary>
+    /// Thực đơn (dịch vụ 10). danh_sach_mon và danh_sach_truong THAY THẾ TOÀN BỘ -> luôn gửi đủ; danh_sach_truong
+    /// rỗng = dùng chung cho mọi trường (gửi [] chứ không bỏ trường, để gỡ được phạm vi riêng đã gửi trước đó).
+    /// </summary>
+    public static object ThucDon(Menu m) => new[]
+    {
+        new
+        {
+            ma_thuc_don = m.MaThucDon,
+            ten_thuc_don = m.TenThucDon,
+            nhom_tuoi_id = m.NhomTuoiId,
+            thu_ap_dung = m.ThuApDung,
+            trang_thai = m.TrangThai,
+            danh_sach_mon = m.DanhSachMon
+                .Select(i => new { buoi_an_id = i.BuoiAnId, ma_mon_an = i.MaMonAn })
+                .ToArray(),
+            danh_sach_truong = m.DanhSachTruong.ToArray()
+        }
+    };
+
     private static object[]? TepCuaKhau(Dish d, DishStep s)
     {
         var tep = d.DanhSachFile

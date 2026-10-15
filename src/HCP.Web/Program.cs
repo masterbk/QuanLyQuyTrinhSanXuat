@@ -180,6 +180,8 @@ builder.Services.AddScoped<IDanhMucService<Staff>, NhanSuService>();
 builder.Services.AddScoped<IDanhMucService<Product>, ThucPhamService>();
 builder.Services.AddScoped<IDanhMucService<Batch>, LoSanXuatService>();
 builder.Services.AddScoped<IDanhMucService<Dish>, MonAnService>();
+builder.Services.AddScoped<IDanhMucService<Menu>, ThucDonService>();
+builder.Services.AddScoped<ITruongHocService, TruongHocService>();
 // Danh mục thực phẩm chuẩn (>5.000 dòng, dùng chung mọi cơ sở) giữ trong bộ nhớ - xem DanhMucChuanService.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
@@ -233,6 +235,7 @@ builder.Services.AddScoped<IDoiMatKhauService, DoiMatKhauService>();
 builder.Services.AddScoped<HCP.Infrastructure.Services.TraCuu.ITraCuuCongKhaiService, HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService>();
 builder.Services.AddScoped<IStandardFoodsSyncJob, StandardFoodsSyncJob>();
 builder.Services.AddScoped<IHanoiCheckOrderQueryClient, HanoiCheckOrderQueryClient>();
+builder.Services.AddScoped<IHanoiCheckTruongHocClient, HanoiCheckTruongHocClient>();
 builder.Services.AddScoped<IHanoiCheckOrderCommandClient, HanoiCheckOrderCommandClient>();
 builder.Services.AddScoped<IDongBoDonHangJob, DongBoDonHangJob>();
 builder.Services.AddScoped<IDonHangNhanService, DonHangNhanService>();
