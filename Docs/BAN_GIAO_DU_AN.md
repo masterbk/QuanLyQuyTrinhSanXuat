@@ -13,7 +13,7 @@
 - **Web/API:** .NET 8, Blazor Server + MudBlazor, EF Core (SqlServer), Finbuckle MultiTenant, QuestPDF (PDF).
   - `src/HCP.Domain` (entity + enum + helper), `src/HCP.Infrastructure` (service + EF + migration),
     `src/HCP.Web` (Blazor pages `Pages/CoSo/`, minimal API `Api/`, `Program.cs` DI ~dòng 189, `Shared/NavMenu.razor`).
-  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **304 test** pass.
+  - `tests/HCP.Tests` (xUnit, EF InMemory). Hiện **305 test** pass (Flutter: 50 test).
 - **App mobile:** Flutter ở `mobile/` (package `hcp_mobile`), Riverpod + dio (`lib/loi/api.dart`).
   Tính năng theo `lib/tinh_nang/<ten>/`. **46 test** pass.
 
@@ -218,6 +218,9 @@ Cho nhân viên nhập dữ liệu các biểu mẫu ATTP thay giấy. KHÔNG đ
     `trace_code` (thiếu thì `ma_mon_an`). Món chưa có công thức → chặn xuất kho. Huỷ đơn trả đúng lô nguyên liệu.
     Đơn suất ăn không cho "Sửa số lượng" sau xuất kho; "Tạo lệnh SX theo đơn" bỏ qua dòng món. "Sửa đơn" nay
     giữ `MaTruyVetHnC` theo mã hàng (trước đây bị mất).
+    **App mobile** (`0bb4b12`): màn xuất kho gửi `maNguyenLieu` trong `phanBo` (thiếu thì máy chủ báo lệch phân
+    bổ vì nhiều nguyên liệu chung `dongId`), hiện "Món × suất", số lượng xuất kho giữ 5 số lẻ (`soGon(v, 5)` - mặc
+    định `soGon` chỉ 3 số lẻ, làm tròn mất định lượng nhỏ). Cần cài APK mới.
     **Giả định CHƯA kiểm với HnC thật:** `required_amount` = định lượng × suất và đơn vị tồn kho nguyên liệu trùng
     đơn vị tính HnC. Nếu đơn thật bị 422 về số lượng → lấy số từ `fulfillment-options`
     (`data.ingredients[].required_amount`). Chưa có JSON mẫu đơn suất ăn thật.
