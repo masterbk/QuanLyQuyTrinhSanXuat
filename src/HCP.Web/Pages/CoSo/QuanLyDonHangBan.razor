@@ -9,6 +9,7 @@
 @using HCP.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.QuyenGiaoHang)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.BanHang)]
 @inject IDonHangBanService DonHangService
 @inject IKhachHangService KhachHangService
 @inject IDanhMucService<Product> ThucPhamService

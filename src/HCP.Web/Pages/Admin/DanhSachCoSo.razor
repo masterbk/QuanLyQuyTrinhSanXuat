@@ -15,7 +15,7 @@
     <div>
         <MudText Typo="Typo.h5">Danh sách cơ sở</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Toàn bộ cơ sở trên nền tảng, tình trạng kết nối HanoiCheck và khoá/mở tài khoản.
+            Toàn bộ cơ sở trên nền tảng, tình trạng kết nối HanoiCheck, chức năng được dùng và khoá/mở tài khoản.
         </MudText>
     </div>
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
@@ -40,7 +40,8 @@ else
             <MudTh>Email</MudTh>
             <MudTh>Trạng thái</MudTh>
             <MudTh>Kết nối HnC</MudTh>
-            <MudTh Style="width:140px"></MudTh>
+            <MudTh>Chức năng</MudTh>
+            <MudTh Style="width:220px"></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="STT">@(_danhSach.IndexOf(context)+1)</MudTd>
@@ -73,7 +74,27 @@ else
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">Chưa cấu hình</MudText>
                 }
             </MudTd>
+            <MudTd DataLabel="Chức năng">
+                @{ var ds = ChucNang.Tach(context.ChucNangCsv); }
+                @if (ds.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Cơ bản</MudText>
+                }
+                else
+                {
+                    @foreach (var ma in ds)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@ChucNang.Ten(ma)</MudChip>
+                    }
+                }
+            </MudTd>
             <MudTd>
+                @if (context.TrangThai != TenantStatus.Rejected)
+                {
+                    <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="mr-1"
+                               StartIcon="@Icons.Material.Filled.Tune" Disabled="_dangXuLy"
+                               OnClick="@(() => MoChucNang(context))">Chức năng</MudButton>
+                }
                 @if (context.TrangThai == TenantStatus.Active)
                 {
                     <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined"
@@ -95,6 +116,41 @@ else
     </MudTable>
 }
 
+<MudDialog @bind-Visible="_hienChucNang" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Chức năng của "@_coSoDangSua?.Name"</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Danh mục cơ bản (Tổng quan, Kho, Cơ sở SX, Khâu, Quy trình, NCC đầu vào, Nhân sự, Thực phẩm) luôn có.
+            Tắt chức năng chỉ ẩn và chặn truy cập, không xoá dữ liệu.
+        </MudText>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <MudText Typo="Typo.caption" Class="align-self-center">Gói mẫu:</MudText>
+            @foreach (var goi in ChucNang.GoiMau)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                           OnClick="@(() => ApGoi(goi.Ma))">@goi.Ten</MudButton>
+            }
+        </div>
+        @foreach (var cn in ChucNang.DanhSach)
+        {
+            <div class="mb-1">
+                <MudCheckBox T="bool" Value="@_chon.Contains(cn.Ma)" ValueChanged="@(v => DoiChon(cn.Ma, v))"
+                             Color="Color.Primary" Dense="true" Label="@cn.Ten" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" Style="margin-left:34px;margin-top:-6px">
+                    @cn.MoTa@(cn.PhuThuoc.Count > 0 ? $" — cần {string.Join(", ", cn.PhuThuoc.Select(ChucNang.Ten))}" : "")
+                </MudText>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _hienChucNang = false)">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dangXuLy"
+                   OnClick="LuuChucNangAsync">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
@@ -102,6 +158,48 @@ else
     private IReadOnlyDictionary<string, bool> _ketNoi = new Dictionary<string, bool>();
     private bool _dangTai = true;
     private bool _dangXuLy;
+
+    private bool _hienChucNang;
+    private Tenant? _coSoDangSua;
+    private HashSet<string> _chon = new();
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    private void MoChucNang(Tenant coSo)
+    {
+        _coSoDangSua = coSo;
+        _chon = ChucNang.Tach(coSo.ChucNangCsv).ToHashSet();
+        _hienChucNang = true;
+    }
+
+    private void ApGoi(IReadOnlyList<string> ma) => _chon = ChucNang.Tach(ChucNang.Ghep(ma)).ToHashSet();
+
+    /// <summary>Bật thì kéo theo module phụ thuộc; tắt thì tắt luôn các module cần nó.</summary>
+    private void DoiChon(string ma, bool bat)
+    {
+        if (bat)
+        {
+            _chon = ChucNang.Tach(ChucNang.Ghep(_chon.Append(ma))).ToHashSet();
+            return;
+        }
+        var bo = new Queue<string>([ma]);
+        while (bo.TryDequeue(out var m))
+        {
+            if (!_chon.Remove(m)) continue;
+            foreach (var c in ChucNang.DanhSach.Where(c => c.PhuThuoc.Contains(m))) bo.Enqueue(c.Ma);
+        }
+    }
+
+    private async Task LuuChucNangAsync()
+    {
+        if (_coSoDangSua is null) return;
+        _dangXuLy = true;
+        var kq = await CoSoService.CapNhatChucNangAsync(_coSoDangSua.Id!, _chon, await LayTenNguoiThucHienAsync());
+        _dangXuLy = false;
+        Snackbar.Add(kq.ThongBao, kq.ThanhCong ? Severity.Success : Severity.Error);
+        if (!kq.ThanhCong) return;
+        _hienChucNang = false;
+        await TaiDanhSachAsync();
+    }
 
     protected override async Task OnInitializedAsync() => await TaiDanhSachAsync();
 

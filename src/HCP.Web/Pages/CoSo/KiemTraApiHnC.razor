@@ -4,6 +4,7 @@
 @using HCP.Infrastructure.HanoiCheck
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.HanoiCheck)]
 @inject IKiemTraApiHnCService ApiService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS

@@ -1,0 +1,13 @@
+@using HCP.Web.Services
+@inject TrangThaiChucNang ChucNangCoSo
+
+@* Chỉ hiển thị nội dung khi cơ sở được quản trị nền tảng mở module Ma (xem ChucNang). *@
+@if (ChucNangCoSo.Co(Ma))
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter, EditorRequired] public string Ma { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

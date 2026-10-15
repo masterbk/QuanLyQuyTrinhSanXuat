@@ -36,6 +36,7 @@ public class TenantStoreDbContext : EFCoreStoreDbContext<Tenant>
             b.Property(t => t.GiayChungNhanAttpPath).HasMaxLength(1000);
             b.Property(t => t.LyDoTuChoi).HasMaxLength(1000);
             b.Property(t => t.NguoiDuyet).HasMaxLength(256);
+            b.Property(t => t.ChucNangCsv).HasMaxLength(500).IsRequired().HasDefaultValue("");
         });
     }
 }

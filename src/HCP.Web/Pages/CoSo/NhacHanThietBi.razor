@@ -3,6 +3,7 @@
 @using HCP.Infrastructure.Services.BieuMau
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.QuyenNhapLieu)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.KiemSoatAttp)]
 @inject IBieuMauService BieuMauService
 
 <PageTitle>Nhắc hạn thiết bị</PageTitle>

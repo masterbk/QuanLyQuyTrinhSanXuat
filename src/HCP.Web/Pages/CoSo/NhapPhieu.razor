@@ -12,6 +12,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau
 @attribute [Authorize(Roles = AppRoles.QuyenBieuMau)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.KiemSoatAttp)]
 @inject IPhieuGhiNhanService PhieuService
 @inject IDanhMucService<Staff> NhanSuService
 @inject IDanhMucService<Product> SanPhamService

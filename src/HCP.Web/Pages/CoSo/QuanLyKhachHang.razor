@@ -5,6 +5,7 @@
 @using HCP.Infrastructure.Services.Kho
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.BanHang)]
 @inject IKhachHangService KhachHangService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService

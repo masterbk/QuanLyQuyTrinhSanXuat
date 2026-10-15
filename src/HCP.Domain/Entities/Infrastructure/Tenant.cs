@@ -39,6 +39,12 @@ public class Tenant : ITenantInfo
     public string? NguoiDuyet { get; set; }
     public string? LyDoTuChoi { get; set; }
 
+    // --- Module chức năng (quản trị nền tảng mở) ---
+    /// <summary>Mã module được mở, CSV theo <see cref="Constants.ChucNang"/>. Rỗng = chỉ danh mục cơ bản.</summary>
+    public string ChucNangCsv { get; set; } = string.Empty;
+
+    public bool CoChucNang(string ma) => Constants.ChucNang.Co(ChucNangCsv, ma);
+
     // --- Quan hệ ---
     public TenantHnCCredential? HnCCredential { get; set; }
     public TenantOAuthToken? OAuthToken { get; set; }

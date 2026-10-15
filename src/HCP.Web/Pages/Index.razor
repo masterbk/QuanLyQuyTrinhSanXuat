@@ -37,10 +37,12 @@
                            StartIcon="@Icons.Material.Filled.Dashboard" Class="mr-2">
                     Tổng quan cơ sở
                 </MudButton>
+                <ChiKhiCoChucNang Ma="@ChucNang.HanoiCheck">
                 <MudButton Href="/app/cai-dat-ket-noi" Variant="Variant.Outlined" Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.Link">
                     Cài đặt kết nối HanoiCheck
                 </MudButton>
+                </ChiKhiCoChucNang>
             </MudPaper>
         </AuthorizeView>
 
@@ -48,16 +50,22 @@
             <MudPaper Class="pa-5 mb-4" Elevation="1">
                 <MudText Typo="Typo.subtitle1" Class="mb-3">Công việc của bạn</MudText>
                 <AuthorizeView Roles="@AppRoles.TenantSanXuat" Context="sx">
+                    <ChiKhiCoChucNang Ma="@ChucNang.KhoSanXuat">
                     <MudButton Href="/app/lenh-san-xuat" Variant="Variant.Filled" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.Factory" Class="mr-2 mb-2">Lệnh sản xuất</MudButton>
+                    </ChiKhiCoChucNang>
                 </AuthorizeView>
                 <AuthorizeView Roles="@AppRoles.TenantGiaoHang" Context="gh">
+                    <ChiKhiCoChucNang Ma="@ChucNang.BanHang">
                     <MudButton Href="/app/don-hang-ban" Variant="Variant.Filled" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.LocalShipping" Class="mr-2 mb-2">Đơn hàng cần giao</MudButton>
+                    </ChiKhiCoChucNang>
                 </AuthorizeView>
                 <AuthorizeView Roles="@AppRoles.TenantBieuMau" Context="bm">
+                    <ChiKhiCoChucNang Ma="@ChucNang.KiemSoatAttp">
                     <MudButton Href="/app/nhap-phieu" Variant="Variant.Filled" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.EditNote" Class="mr-2 mb-2">Nhập phiếu biểu mẫu</MudButton>
+                    </ChiKhiCoChucNang>
                     <MudButton Href="/app/phieu-ghi-nhan" Variant="Variant.Outlined" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.FactCheck" Class="mr-2 mb-2">Phiếu ghi nhận</MudButton>
                 </AuthorizeView>

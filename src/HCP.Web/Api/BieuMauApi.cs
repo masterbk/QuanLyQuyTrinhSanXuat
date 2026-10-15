@@ -93,6 +93,7 @@ public static class BieuMauApi
     {
         var nhom = app.MapGroup("/api/v1")
             .RequireAuthorization(ApiAuth.ChinhSach)
+            .RequireAuthorization(ChucNang.ChinhSach.KiemSoatAttp)
             .RequireAuthorization(new AuthorizeAttribute { Roles = AppRoles.MoiNguoiDungCoSo })
             .WithTags("Biểu mẫu kiểm soát");
 

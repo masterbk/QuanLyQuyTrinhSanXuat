@@ -184,6 +184,39 @@ public class CoSoService : ICoSoService
         return KetQuaThaoTac.Ok($"Đã mở khoá cơ sở \"{tenant.Name}\".");
     }
 
+    public async Task<KetQuaThaoTac> CapNhatChucNangAsync(string tenantId, IEnumerable<string> maChucNang,
+                                                          string nguoiThucHien, CancellationToken ct = default)
+    {
+        var tenant = await LayTheoIdAsync(tenantId, ct);
+        if (tenant is null) return KetQuaThaoTac.Loi("Không tìm thấy cơ sở.");
+
+        var cu = tenant.ChucNangCsv;
+        tenant.ChucNangCsv = ChucNang.Ghep(maChucNang);
+        await _tenantStore.SaveChangesAsync(ct);
+
+        var ghiChu = "";
+        if (!tenant.CoChucNang(ChucNang.HanoiCheck))
+        {
+            var dangBat = await _db.TenantHnCCredentials.Where(c => c.TenantId == tenantId && c.BatDongBo).ToListAsync(ct);
+            if (dangBat.Count > 0)
+            {
+                dangBat.ForEach(c => c.BatDongBo = false);
+                // Như khi cơ sở tự tắt công tắc: bỏ các bản ghi chưa gửi, giữ lịch sử đã gửi.
+                _db.SyncOutboxItems.RemoveRange(await _db.SyncOutboxItems
+                    .Where(o => o.TenantId == tenantId
+                                && o.Status != SyncOutboxStatus.Success && o.Status != SyncOutboxStatus.Processing)
+                    .ToListAsync(ct));
+                await _db.SaveChangesAsync(ct);
+                ghiChu = " Đã tắt đồng bộ HanoiCheck của cơ sở.";
+            }
+        }
+
+        _logger.LogInformation("Chức năng cơ sở {TenantId}: [{Cu}] -> [{Moi}] bởi {NguoiThucHien}.",
+                               tenantId, cu, tenant.ChucNangCsv, nguoiThucHien);
+        return KetQuaThaoTac.Ok($"Đã cập nhật chức năng cho \"{tenant.Name}\". Người dùng cơ sở tải lại trang để thấy thay đổi."
+                                + ghiChu);
+    }
+
     public async Task<IReadOnlyDictionary<string, bool>> LayTrangThaiKetNoiAsync(CancellationToken ct = default)
     {
         // TenantHnCCredentials là bảng hạ tầng (không lọc theo tenant) nên quản trị nền tảng

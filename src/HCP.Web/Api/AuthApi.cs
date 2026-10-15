@@ -60,7 +60,7 @@ public static class AuthApi
 
         // Kiểm tra token còn sống + lấy thông tin người dùng hiện tại. App gọi lại mỗi khi mở màn lệnh để biết
         // công tắc HanoiCheck mới nhất (đổi trên web thì app thấy ngay, không cần đăng nhập lại).
-        nhom.MapGet("/toi", async (ClaimsPrincipal user, IMultiTenantContextAccessor tenant, AppDbContext db,
+        nhom.MapGet("/toi", async (ClaimsPrincipal user, IMultiTenantContextAccessor<Tenant> tenant, AppDbContext db,
                                    CancellationToken ct) => Results.Ok(new NguoiDungDto(
                 user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
                 user.FindFirstValue(ClaimTypes.Email) ?? user.Identity?.Name ?? "",
@@ -70,7 +70,8 @@ public static class AuthApi
                 await HanoiCheckBatAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id, ct),
                 await LenhSanXuatApi.MaNhanSuTaiKhoanAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id,
                     user.FindFirstValue(ClaimTypes.NameIdentifier), user.IsInRole(AppRoles.TenantAdmin), ct),
-                tenant.MultiTenantContext?.TenantInfo?.Name)))
+                tenant.MultiTenantContext?.TenantInfo?.Name,
+                ChucNang.Tach(tenant.MultiTenantContext?.TenantInfo?.ChucNangCsv))))
             .RequireAuthorization(ApiAuth.ChinhSach);
 
         // Đăng ký/bỏ đăng ký token thiết bị (FCM) để nhận thông báo đẩy - gọi lúc đăng nhập/đăng xuất.
@@ -105,14 +106,17 @@ public static class AuthApi
     }
 
     private static async Task<PhienDto> MapAsync(PhienDangNhap p, AppDbContext db, IMultiTenantStore<Tenant> coSo,
-                                                 CancellationToken ct) => new(
-        p.AccessToken, p.AccessTokenHetHanUtc, p.RefreshToken, p.RefreshTokenHetHanUtc,
-        new NguoiDungDto(p.NguoiDung.Id, p.NguoiDung.Email ?? "", p.NguoiDung.HoTen,
-                         p.NguoiDung.TenantId, p.VaiTro, await HanoiCheckBatAsync(db, p.NguoiDung.TenantId, ct),
-                         await LenhSanXuatApi.MaNhanSuTaiKhoanAsync(db, p.NguoiDung.TenantId, p.NguoiDung.Id,
-                                                                    p.VaiTro.Contains(AppRoles.TenantAdmin), ct),
-                         string.IsNullOrWhiteSpace(p.NguoiDung.TenantId)
-                             ? null : (await coSo.TryGetAsync(p.NguoiDung.TenantId))?.Name));
+                                                 CancellationToken ct)
+    {
+        var tenant = string.IsNullOrWhiteSpace(p.NguoiDung.TenantId) ? null : await coSo.TryGetAsync(p.NguoiDung.TenantId);
+        return new(
+            p.AccessToken, p.AccessTokenHetHanUtc, p.RefreshToken, p.RefreshTokenHetHanUtc,
+            new NguoiDungDto(p.NguoiDung.Id, p.NguoiDung.Email ?? "", p.NguoiDung.HoTen,
+                             p.NguoiDung.TenantId, p.VaiTro, await HanoiCheckBatAsync(db, p.NguoiDung.TenantId, ct),
+                             await LenhSanXuatApi.MaNhanSuTaiKhoanAsync(db, p.NguoiDung.TenantId, p.NguoiDung.Id,
+                                                                        p.VaiTro.Contains(AppRoles.TenantAdmin), ct),
+                             tenant?.Name, ChucNang.Tach(tenant?.ChucNangCsv)));
+    }
 
     /// <summary>
     /// Công tắc tổng HanoiCheck (chưa có cấu hình kết nối = tắt). Đọc thẳng theo TenantId vì lúc đăng nhập request

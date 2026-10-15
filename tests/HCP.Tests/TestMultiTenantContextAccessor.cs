@@ -14,12 +14,19 @@ public class TestMultiTenantContextAccessor : IMultiTenantContextAccessor
 
     public IMultiTenantContext MultiTenantContext => _context;
 
-    /// <summary>Đặt tenant hiện hành (mô phỏng người dùng của cơ sở đó đang đăng nhập).</summary>
-    public void SetTenant(string tenantId)
+    /// <summary>
+    /// Đặt tenant hiện hành (mô phỏng người dùng của cơ sở đó đang đăng nhập). Mặc định cơ sở được mở mọi module
+    /// chức năng (như cơ sở có từ trước khi phân quyền chức năng); truyền <paramref name="chucNangCsv"/> để thử khác.
+    /// </summary>
+    public void SetTenant(string tenantId, string? chucNangCsv = null)
     {
         _context = new MultiTenantContext<Tenant>
         {
-            TenantInfo = new Tenant { Id = tenantId, Identifier = tenantId, Name = tenantId }
+            TenantInfo = new Tenant
+            {
+                Id = tenantId, Identifier = tenantId, Name = tenantId,
+                ChucNangCsv = chucNangCsv ?? HCP.Domain.Constants.ChucNang.Ghep(HCP.Domain.Constants.ChucNang.TatCa)
+            }
         };
     }
 

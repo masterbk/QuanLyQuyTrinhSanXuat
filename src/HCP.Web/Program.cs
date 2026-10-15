@@ -22,6 +22,7 @@ using HCP.Infrastructure.Services.ThongBao;
 using HCP.Infrastructure.Sync;
 using HCP.Web.Api;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using HCP.Web.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -230,6 +231,8 @@ builder.Services.AddScoped<ISyncOutboxProcessor, SyncOutboxProcessor>();
 builder.Services.AddScoped<ISyncOutboxWriter, SyncOutboxWriter>();
 builder.Services.AddScoped<IDongBoHnCTongService, DongBoHnCTongService>();
 builder.Services.AddScoped<TrangThaiHnC>();
+builder.Services.AddScoped<IAuthorizationHandler, ChucNangHandler>();
+builder.Services.AddScoped<TrangThaiChucNang>();
 builder.Services.AddScoped<ITaiKhoanNhanVienService, TaiKhoanNhanVienService>();
 builder.Services.AddScoped<IDoiMatKhauService, DoiMatKhauService>();
 builder.Services.AddScoped<HCP.Infrastructure.Services.TraCuu.ITraCuuCongKhaiService, HCP.Infrastructure.Services.TraCuu.TraCuuCongKhaiService>();
@@ -302,6 +305,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("QuanTriNenTang", p => p.RequireRole(AppRoles.PlatformSuperAdmin));
     options.AddPolicy("QuanTriCoSo", p => p.RequireRole(AppRoles.TenantAdmin));
     options.AddPolicy("NguoiDungCoSo", p => p.RequireRole(AppRoles.VaiTroCoSo));
+
+    // Module chức năng quản trị nền tảng mở cho từng cơ sở (chồng lên role) - xem ChucNang.
+    foreach (var ma in ChucNang.TatCa)
+        options.AddPolicy(ChucNang.ChinhSach.TienTo + ma, p => p.AddRequirements(new ChucNangRequirement(ma)));
 
     // API di động: CHỈ nhận JWT (không nhận cookie) để tránh bị gọi chéo từ trình duyệt đang
     // đăng nhập web - đó cũng là lý do không cần chống CSRF cho nhóm API này.

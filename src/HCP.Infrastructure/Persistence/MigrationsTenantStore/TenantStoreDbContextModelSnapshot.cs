@@ -28,6 +28,13 @@ namespace HCP.Infrastructure.Persistence.MigrationsTenantStore
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("ChucNangCsv")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("DiaChi")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");

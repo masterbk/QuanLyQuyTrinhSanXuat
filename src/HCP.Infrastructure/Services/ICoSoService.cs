@@ -27,6 +27,13 @@ public interface ICoSoService
     /// <summary>Mở lại một cơ sở đang bị khoá (Suspended -> Active).</summary>
     Task<KetQuaThaoTac> MoKhoaAsync(string tenantId, string nguoiThucHien, CancellationToken ct = default);
 
+    /// <summary>
+    /// Đặt module chức năng mở cho cơ sở (tự thêm module phụ thuộc). Tắt "Kết nối HanoiCheck" thì tắt luôn công tắc
+    /// đồng bộ của cơ sở để job nền ngừng kéo đơn/đẩy dữ liệu. Không xoá dữ liệu.
+    /// </summary>
+    Task<KetQuaThaoTac> CapNhatChucNangAsync(string tenantId, IEnumerable<string> maChucNang, string nguoiThucHien,
+                                             CancellationToken ct = default);
+
     /// <summary>Trạng thái kết nối HnC theo cơ sở: tenantId -> đã kiểm tra kết nối thành công chưa.</summary>
     Task<IReadOnlyDictionary<string, bool>> LayTrangThaiKetNoiAsync(CancellationToken ct = default);
 }

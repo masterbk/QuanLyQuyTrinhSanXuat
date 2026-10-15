@@ -46,6 +46,9 @@ public sealed class DongBoHnCTongService : IDongBoHnCTongService
         var cauHinh = await _db.TenantHnCCredentials.FirstOrDefaultAsync(c => c.TenantId == tenantId, ct);
         if (cauHinh is null)
             return KetQuaThaoTac.Loi("Cần lưu cấu hình kết nối HanoiCheck trước khi bật đồng bộ.");
+        if (bat && _db.TenantInfo is HCP.Domain.Entities.Infrastructure.Tenant coSo
+                && !coSo.CoChucNang(HCP.Domain.Constants.ChucNang.HanoiCheck))
+            return KetQuaThaoTac.Loi("Cơ sở chưa được mở chức năng \"Kết nối HanoiCheck\" - liên hệ quản trị nền tảng.");
         if (cauHinh.BatDongBo == bat)
             return KetQuaThaoTac.Ok(bat ? "Đồng bộ HanoiCheck đang bật." : "Đồng bộ HanoiCheck đang tắt.");
 

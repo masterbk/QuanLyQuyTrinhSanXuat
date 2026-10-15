@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../loi/api.dart';
+import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'man_dinh_muc.dart';
 import 'man_sua_thuc_pham.dart';
@@ -73,7 +74,8 @@ class _TheSanPham extends ConsumerWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (sp.laThanhPham)
+              if (sp.laThanhPham &&
+                  (ref.watch(xacThucProvider).nguoiDung?.coChucNang('KhoSanXuat') ?? false))
                 IconButton(
                   tooltip: 'Định mức',
                   icon: const Icon(Icons.science_outlined),

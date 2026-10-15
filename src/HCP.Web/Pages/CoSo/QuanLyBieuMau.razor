@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau
 @attribute [Authorize(Roles = AppRoles.QuyenNhapLieu)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.KiemSoatAttp)]
 @inject IBieuMauService BieuMauService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService

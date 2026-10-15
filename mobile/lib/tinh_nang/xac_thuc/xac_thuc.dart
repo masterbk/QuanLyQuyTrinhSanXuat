@@ -23,8 +23,14 @@ class NguoiDung {
   /// Mã nhân sự gắn với tài khoản nhân viên (null với quản trị cơ sở).
   final String? maNhanSu;
 
+  /// Module quản trị nền tảng mở cho cơ sở (khớp ChucNang phía máy chủ). null = máy chủ bản cũ chưa trả -> coi như mở hết.
+  final List<String>? chucNang;
+
   NguoiDung({required this.id, required this.email, this.hoTen, this.maCoSo, this.tenCoSo,
-             this.vaiTro = const [], this.hanoiCheckBat = true, this.maNhanSu});
+             this.vaiTro = const [], this.hanoiCheckBat = true, this.maNhanSu, this.chucNang});
+
+  /// Cơ sở được mở module [ma] (vd 'KhoSanXuat', 'BanHang', 'KiemSoatAttp').
+  bool coChucNang(String ma) => chucNang?.contains(ma) ?? true;
 
   /// Nhân viên sản xuất chế biến có hồ sơ nhân sự thì mới quét mã lệnh để tham gia các khâu.
   bool get coTheThamGiaLenh => vaiTro.contains('TenantSanXuat') && (maNhanSu?.isNotEmpty ?? false);
@@ -45,6 +51,7 @@ class NguoiDung {
         // Máy chủ bản cũ chưa trả trường này: coi như bật để app giữ nguyên cách làm trước đây.
         hanoiCheckBat: j['hanoiCheckBat'] as bool? ?? true,
         maNhanSu: j['maNhanSu'] as String?,
+        chucNang: (j['chucNang'] as List?)?.map((e) => e.toString()).toList(),
       );
 
   String get tenHienThi => (hoTen != null && hoTen!.isNotEmpty) ? hoTen! : email;

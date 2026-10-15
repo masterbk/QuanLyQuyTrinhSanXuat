@@ -31,22 +31,24 @@ class _ManChinhState extends ConsumerState<ManChinh> {
   Widget build(BuildContext context) {
     final nd = ref.watch(xacThucProvider).nguoiDung;
     final vaiTro = nd?.vaiTro ?? const <String>[];
+    // Module quản trị nền tảng mở cho cơ sở - chồng lên vai trò (Danh mục cơ bản luôn có).
+    bool coModule(String ma) => nd?.coChucNang(ma) ?? false;
     final muc = <({String ten, Widget man, NavigationDestination nut})>[
-      if (vaiTro.any(_quyenLenhSanXuat.contains))
+      if (vaiTro.any(_quyenLenhSanXuat.contains) && coModule('KhoSanXuat'))
         (
           ten: 'Lệnh sản xuất',
           man: const ManDanhSachLenh(),
           nut: const NavigationDestination(icon: Icon(Icons.factory_outlined),
                                            selectedIcon: Icon(Icons.factory), label: 'Lệnh sản xuất'),
         ),
-      if (vaiTro.any(_quyenKhoNoiBo.contains))
+      if (vaiTro.any(_quyenKhoNoiBo.contains) && coModule('KhoSanXuat'))
         (
           ten: 'Kho',
           man: const ManKhoNoiBo(),
           nut: const NavigationDestination(icon: Icon(Icons.inventory_2_outlined),
                                            selectedIcon: Icon(Icons.inventory_2), label: 'Kho'),
         ),
-      if (vaiTro.any(_quyenDonHang.contains))
+      if (vaiTro.any(_quyenDonHang.contains) && coModule('BanHang'))
         (
           ten: 'Đơn hàng',
           man: const ManDanhSachDon(),
@@ -60,7 +62,7 @@ class _ManChinhState extends ConsumerState<ManChinh> {
           nut: const NavigationDestination(icon: Icon(Icons.category_outlined),
                                            selectedIcon: Icon(Icons.category), label: 'Danh mục'),
         ),
-      if (vaiTro.any(_quyenBieuMau.contains))
+      if (vaiTro.any(_quyenBieuMau.contains) && coModule('KiemSoatAttp'))
         (
           ten: 'Biểu mẫu',
           man: const ManDanhSachBieuMau(),
@@ -117,7 +119,7 @@ class _ManChinhState extends ConsumerState<ManChinh> {
         ],
       ),
       body: muc.isEmpty
-          ? const _ChuaLam('Tài khoản chưa được phân quyền dùng ứng dụng', Icons.lock_outline)
+          ? const _ChuaLam('Tài khoản chưa được phân quyền, hoặc cơ sở chưa được mở chức năng này', Icons.lock_outline)
           : IndexedStack(index: tab, children: [for (final m in muc) m.man]),
       // NavigationBar cần ít nhất 2 mục: chỉ một quyền thì không hiện thanh chuyển mục.
       bottomNavigationBar: muc.length < 2

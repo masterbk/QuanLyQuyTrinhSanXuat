@@ -3,6 +3,7 @@
 @using HCP.Infrastructure.Services.Dashboard
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@inject HCP.Web.Services.TrangThaiChucNang ChucNangCoSo
 @inject IDashboardCoSoService DashboardService
 
 <PageTitle>Tổng quan cơ sở</PageTitle>
@@ -16,6 +17,7 @@
 else
 {
     <MudGrid Class="mb-2">
+        <ChiKhiCoChucNang Ma="@ChucNang.HanoiCheck">
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Class="pa-4" Elevation="1">
                 <MudText Typo="Typo.overline" Class="mud-text-secondary">Đã đồng bộ</MudText>
@@ -34,6 +36,7 @@ else
                 <MudText Typo="Typo.h4" Color="@(_data.SoLoi > 0 ? Color.Error : Color.Default)">@_data.SoLoi</MudText>
             </MudPaper>
         </MudItem>
+        </ChiKhiCoChucNang>
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Class="pa-4" Elevation="1">
                 <MudText Typo="Typo.overline" Class="mud-text-secondary">Giấy tờ cần chú ý</MudText>
@@ -42,6 +45,7 @@ else
                 </MudText>
             </MudPaper>
         </MudItem>
+        <ChiKhiCoChucNang Ma="@ChucNang.KhoSanXuat">
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Class="pa-4" Elevation="1">
                 <MudText Typo="Typo.overline" Class="mud-text-secondary">Cảnh báo kho</MudText>
@@ -50,8 +54,10 @@ else
                 </MudText>
             </MudPaper>
         </MudItem>
+        </ChiKhiCoChucNang>
     </MudGrid>
 
+    <ChiKhiCoChucNang Ma="@ChucNang.BanHang">
     <MudText Typo="Typo.h6" Class="mb-2 mt-4">
         Đơn hàng bán
         <span class="mud-text-secondary" style="font-size:0.8rem">
@@ -98,8 +104,9 @@ else
             </MudPaper>
         </MudItem>
     </MudGrid>
+    </ChiKhiCoChucNang>
 
-    @if (_data.SoLoi > 0)
+    @if (_data.SoLoi > 0 && ChucNangCoSo.Co(ChucNang.HanoiCheck))
     {
         <MudAlert Severity="Severity.Error" Class="mb-4">
             Có @_data.SoLoi bản ghi đồng bộ đang lỗi.
@@ -141,6 +148,7 @@ else
         </MudTable>
     }
 
+    <ChiKhiCoChucNang Ma="@ChucNang.KhoSanXuat">
     <MudText Typo="Typo.h6" Class="mb-2 mt-6">Cảnh báo kho (lô sắp/đã hết hạn, tồn thấp)</MudText>
     @if (_data.CanhBaoTonKho.Count == 0)
     {
@@ -180,6 +188,7 @@ else
             </RowTemplate>
         </MudTable>
     }
+    </ChiKhiCoChucNang>
 }
 
 @code {

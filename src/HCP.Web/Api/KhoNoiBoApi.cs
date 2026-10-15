@@ -18,6 +18,7 @@ public static class KhoNoiBoApi
     {
         var nhom = app.MapGroup("/api/v1/kho-noi-bo")
             .RequireAuthorization(ApiAuth.ChinhSach)
+            .RequireAuthorization(ChucNang.ChinhSach.KhoSanXuat)
             .RequireAuthorization(new AuthorizeAttribute { Roles = AppRoles.QuyenSanXuat })
             .WithTags("Kho nội bộ");
 

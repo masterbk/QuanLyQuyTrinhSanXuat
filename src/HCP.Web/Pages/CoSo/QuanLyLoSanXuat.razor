@@ -4,6 +4,7 @@
 @using HCP.Infrastructure.Services.DanhMuc
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.LoSanXuat)]
 @inject IDanhMucService<Batch> LoService
 @inject IDanhMucService<Product> ThucPhamService
 @inject IDanhMucService<Warehouse> KhoService
