@@ -41,6 +41,16 @@ public class NhanSuService : IDanhMucService<Staff>
         return s;
     }
 
+    /// <inheritdoc />
+    /// <remarks>Bản tách rời nên giải mã CCCD vào đây cũng không có nguy cơ ghi ngược số đã giải mã
+    /// xuống CSDL khi có SaveChanges ở chỗ khác.</remarks>
+    public async Task<Staff?> LayDeSuaAsync(int id, CancellationToken ct = default)
+    {
+        var s = await _db.Staff.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (s is not null) GiaiMaCccd(s);
+        return s;
+    }
+
     public async Task<KetQuaThaoTac> ThemAsync(Staff entity, CancellationToken ct = default)
     {
         entity.MaNhanSu = entity.MaNhanSu.Trim();

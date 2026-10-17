@@ -52,8 +52,13 @@ public class NhanSuServiceTests
         using (var db = MoDb())
         {
             var svc = new NhanSuService(db, outbox, new PrefixProtector());
-            var ns = await svc.LayTheoIdAsync((await db.Staff.SingleAsync()).Id);
+            var id = (await db.Staff.SingleAsync()).Id;
+            var ns = await svc.LayTheoIdAsync(id);
             Assert.Equal("079090012345", ns!.Cccd);
+
+            // Đường đọc cho form sửa (không theo dõi thay đổi) cũng phải giải mã được.
+            var deSua = await svc.LayDeSuaAsync(id);
+            Assert.Equal("079090012345", deSua!.Cccd);
         }
     }
 

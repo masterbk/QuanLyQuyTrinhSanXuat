@@ -304,8 +304,18 @@ else
         return null;
     }
 
-    private void MoForm(SubSupplier? ncc)
+    /// <summary>Mở form thêm (dong = null) hoặc sửa. Khi SỬA thì tải lại bản mới nhất từ CSDL chứ không
+    /// dùng thẳng dòng đang hiển thị: danh sách tải từ lúc mở trang, người khác có thể đã sửa bản ghi đó
+    /// rồi - lưu đè bằng dữ liệu cũ sẽ mất thay đổi của họ. Theo mẫu màn Đơn hàng bán (commit 5225bab).</summary>
+    private async Task MoForm(SubSupplier? dong)
     {
+        var ncc = dong is null ? null : await NccService.LayDeSuaAsync(dong.Id);
+        if (dong is not null && ncc is null)
+        {
+            Snackbar.Add("Không tìm thấy nhà cung ứng (có thể vừa bị xoá). Hãy tải lại danh sách.", Severity.Error);
+            return;
+        }
+
         _dangSua = ncc is not null;
         _nhomNhapTay = string.Empty;
 

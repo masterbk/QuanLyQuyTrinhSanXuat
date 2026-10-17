@@ -18,6 +18,7 @@ public sealed class FakeDanhMuc<T> : IDanhMucService<T> where T : class
     public Task<IReadOnlyList<T>> LayTatCaAsync(CancellationToken ct = default) =>
         Task.FromResult((IReadOnlyList<T>)Array.Empty<T>());
     public Task<T?> LayTheoIdAsync(int id, CancellationToken ct = default) => Task.FromResult<T?>(null);
+    public Task<T?> LayDeSuaAsync(int id, CancellationToken ct = default) => Task.FromResult<T?>(null);
     public Task<KetQuaThaoTac> ThemAsync(T entity, CancellationToken ct = default) => Task.FromResult(KetQuaThaoTac.Ok(""));
     public Task<KetQuaThaoTac> CapNhatAsync(T entity, CancellationToken ct = default) => Task.FromResult(KetQuaThaoTac.Ok(""));
     public Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default) => Task.FromResult(KetQuaThaoTac.Ok(""));

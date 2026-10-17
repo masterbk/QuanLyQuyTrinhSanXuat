@@ -326,8 +326,18 @@ else
         return Task.FromResult(kq.Take(100).Select(c => c.Code));
     }
 
-    private void MoForm(Product? sp)
+    /// <summary>Mở form thêm (dong = null) hoặc sửa. Khi SỬA thì tải lại bản mới nhất từ CSDL chứ không
+    /// dùng thẳng dòng đang hiển thị: danh sách tải từ lúc mở trang, người khác có thể đã sửa bản ghi đó
+    /// rồi - lưu đè bằng dữ liệu cũ sẽ mất thay đổi của họ. Theo mẫu màn Đơn hàng bán (commit 5225bab).</summary>
+    private async Task MoForm(Product? dong)
     {
+        var sp = dong is null ? null : await ThucPhamService.LayDeSuaAsync(dong.Id);
+        if (dong is not null && sp is null)
+        {
+            Snackbar.Add("Không tìm thấy thực phẩm (có thể vừa bị xoá). Hãy tải lại danh sách.", Severity.Error);
+            return;
+        }
+
         _dangSua = sp is not null;
 
         _input = sp is null

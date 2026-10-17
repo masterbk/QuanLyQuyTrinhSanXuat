@@ -30,6 +30,10 @@ public class KhauSanXuatService : IDanhMucService<ProductionStep>
     public Task<ProductionStep?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         _db.ProductionSteps.FirstOrDefaultAsync(s => s.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<ProductionStep?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.ProductionSteps.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(ProductionStep entity, CancellationToken ct = default)
     {
         entity.TenKhau = entity.TenKhau.Trim();

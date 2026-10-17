@@ -45,6 +45,10 @@ public interface ILenhSanXuatService
 
     Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default);
 
+    /// <summary>Đọc bản mới nhất để đổ vào form sửa - KHÔNG theo dõi thay đổi, xem
+    /// <see cref="HCP.Infrastructure.Services.DanhMuc.IDanhMucService{T}.LayDeSuaAsync"/>.</summary>
+    Task<LenhSanXuat?> LayDeSuaAsync(int id, CancellationToken ct = default);
+
     /// <summary>Tra lệnh theo mã lệnh - app quét mã QR của lệnh (nội dung "LSX:&lt;mã lệnh&gt;").</summary>
     Task<LenhSanXuat?> LayTheoMaAsync(string maLenh, CancellationToken ct = default);
 

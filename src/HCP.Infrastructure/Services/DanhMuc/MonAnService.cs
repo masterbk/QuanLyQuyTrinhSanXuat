@@ -46,6 +46,10 @@ public class MonAnService : IDanhMucService<Dish>
     public Task<Dish?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<Dish?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        QueryDayDu().AsNoTrackingWithIdentityResolution().FirstOrDefaultAsync(d => d.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(Dish entity, CancellationToken ct = default)
     {
         entity.MaMonAn = entity.MaMonAn.Trim();

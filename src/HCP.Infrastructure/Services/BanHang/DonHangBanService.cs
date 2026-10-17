@@ -39,6 +39,10 @@ public interface IDonHangBanService
     Task<IReadOnlyList<DonHangBan>> LayTatCaAsync(CancellationToken ct = default);
     Task<DonHangBan?> LayTheoIdAsync(int id, CancellationToken ct = default);
 
+    /// <summary>Đọc bản mới nhất để đổ vào form sửa - KHÔNG theo dõi thay đổi, xem
+    /// <see cref="HCP.Infrastructure.Services.DanhMuc.IDanhMucService{T}.LayDeSuaAsync"/>.</summary>
+    Task<DonHangBan?> LayDeSuaAsync(int id, CancellationToken ct = default);
+
     /// <summary>
     /// Trang kết quả lọc + phân trang NGAY Ở CSDL (không tải cả bảng vào bộ nhớ rồi mới cắt trang) - dùng cho
     /// API danh sách (mobile), nơi mỗi lần chuyển tab/kéo thêm trang đều gọi lại. Sắp xếp theo Ngày hẹn giao
@@ -136,6 +140,10 @@ public sealed class DonHangBanService : IDonHangBanService
 
     public Task<DonHangBan?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
+
+    /// <inheritdoc />
+    public Task<DonHangBan?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        QueryDayDu().AsNoTrackingWithIdentityResolution().FirstOrDefaultAsync(d => d.Id == id, ct);
 
     public async Task<(IReadOnlyList<DonHangBan> Trang, int TongSo)> LayTrangAsync(
         TrangThaiDonHangBan? trangThai, bool choGiaoHang, string? maNguoiGiao,

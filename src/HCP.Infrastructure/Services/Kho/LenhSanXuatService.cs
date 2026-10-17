@@ -79,6 +79,10 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
     public Task<LenhSanXuat?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         QueryDayDu().FirstOrDefaultAsync(l => l.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<LenhSanXuat?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        QueryDayDu().AsNoTrackingWithIdentityResolution().FirstOrDefaultAsync(l => l.Id == id, ct);
+
     // AsSplitQuery(): SanPham->Khau/TieuHao/Anh + ThamGia là nhiều collection cùng lúc - gộp 1 câu JOIN
     // sẽ nhân dòng theo tích số, tách câu truy vấn cho rẻ hơn (khớp cảnh báo MultipleCollectionInclude).
     private IQueryable<LenhSanXuat> QueryDayDu() =>

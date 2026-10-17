@@ -27,6 +27,10 @@ public class KhoService : IDanhMucService<Warehouse>
     public Task<Warehouse?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         _db.Warehouses.FirstOrDefaultAsync(w => w.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<Warehouse?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.Warehouses.AsNoTracking().FirstOrDefaultAsync(w => w.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(Warehouse entity, CancellationToken ct = default)
     {
         entity.MaKho = entity.MaKho.Trim();

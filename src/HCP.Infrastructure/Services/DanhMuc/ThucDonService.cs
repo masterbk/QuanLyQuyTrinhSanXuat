@@ -32,6 +32,10 @@ public class ThucDonService : IDanhMucService<Menu>
     public Task<Menu?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         _db.Menus.Include(m => m.DanhSachMon).FirstOrDefaultAsync(m => m.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<Menu?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.Menus.AsNoTracking().Include(m => m.DanhSachMon).FirstOrDefaultAsync(m => m.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(Menu entity, CancellationToken ct = default)
     {
         ChuanHoa(entity);

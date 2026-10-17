@@ -783,7 +783,7 @@ else
     /// Không dùng thẳng dòng đang hiển thị - đơn HanoiCheck có thể vừa bị job nền đồng bộ đổi SL/ngày giao.</summary>
     private async Task MoSua(DonHangBan dong)
     {
-        var d = await DonHangService.LayTheoIdAsync(dong.Id);
+        var d = await DonHangService.LayDeSuaAsync(dong.Id);
         if (d is null) { Snackbar.Add("Không tìm thấy đơn hàng.", Severity.Error); return; }
 
         _input = new DonHangBan
@@ -897,7 +897,7 @@ else
     /// <summary>Tải lại bản mới nhất rồi dựng danh sách dòng để sửa số lượng (đơn có thể vừa bị job HnC đổi).</summary>
     private async Task MoSuaSoLuongAsync(DonHangBan dong)
     {
-        var d = await DonHangService.LayTheoIdAsync(dong.Id);
+        var d = await DonHangService.LayDeSuaAsync(dong.Id);
         if (d is null) { Snackbar.Add("Không tìm thấy đơn hàng.", Severity.Error); return; }
         _donSuaSoLuong = d;
         _dongSoLuong = d.Dong.OrderBy(l => l.Id)

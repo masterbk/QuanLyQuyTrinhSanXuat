@@ -342,8 +342,16 @@ else
     }
 
     /// <param name="saoChep">true = tạo thực đơn mới từ thực đơn có sẵn (sang thứ kế tiếp), không sửa bản gốc.</param>
-    private void MoForm(Menu? td, bool saoChep)
+    /// <remarks>Tải lại bản mới nhất từ CSDL chứ không dùng dòng đang hiển thị - xem LayDeSuaAsync.</remarks>
+    private async Task MoForm(Menu? dong, bool saoChep)
     {
+        var td = dong is null ? null : await ThucDonService.LayDeSuaAsync(dong.Id);
+        if (dong is not null && td is null)
+        {
+            Snackbar.Add("Không tìm thấy thực đơn (có thể vừa bị xoá). Hãy tải lại danh sách.", Severity.Error);
+            return;
+        }
+
         _dangSua = td is not null && !saoChep;
 
         if (td is null)

@@ -8,6 +8,10 @@ public interface IKhachHangService
     Task<IReadOnlyList<KhachHang>> LayTatCaAsync(CancellationToken ct = default);
     Task<KhachHang?> LayTheoIdAsync(int id, CancellationToken ct = default);
 
+    /// <summary>Đọc bản mới nhất để đổ vào form sửa - KHÔNG theo dõi thay đổi, xem
+    /// <see cref="HCP.Infrastructure.Services.DanhMuc.IDanhMucService{T}.LayDeSuaAsync"/>.</summary>
+    Task<KhachHang?> LayDeSuaAsync(int id, CancellationToken ct = default);
+
     /// <summary>Thêm mới (Id == 0) hoặc cập nhật khách hàng.</summary>
     Task<KetQuaThaoTac> LuuAsync(KhachHang kh, CancellationToken ct = default);
 

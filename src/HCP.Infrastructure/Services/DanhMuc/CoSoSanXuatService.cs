@@ -30,6 +30,10 @@ public class CoSoSanXuatService : IDanhMucService<Facility>
     public Task<Facility?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         _db.Facilities.FirstOrDefaultAsync(f => f.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<Facility?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.Facilities.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(Facility entity, CancellationToken ct = default)
     {
         entity.TenCoSo = entity.TenCoSo.Trim();

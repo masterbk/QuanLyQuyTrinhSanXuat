@@ -36,6 +36,13 @@ public class NccDauVaoService : IDanhMucService<SubSupplier>
             .Include(s => s.NhomThucPham)
             .FirstOrDefaultAsync(s => s.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<SubSupplier?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.SubSuppliers
+            .AsNoTracking()
+            .Include(s => s.NhomThucPham)
+            .FirstOrDefaultAsync(s => s.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(SubSupplier entity, CancellationToken ct = default)
     {
         var loi = KiemTraDuLieu(entity);

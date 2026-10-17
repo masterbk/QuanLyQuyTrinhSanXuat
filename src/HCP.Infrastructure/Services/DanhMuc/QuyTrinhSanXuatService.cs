@@ -34,6 +34,13 @@ public class QuyTrinhSanXuatService : IDanhMucService<ProductionProcess>
             .Include(p => p.DanhSachKhau)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<ProductionProcess?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.ProductionProcesses
+            .AsNoTracking()
+            .Include(p => p.DanhSachKhau)
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(ProductionProcess entity, CancellationToken ct = default)
     {
         entity.MaQuyTrinh = entity.MaQuyTrinh.Trim();

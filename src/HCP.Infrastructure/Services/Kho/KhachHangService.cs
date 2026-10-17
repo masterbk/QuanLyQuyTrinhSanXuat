@@ -18,6 +18,10 @@ public sealed class KhachHangService : IKhachHangService
     public Task<KhachHang?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         _db.KhachHangs.FirstOrDefaultAsync(k => k.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<KhachHang?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.KhachHangs.AsNoTracking().FirstOrDefaultAsync(k => k.Id == id, ct);
+
     public async Task<KetQuaThaoTac> LuuAsync(KhachHang kh, CancellationToken ct = default)
     {
         kh.MaKhachHang = kh.MaKhachHang?.Trim() ?? "";

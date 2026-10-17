@@ -47,6 +47,12 @@ public class LoSanXuatService : IDanhMucService<Batch>
     public Task<Batch?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         QueryDayDu().FirstOrDefaultAsync(b => b.Id == id, ct);
 
+    /// <inheritdoc />
+    /// <remarks>AsNoTrackingWithIdentityResolution (không phải AsNoTracking trơn) vì QueryDayDu dùng
+    /// AsSplitQuery: tách nhiều câu mà không có identity resolution thì các bảng con dễ bị nhân bản.</remarks>
+    public Task<Batch?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        QueryDayDu().AsNoTrackingWithIdentityResolution().FirstOrDefaultAsync(b => b.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(Batch entity, CancellationToken ct = default)
     {
         var loi = await KiemTraAsync(entity, ct);

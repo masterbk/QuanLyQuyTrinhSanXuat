@@ -28,6 +28,10 @@ public class ThucPhamService : IDanhMucService<Product>
     public Task<Product?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
         _db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
 
+    /// <inheritdoc />
+    public Task<Product?> LayDeSuaAsync(int id, CancellationToken ct = default) =>
+        _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+
     public async Task<KetQuaThaoTac> ThemAsync(Product entity, CancellationToken ct = default)
     {
         entity.MaSanPham = entity.MaSanPham.Trim();

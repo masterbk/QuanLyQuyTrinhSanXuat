@@ -602,7 +602,7 @@ else
     /// <summary>Mở form sửa trên BẢN SAO - bấm Huỷ thì dữ liệu đang theo dõi không bị đổi theo.</summary>
     private async Task MoSuaAsync(LenhSanXuat dong)
     {
-        var lenh = await LenhService.LayTheoIdAsync(dong.Id);
+        var lenh = await LenhService.LayDeSuaAsync(dong.Id);
         if (lenh is null) { Snackbar.Add("Không tìm thấy lệnh sản xuất.", Severity.Error); return; }
 
         _idDangSua = lenh.Id;
@@ -731,7 +731,7 @@ else
 
     private async Task MoHoanThanhAsync(LenhSanXuat dong)
     {
-        var lenh = await LenhService.LayTheoIdAsync(dong.Id);
+        var lenh = await LenhService.LayDeSuaAsync(dong.Id);
         if (lenh is null) { Snackbar.Add("Không tìm thấy lệnh sản xuất.", Severity.Error); return; }
 
         _lenhHoanThanh = lenh;
