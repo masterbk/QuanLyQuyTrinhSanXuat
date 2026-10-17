@@ -186,6 +186,8 @@ builder.Services.AddScoped<ITruongHocService, TruongHocService>();
 // Danh mục thực phẩm chuẩn (>5.000 dòng, dùng chung mọi cơ sở) giữ trong bộ nhớ - xem DanhMucChuanService.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IDanhMucChuanService, DanhMucChuanService>();
+builder.Services.AddScoped<HCP.Infrastructure.Services.SuatAn.ISuatAnNgayService,
+                           HCP.Infrastructure.Services.SuatAn.SuatAnNgayService>();
 builder.Services.AddScoped<ISyncNhatKyService, SyncNhatKyService>();
 builder.Services.AddScoped<IKhoNoiBoService, KhoNoiBoService>();
 builder.Services.AddScoped<IDinhMucService, DinhMucService>();
@@ -361,6 +363,7 @@ app.MapDonHangApi();
 app.MapQrApi();
 app.MapKhoNoiBoApi();
 app.MapQuanLyDanhMucApi();
+app.MapSuatAnApi();
 app.MapBieuMauApi();
 app.MapPhieuPdfApi();
 

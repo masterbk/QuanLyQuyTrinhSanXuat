@@ -7,9 +7,11 @@ import 'tinh_nang/danh_muc/man_danh_sach.dart';
 import 'tinh_nang/don_hang/man_danh_sach.dart';
 import 'tinh_nang/kho_noi_bo/man_danh_sach.dart';
 import 'tinh_nang/lenh_san_xuat/man_danh_sach.dart';
+import 'tinh_nang/suat_an/man_suat_an.dart';
 import 'tinh_nang/xac_thuc/xac_thuc.dart';
 
-/// Khung chính sau khi đăng nhập: Lệnh sản xuất, Kho, Đơn hàng, Danh mục - chỉ hiện mục người dùng có quyền.
+/// Khung chính sau khi đăng nhập: Lệnh sản xuất, Kho, Đơn hàng, Suất ăn, Danh mục, Biểu mẫu
+/// - chỉ hiện mục người dùng có quyền và cơ sở được mở module.
 class ManChinh extends ConsumerStatefulWidget {
   const ManChinh({super.key});
 
@@ -23,6 +25,8 @@ const _quyenKhoNoiBo = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat'};
 const _quyenDonHang = {'TenantAdmin', 'TenantStaff', 'TenantGiaoHang'};
 const _quyenDanhMuc = {'TenantAdmin', 'TenantStaff'};
 const _quyenBieuMau = {'TenantAdmin', 'TenantStaff', 'TenantBieuMau'};
+/// Suất ăn chỉ để XEM nên mở cho mọi vai trò của cơ sở: bếp cần biết nấu gì, giao hàng cần biết bao nhiêu suất.
+const _quyenSuatAn = {'TenantAdmin', 'TenantStaff', 'TenantSanXuat', 'TenantGiaoHang', 'TenantBieuMau'};
 
 class _ManChinhState extends ConsumerState<ManChinh> {
   int _tab = 0;
@@ -54,6 +58,13 @@ class _ManChinhState extends ConsumerState<ManChinh> {
           man: const ManDanhSachDon(),
           nut: const NavigationDestination(icon: Icon(Icons.receipt_long_outlined),
                                            selectedIcon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
+        ),
+      if (vaiTro.any(_quyenSuatAn.contains) && coModule('SuatAn'))
+        (
+          ten: 'Suất ăn',
+          man: const ManSuatAn(),
+          nut: const NavigationDestination(icon: Icon(Icons.restaurant_outlined),
+                                           selectedIcon: Icon(Icons.restaurant), label: 'Suất ăn'),
         ),
       if (vaiTro.any(_quyenDanhMuc.contains))
         (
