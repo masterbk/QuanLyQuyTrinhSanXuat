@@ -35,31 +35,32 @@ class _ManChinhState extends ConsumerState<ManChinh> {
   Widget build(BuildContext context) {
     final nd = ref.watch(xacThucProvider).nguoiDung;
     final vaiTro = nd?.vaiTro ?? const <String>[];
-    // Module quản trị nền tảng mở cho cơ sở - chồng lên vai trò (Danh mục cơ bản luôn có).
+    // Chức năng (menu) quản trị nền tảng mở cho cơ sở - chồng lên vai trò. Máy chủ trả kèm cả mã
+    // module cũ nên bản app này chạy được với máy chủ cũ lẫn mới (null = máy chủ rất cũ = mở hết).
     bool coModule(String ma) => nd?.coChucNang(ma) ?? false;
     final muc = <({String ten, Widget man, NavigationDestination nut})>[
-      if (vaiTro.any(_quyenLenhSanXuat.contains) && coModule('KhoSanXuat'))
+      if (vaiTro.any(_quyenLenhSanXuat.contains) && coModule('LenhSanXuat'))
         (
           ten: 'Lệnh sản xuất',
           man: const ManDanhSachLenh(),
           nut: const NavigationDestination(icon: Icon(Icons.factory_outlined),
                                            selectedIcon: Icon(Icons.factory), label: 'Lệnh sản xuất'),
         ),
-      if (vaiTro.any(_quyenKhoNoiBo.contains) && coModule('KhoSanXuat'))
+      if (vaiTro.any(_quyenKhoNoiBo.contains) && coModule('TonKho'))
         (
           ten: 'Kho',
           man: const ManKhoNoiBo(),
           nut: const NavigationDestination(icon: Icon(Icons.inventory_2_outlined),
                                            selectedIcon: Icon(Icons.inventory_2), label: 'Kho'),
         ),
-      if (vaiTro.any(_quyenDonHang.contains) && coModule('BanHang'))
+      if (vaiTro.any(_quyenDonHang.contains) && coModule('DonHangBan'))
         (
           ten: 'Đơn hàng',
           man: const ManDanhSachDon(),
           nut: const NavigationDestination(icon: Icon(Icons.receipt_long_outlined),
                                            selectedIcon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
         ),
-      if (vaiTro.any(_quyenSuatAn.contains) && coModule('SuatAn'))
+      if (vaiTro.any(_quyenSuatAn.contains) && coModule('ThucDon'))
         (
           ten: 'Suất ăn',
           man: const ManSuatAn(),
@@ -73,7 +74,7 @@ class _ManChinhState extends ConsumerState<ManChinh> {
           nut: const NavigationDestination(icon: Icon(Icons.category_outlined),
                                            selectedIcon: Icon(Icons.category), label: 'Danh mục'),
         ),
-      if (vaiTro.any(_quyenBieuMau.contains) && coModule('KiemSoatAttp'))
+      if (vaiTro.any(_quyenBieuMau.contains) && coModule('NhapPhieu'))
         (
           ten: 'Biểu mẫu',
           man: const ManDanhSachBieuMau(),

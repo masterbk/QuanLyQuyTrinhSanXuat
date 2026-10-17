@@ -7,7 +7,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using BieuMauEntity = HCP.Domain.Entities.Business.BieuMau
 @attribute [Authorize(Roles = AppRoles.QuyenBieuMau)]
-@attribute [Authorize(Policy = ChucNang.ChinhSach.KiemSoatAttp)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.PhieuGhiNhan)]
 @inject HCP.Infrastructure.Persistence.AppDbContext Db
 @inject IPhieuGhiNhanService PhieuService
 @inject IBieuMauService BieuMauService

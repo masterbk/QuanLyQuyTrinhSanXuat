@@ -4,6 +4,7 @@
 @using HCP.Infrastructure.Services.DanhMuc
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.KhauSanXuat)]
 @inject IDanhMucService<ProductionStep> KhauService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService

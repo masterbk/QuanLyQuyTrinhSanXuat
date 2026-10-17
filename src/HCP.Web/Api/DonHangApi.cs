@@ -26,7 +26,7 @@ public static class DonHangApi
         // ---------- Đơn từ trường (chiều kéo) ----------
         var nhan = app.MapGroup("/api/v1/don-hang-nhan")
             .RequireAuthorization(ApiAuth.ChinhSach)
-            .RequireAuthorization(ChucNang.ChinhSach.HanoiCheck)
+            .RequireAuthorization(ChucNang.ChinhSach.DonHangNhan)
             .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenGiaoHang })
             .WithTags("Đơn hàng từ trường");
 
@@ -71,7 +71,7 @@ public static class DonHangApi
         // ---------- Đơn hàng bán của nhà cung cấp (mọi khách hàng) ----------
         var ban = app.MapGroup("/api/v1/don-hang-ban")
             .RequireAuthorization(ApiAuth.ChinhSach)
-            .RequireAuthorization(ChucNang.ChinhSach.BanHang)
+            .RequireAuthorization(ChucNang.ChinhSach.DonHangBan)
             .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenGiaoHang })
             .WithTags("Đơn hàng bán");
 

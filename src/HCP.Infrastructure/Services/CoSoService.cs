@@ -195,7 +195,7 @@ public class CoSoService : ICoSoService
         await _tenantStore.SaveChangesAsync(ct);
 
         var ghiChu = "";
-        if (!tenant.CoChucNang(ChucNang.HanoiCheck))
+        if (!tenant.CoChucNang(ChucNang.KetNoiHnC))
         {
             var dangBat = await _db.TenantHnCCredentials.Where(c => c.TenantId == tenantId && c.BatDongBo).ToListAsync(ct);
             if (dangBat.Count > 0)

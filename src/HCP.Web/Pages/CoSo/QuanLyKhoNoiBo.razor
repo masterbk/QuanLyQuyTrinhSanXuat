@@ -6,7 +6,7 @@
 @using HCP.Infrastructure.Services.Kho
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.QuyenSanXuat)]
-@attribute [Authorize(Policy = ChucNang.ChinhSach.KhoSanXuat)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.TonKho)]
 @inject IKhoNoiBoService KhoService
 @inject IDanhMucService<Product> ThucPhamService
 @inject IDanhMucService<Warehouse> KhoDanhMucService

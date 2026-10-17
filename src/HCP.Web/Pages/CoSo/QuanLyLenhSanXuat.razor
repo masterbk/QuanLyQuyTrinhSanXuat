@@ -11,7 +11,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @attribute [Authorize(Roles = AppRoles.QuyenSanXuat)]
-@attribute [Authorize(Policy = ChucNang.ChinhSach.KhoSanXuat)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.LenhSanXuat)]
 @inject ILenhSanXuatService LenhService
 @inject IDinhMucService DinhMucService
 @inject IDanhMucService<Product> ThucPhamService

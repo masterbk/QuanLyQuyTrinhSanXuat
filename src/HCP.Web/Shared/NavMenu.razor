@@ -1,7 +1,8 @@
 @using HCP.Domain.Constants
 
 @* Menu theo vai trò; người nhiều vai trò thấy gộp các mục. AuthorizeView lồng nhau phải đặt Context riêng.
-   ChiKhiCoChucNang: module quản trị nền tảng mở cho cơ sở (xem ChucNang) - chồng lên vai trò. *@
+   ChiKhiCoChucNang: chức năng (menu) mà quản trị nền tảng mở cho cơ sở - xem ChucNang, chồng lên vai trò.
+   Mỗi mục menu bọc một mã riêng: NCC suất ăn tắt được Lệnh sản xuất mà vẫn giữ Tồn kho. *@
 <MudNavMenu>
     <AuthorizeView Roles="@AppRoles.PlatformSuperAdmin">
         <MudNavLink Href="/admin/dashboard" Icon="@Icons.Material.Filled.Dashboard">
@@ -16,40 +17,57 @@
     </AuthorizeView>
 
     <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="nhapLieu">
+        @* Tổng quan luôn mở - không có mã chức năng. *@
         <MudNavLink Href="/app/dashboard" Icon="@Icons.Material.Filled.Dashboard">
             Tổng quan
         </MudNavLink>
         <MudNavGroup Title="Danh mục" Icon="@Icons.Material.Filled.ListAlt" Expanded="true">
-            <MudNavLink Href="/app/kho" Icon="@Icons.Material.Filled.Warehouse">
-                Kho
-            </MudNavLink>
-            <MudNavLink Href="/app/co-so-san-xuat" Icon="@Icons.Material.Filled.Factory">
-                Cơ sở sản xuất
-            </MudNavLink>
-            <MudNavLink Href="/app/khau-san-xuat" Icon="@Icons.Material.Filled.Timeline">
-                Khâu sản xuất
-            </MudNavLink>
-            <MudNavLink Href="/app/quy-trinh" Icon="@Icons.Material.Filled.AccountTree">
-                Quy trình sản xuất
-            </MudNavLink>
-            <MudNavLink Href="/app/ncc-dau-vao" Icon="@Icons.Material.Filled.LocalShipping">
-                Nhà cung ứng đầu vào
-            </MudNavLink>
-            <MudNavLink Href="/app/nhan-su" Icon="@Icons.Material.Filled.Badge">
-                Nhân sự
-            </MudNavLink>
-            <MudNavLink Href="/app/thuc-pham" Icon="@Icons.Material.Filled.Fastfood">
-                Thực phẩm / SKU
-            </MudNavLink>
+            <ChiKhiCoChucNang Ma="@ChucNang.Kho">
+                <MudNavLink Href="/app/kho" Icon="@Icons.Material.Filled.Warehouse">
+                    Kho
+                </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.CoSoSanXuat">
+                <MudNavLink Href="/app/co-so-san-xuat" Icon="@Icons.Material.Filled.Factory">
+                    Cơ sở sản xuất
+                </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.KhauSanXuat">
+                <MudNavLink Href="/app/khau-san-xuat" Icon="@Icons.Material.Filled.Timeline">
+                    Khâu sản xuất
+                </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.QuyTrinh">
+                <MudNavLink Href="/app/quy-trinh" Icon="@Icons.Material.Filled.AccountTree">
+                    Quy trình sản xuất
+                </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.NccDauVao">
+                <MudNavLink Href="/app/ncc-dau-vao" Icon="@Icons.Material.Filled.LocalShipping">
+                    Nhà cung ứng đầu vào
+                </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.NhanSu">
+                <MudNavLink Href="/app/nhan-su" Icon="@Icons.Material.Filled.Badge">
+                    Nhân sự
+                </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.ThucPham">
+                <MudNavLink Href="/app/thuc-pham" Icon="@Icons.Material.Filled.Fastfood">
+                    Thực phẩm / SKU
+                </MudNavLink>
+            </ChiKhiCoChucNang>
             <ChiKhiCoChucNang Ma="@ChucNang.LoSanXuat">
                 <MudNavLink Href="/app/lo-san-xuat" Icon="@Icons.Material.Filled.Inventory2">
                     Lô sản xuất
                 </MudNavLink>
             </ChiKhiCoChucNang>
-            <ChiKhiCoChucNang Ma="@ChucNang.SuatAn">
+            <ChiKhiCoChucNang Ma="@ChucNang.MonAn">
                 <MudNavLink Href="/app/mon-an" Icon="@Icons.Material.Filled.RestaurantMenu">
                     Món ăn
                 </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.ThucDon">
                 <MudNavLink Href="/app/thuc-don" Icon="@Icons.Material.Filled.MenuBook">
                     Thực đơn
                 </MudNavLink>
@@ -58,79 +76,93 @@
     </AuthorizeView>
 
     @* Biểu mẫu kiểm soát: nhân viên nhập biểu mẫu chỉ thấy Nhập phiếu + Phiếu ghi nhận (mẫu được giao). *@
-    <ChiKhiCoChucNang Ma="@ChucNang.KiemSoatAttp">
-        <AuthorizeView Roles="@AppRoles.QuyenBieuMau" Context="bieuMau">
-            <MudNavGroup Title="Kiểm soát ATTP" Icon="@Icons.Material.Filled.Assignment" Expanded="true">
+    <AuthorizeView Roles="@AppRoles.QuyenBieuMau" Context="bieuMau">
+        <MudNavGroup Title="Kiểm soát ATTP" Icon="@Icons.Material.Filled.Assignment" Expanded="true">
+            <ChiKhiCoChucNang Ma="@ChucNang.NhapPhieu">
                 <MudNavLink Href="/app/nhap-phieu" Icon="@Icons.Material.Filled.EditNote">
                     Nhập phiếu
                 </MudNavLink>
+            </ChiKhiCoChucNang>
+            <ChiKhiCoChucNang Ma="@ChucNang.PhieuGhiNhan">
                 <MudNavLink Href="/app/phieu-ghi-nhan" Icon="@Icons.Material.Filled.FactCheck">
                     Phiếu ghi nhận
                 </MudNavLink>
-                <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="cauHinhBm">
+            </ChiKhiCoChucNang>
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="cauHinhBm">
+                <ChiKhiCoChucNang Ma="@ChucNang.BieuMau">
                     <MudNavLink Href="/app/bieu-mau" Icon="@Icons.Material.Filled.Assignment">
                         Biểu mẫu kiểm soát
                     </MudNavLink>
+                </ChiKhiCoChucNang>
+                <ChiKhiCoChucNang Ma="@ChucNang.NhacHan">
                     <MudNavLink Href="/app/nhac-han" Icon="@Icons.Material.Filled.NotificationsActive">
                         Nhắc hạn thiết bị
                     </MudNavLink>
-                </AuthorizeView>
-            </MudNavGroup>
-        </AuthorizeView>
-    </ChiKhiCoChucNang>
+                </ChiKhiCoChucNang>
+            </AuthorizeView>
+        </MudNavGroup>
+    </AuthorizeView>
 
-    <ChiKhiCoChucNang Ma="@ChucNang.KhoSanXuat">
-        <AuthorizeView Roles="@AppRoles.QuyenSanXuat" Context="sanXuat">
-            <MudNavGroup Title="Kho & Sản xuất" Icon="@Icons.Material.Filled.Inventory" Expanded="true">
+    <AuthorizeView Roles="@AppRoles.QuyenSanXuat" Context="sanXuat">
+        <MudNavGroup Title="Kho & Sản xuất" Icon="@Icons.Material.Filled.Inventory" Expanded="true">
+            <ChiKhiCoChucNang Ma="@ChucNang.TonKho">
                 <MudNavLink Href="/app/kho-noi-bo" Icon="@Icons.Material.Filled.Warehouse">
                     Tồn kho &amp; nhập
                 </MudNavLink>
-                <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="dinhMuc">
+            </ChiKhiCoChucNang>
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="dinhMuc">
+                <ChiKhiCoChucNang Ma="@ChucNang.DinhMuc">
                     <MudNavLink Href="/app/dinh-muc" Icon="@Icons.Material.Filled.Rule">
                         Định mức
                     </MudNavLink>
-                </AuthorizeView>
+                </ChiKhiCoChucNang>
+            </AuthorizeView>
+            <ChiKhiCoChucNang Ma="@ChucNang.LenhSanXuat">
                 <MudNavLink Href="/app/lenh-san-xuat" Icon="@Icons.Material.Filled.Factory">
                     Lệnh sản xuất
                 </MudNavLink>
-            </MudNavGroup>
-        </AuthorizeView>
-    </ChiKhiCoChucNang>
+            </ChiKhiCoChucNang>
+        </MudNavGroup>
+    </AuthorizeView>
 
-    <ChiKhiCoChucNang Ma="@ChucNang.BanHang">
-        <AuthorizeView Roles="@AppRoles.QuyenGiaoHang" Context="giaoHang">
-            <MudNavGroup Title="Bán hàng" Icon="@Icons.Material.Filled.PointOfSale" Expanded="true">
-                <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="khachHang">
+    <AuthorizeView Roles="@AppRoles.QuyenGiaoHang" Context="giaoHang">
+        <MudNavGroup Title="Bán hàng" Icon="@Icons.Material.Filled.PointOfSale" Expanded="true">
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="khachHang">
+                <ChiKhiCoChucNang Ma="@ChucNang.KhachHang">
                     <MudNavLink Href="/app/khach-hang" Icon="@Icons.Material.Filled.People">
                         Khách hàng
                     </MudNavLink>
-                </AuthorizeView>
+                </ChiKhiCoChucNang>
+            </AuthorizeView>
+            <ChiKhiCoChucNang Ma="@ChucNang.DonHangBan">
                 <MudNavLink Href="/app/don-hang-ban" Icon="@Icons.Material.Filled.ReceiptLong">
                     Đơn hàng bán
                 </MudNavLink>
-                <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="donTruong">
-                    <ChiKhiCoChucNang Ma="@ChucNang.HanoiCheck">
-                        <ChiKhiBatHnC>
-                            <MudNavLink Href="/app/don-hang-nhan" Icon="@Icons.Material.Filled.CloudDownload">
-                                Đơn hàng từ trường (HanoiCheck)
-                            </MudNavLink>
-                        </ChiKhiBatHnC>
-                    </ChiKhiCoChucNang>
-                </AuthorizeView>
-            </MudNavGroup>
-        </AuthorizeView>
-    </ChiKhiCoChucNang>
+            </ChiKhiCoChucNang>
+            <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="donTruong">
+                <ChiKhiCoChucNang Ma="@ChucNang.DonHangNhan">
+                    <ChiKhiBatHnC>
+                        <MudNavLink Href="/app/don-hang-nhan" Icon="@Icons.Material.Filled.CloudDownload">
+                            Đơn hàng từ trường (HanoiCheck)
+                        </MudNavLink>
+                    </ChiKhiBatHnC>
+                </ChiKhiCoChucNang>
+            </AuthorizeView>
+        </MudNavGroup>
+    </AuthorizeView>
 
-    <ChiKhiCoChucNang Ma="@ChucNang.HanoiCheck">
-        <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="nhatKy">
+    <AuthorizeView Roles="@AppRoles.QuyenNhapLieu" Context="nhatKy">
+        <ChiKhiCoChucNang Ma="@ChucNang.NhatKyDongBo">
             <ChiKhiBatHnC>
                 <MudNavLink Href="/app/nhat-ky-dong-bo" Icon="@Icons.Material.Filled.Sync">
                     Nhật ký đồng bộ
                 </MudNavLink>
             </ChiKhiBatHnC>
-        </AuthorizeView>
+        </ChiKhiCoChucNang>
+    </AuthorizeView>
 
-        <AuthorizeView Roles="@AppRoles.TenantAdmin" Context="quanTri">
+    <AuthorizeView Roles="@AppRoles.TenantAdmin" Context="quanTri">
+        <ChiKhiCoChucNang Ma="@ChucNang.KetNoiHnC">
             <MudNavLink Href="/app/cai-dat-ket-noi" Icon="@Icons.Material.Filled.Link">
                 Cài đặt kết nối HanoiCheck
             </MudNavLink>
@@ -139,6 +171,6 @@
                     Kiểm tra API HanoiCheck
                 </MudNavLink>
             </ChiKhiBatHnC>
-        </AuthorizeView>
-    </ChiKhiCoChucNang>
+        </ChiKhiCoChucNang>
+    </AuthorizeView>
 </MudNavMenu>

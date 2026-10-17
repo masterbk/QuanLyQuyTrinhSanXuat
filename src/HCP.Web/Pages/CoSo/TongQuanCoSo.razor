@@ -17,7 +17,7 @@
 else
 {
     <MudGrid Class="mb-2">
-        <ChiKhiCoChucNang Ma="@ChucNang.HanoiCheck">
+        <ChiKhiCoChucNang Ma="@ChucNang.KetNoiHnC">
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Class="pa-4" Elevation="1">
                 <MudText Typo="Typo.overline" Class="mud-text-secondary">Đã đồng bộ</MudText>
@@ -45,7 +45,7 @@ else
                 </MudText>
             </MudPaper>
         </MudItem>
-        <ChiKhiCoChucNang Ma="@ChucNang.KhoSanXuat">
+        <ChiKhiCoChucNang Ma="@ChucNang.TonKho">
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Class="pa-4" Elevation="1">
                 <MudText Typo="Typo.overline" Class="mud-text-secondary">Cảnh báo kho</MudText>
@@ -57,7 +57,7 @@ else
         </ChiKhiCoChucNang>
     </MudGrid>
 
-    <ChiKhiCoChucNang Ma="@ChucNang.BanHang">
+    <ChiKhiCoChucNang Ma="@ChucNang.DonHangBan">
     <MudText Typo="Typo.h6" Class="mb-2 mt-4">
         Đơn hàng bán
         <span class="mud-text-secondary" style="font-size:0.8rem">
@@ -106,7 +106,7 @@ else
     </MudGrid>
     </ChiKhiCoChucNang>
 
-    @if (_data.SoLoi > 0 && ChucNangCoSo.Co(ChucNang.HanoiCheck))
+    @if (_data.SoLoi > 0 && ChucNangCoSo.Co(ChucNang.NhatKyDongBo))
     {
         <MudAlert Severity="Severity.Error" Class="mb-4">
             Có @_data.SoLoi bản ghi đồng bộ đang lỗi.
@@ -148,7 +148,7 @@ else
         </MudTable>
     }
 
-    <ChiKhiCoChucNang Ma="@ChucNang.KhoSanXuat">
+    <ChiKhiCoChucNang Ma="@ChucNang.TonKho">
     <MudText Typo="Typo.h6" Class="mb-2 mt-6">Cảnh báo kho (lô sắp/đã hết hạn, tồn thấp)</MudText>
     @if (_data.CanhBaoTonKho.Count == 0)
     {

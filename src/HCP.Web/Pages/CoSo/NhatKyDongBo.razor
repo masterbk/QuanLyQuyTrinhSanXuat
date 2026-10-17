@@ -5,7 +5,7 @@
 @using HCP.Infrastructure.Services.NhatKyDongBo
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
-@attribute [Authorize(Policy = ChucNang.ChinhSach.HanoiCheck)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.NhatKyDongBo)]
 @inject ISyncNhatKyService NhatKyService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService

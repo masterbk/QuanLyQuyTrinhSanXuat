@@ -16,7 +16,7 @@ public static class SuatAnApi
     {
         var nhom = app.MapGroup("/api/v1/suat-an")
             .RequireAuthorization(ApiAuth.ChinhSach)
-            .RequireAuthorization(ChucNang.ChinhSach.SuatAn)
+            .RequireAuthorization(ChucNang.ChinhSach.ThucDon)
             .RequireAuthorization(new AuthorizeAttribute { Roles = AppRoles.MoiNguoiDungCoSo })
             .WithTags("Suất ăn");
 

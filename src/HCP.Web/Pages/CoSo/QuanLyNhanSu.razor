@@ -5,6 +5,7 @@
 @using HCP.Infrastructure.Identity
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = AppRoles.TenantAdmin + "," + AppRoles.TenantStaff)]
+@attribute [Authorize(Policy = ChucNang.ChinhSach.NhanSu)]
 @inject IDanhMucService<Staff> NhanSuService
 @inject ITaiKhoanNhanVienService TaiKhoanService
 @inject HCP.Infrastructure.Services.BieuMau.IBieuMauService BieuMauService

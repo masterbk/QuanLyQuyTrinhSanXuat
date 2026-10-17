@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace HCP.Tests;
 
 /// <summary>
-/// Phân quyền module chức năng theo cơ sở (quản trị nền tảng mở): chuẩn hoá + tự thêm module phụ thuộc,
-/// tắt "Kết nối HanoiCheck" thì tắt công tắc đồng bộ + gỡ hàng đợi chưa gửi, cơ sở chưa được mở thì không tự bật được.
+/// Phân quyền chức năng (từng menu) theo cơ sở: chuẩn hoá + tự thêm chức năng phụ thuộc, quy đổi mã module cũ,
+/// tắt "Cài đặt kết nối" thì tắt công tắc đồng bộ + gỡ hàng đợi chưa gửi, cơ sở chưa được mở thì không tự bật được.
 /// </summary>
 public class ChucNangTests
 {
@@ -31,12 +31,50 @@ public class ChucNangTests
     [Fact]
     public void Ghep_Tu_Them_Phu_Thuoc_Bo_Ma_La_Va_Sap_Theo_Thu_Tu()
     {
-        // HanoiCheck cần Bán hàng, Bán hàng cần Kho & sản xuất.
-        Assert.Equal("KhoSanXuat,BanHang,HanoiCheck", ChucNang.Ghep(["HanoiCheck", "XYZ"]));
+        // Đơn hàng bán cần Khách hàng + Tồn kho; Tồn kho lại cần Kho + Thực phẩm.
+        Assert.Equal("Kho,ThucPham,TonKho,KhachHang,DonHangBan", ChucNang.Ghep([ChucNang.DonHangBan, "XYZ"]));
         Assert.Equal("", ChucNang.Ghep([]));
-        Assert.Equal(["SuatAn"], ChucNang.Tach(" SuatAn ,LaLung,SuatAn"));
-        Assert.True(ChucNang.Co("LoSanXuat,KiemSoatAttp", ChucNang.KiemSoatAttp));
+        Assert.Equal([ChucNang.MonAn], ChucNang.Tach(" MonAn ,LaLung,MonAn"));
+        Assert.True(ChucNang.Co("LoSanXuat,BieuMau", ChucNang.BieuMau));
         Assert.False(ChucNang.Co("", ChucNang.LoSanXuat));
+
+        // Thực đơn kéo theo Món ăn, Món ăn kéo theo Thực phẩm + Quy trình, Quy trình kéo theo Khâu.
+        Assert.Equal("KhauSanXuat,QuyTrinh,ThucPham,MonAn,ThucDon", ChucNang.Ghep([ChucNang.ThucDon]));
+    }
+
+    [Fact]
+    public void Quy_Doi_Ma_Module_Cu_Sang_Ma_Theo_Menu()
+    {
+        // Cơ sở cũ mở đủ 6 module -> mở hết menu.
+        var day = ChucNang.TuMaCu("LoSanXuat,SuatAn,KhoSanXuat,BanHang,HanoiCheck,KiemSoatAttp");
+        Assert.All(ChucNang.TatCa, ma => Assert.True(ChucNang.Co(day, ma), ma));
+
+        // Cơ sở cũ chỉ có Kiểm soát ATTP: vẫn được nhóm danh mục (trước đây luôn hiện), không có Bán hàng.
+        var attp = ChucNang.TuMaCu("KiemSoatAttp");
+        Assert.True(ChucNang.Co(attp, ChucNang.NhapPhieu));
+        Assert.True(ChucNang.Co(attp, ChucNang.ThucPham));
+        Assert.False(ChucNang.Co(attp, ChucNang.DonHangBan));
+        Assert.False(ChucNang.Co(attp, ChucNang.LenhSanXuat));
+    }
+
+    [Fact]
+    public void Tra_Kem_Ma_Module_Cu_Cho_App_Da_Cai()
+    {
+        // App phát trước 18/10/2026 lọc tab theo mã cũ - máy chủ phải trả kèm, nếu không app cũ mất sạch tab.
+        var csv = ChucNang.Ghep([ChucNang.LenhSanXuat, ChucNang.DonHangBan, ChucNang.ThucDon, ChucNang.NhapPhieu]);
+        var guiApp = ChucNang.KemMaCu(csv);
+
+        Assert.Contains(ChucNang.MaCu.KhoSanXuat, guiApp);
+        Assert.Contains(ChucNang.MaCu.BanHang, guiApp);
+        Assert.Contains(ChucNang.MaCu.SuatAn, guiApp);
+        Assert.Contains(ChucNang.MaCu.KiemSoatAttp, guiApp);
+        Assert.Contains(ChucNang.LenhSanXuat, guiApp);          // mã mới vẫn còn cho app mới
+        Assert.DoesNotContain(ChucNang.MaCu.LoSanXuat, guiApp);  // không bật Lô thì không suy ra mã cũ
+
+        // Cơ sở chỉ có danh mục thuần thì app cũ không thấy tab nào.
+        var chiDanhMuc = ChucNang.KemMaCu(ChucNang.Ghep([ChucNang.ThucPham]));
+        Assert.DoesNotContain(ChucNang.MaCu.KhoSanXuat, chiDanhMuc);
+        Assert.DoesNotContain(ChucNang.MaCu.BanHang, chiDanhMuc);
     }
 
     [Fact]
@@ -72,13 +110,13 @@ public class ChucNangTests
         using (var db = MoDb())
         {
             var svc = new CoSoService(store, db, null!, NullLogger<CoSoService>.Instance);
-            var kq = await svc.CapNhatChucNangAsync(CoSo, [ChucNang.SuatAn, ChucNang.KiemSoatAttp], "admin");
+            var kq = await svc.CapNhatChucNangAsync(CoSo, [ChucNang.MonAn, ChucNang.BieuMau], "admin");
             Assert.True(kq.ThanhCong, kq.ThongBao);
             Assert.Contains("tắt đồng bộ HanoiCheck", kq.ThongBao);
         }
 
         using (var store = MoStore())
-            Assert.Equal("SuatAn,KiemSoatAttp", store.TenantInfo.Single().ChucNangCsv);
+            Assert.Equal("KhauSanXuat,QuyTrinh,ThucPham,MonAn,BieuMau", store.TenantInfo.Single().ChucNangCsv);
         using (var db = MoDb())
         {
             Assert.False(db.TenantHnCCredentials.Single().BatDongBo);
@@ -103,7 +141,7 @@ public class ChucNangTests
             Assert.Contains("Kết nối HanoiCheck", kq.ThongBao);
         }
 
-        using (var db = MoDb(ChucNang.Ghep([ChucNang.HanoiCheck])))
+        using (var db = MoDb(ChucNang.Ghep([ChucNang.KetNoiHnC])))
         {
             var kq = await new DongBoHnCTongService(db, new SyncOutboxWriter(db, new TestMultiTenantContextAccessor()))
                 .BatTatAsync(true);

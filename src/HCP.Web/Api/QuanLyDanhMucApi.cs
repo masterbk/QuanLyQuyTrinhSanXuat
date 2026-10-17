@@ -74,7 +74,7 @@ public static class QuanLyDanhMucApi
             var ds = await svc.LayTheoThanhPhamAsync(id);
             return Results.Ok(ds.Select(d => new DinhMucDongDto(
                 d.MaNguyenLieu, ten.GetValueOrDefault(d.MaNguyenLieu), d.SoLuong, d.HaoHutPhanTram)).ToList());
-        }).RequireAuthorization(ChucNang.ChinhSach.KhoSanXuat);
+        }).RequireAuthorization(ChucNang.ChinhSach.DinhMuc);
 
         nhom.MapPut("/thuc-pham/{id:int}/dinh-muc", async (int id, DinhMucLuuRequest req, IDinhMucService svc) =>
         {
@@ -85,7 +85,7 @@ public static class QuanLyDanhMucApi
                 });
             var kq = await svc.LuuAsync(id, dong);
             return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao)) : Results.BadRequest(new LoiDto(kq.ThongBao));
-        }).RequireAuthorization(ChucNang.ChinhSach.KhoSanXuat);
+        }).RequireAuthorization(ChucNang.ChinhSach.DinhMuc);
     }
 
     private static SanPhamQuanLyDto Map(Product p) => new(

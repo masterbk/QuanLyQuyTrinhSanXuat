@@ -19,7 +19,7 @@ public static class PhieuPdfApi
     public static void MapPhieuPdfApi(this IEndpointRouteBuilder app)
     {
         var g = app.MapGroup("/app/phieu").RequireAuthorization("NguoiDungCoSo")
-            .RequireAuthorization(ChucNang.ChinhSach.KiemSoatAttp);
+            .RequireAuthorization(ChucNang.ChinhSach.PhieuGhiNhan);
 
         g.MapGet("/{id:int}/pdf", async (int id, IPhieuPdfService svc, IPhieuGhiNhanService phieuSvc, ClaimsPrincipal user,
                                          AppDbContext db, bool? tai, CancellationToken ct) =>

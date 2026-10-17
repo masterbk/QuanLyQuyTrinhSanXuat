@@ -122,10 +122,10 @@ else
     </TitleContent>
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-2">
-            Danh mục cơ bản (Tổng quan, Kho, Cơ sở SX, Khâu, Quy trình, NCC đầu vào, Nhân sự, Thực phẩm) luôn có.
+            Tick theo đúng cây menu của cơ sở. Màn <b>Tổng quan</b> luôn có, không tắt được.
             Tắt chức năng chỉ ẩn và chặn truy cập, không xoá dữ liệu.
         </MudText>
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-2">
             <MudText Typo="Typo.caption" Class="align-self-center">Gói mẫu:</MudText>
             @foreach (var goi in ChucNang.GoiMau)
             {
@@ -133,14 +133,33 @@ else
                            OnClick="@(() => ApGoi(goi.Ma))">@goi.Ten</MudButton>
             }
         </div>
-        @foreach (var cn in ChucNang.DanhSach)
+
+        @* Cây menu: mỗi nhóm là một nhánh, tick ở nhánh thì bật/tắt cả nhóm. *@
+        @foreach (var nhom in ChucNang.CacNhom)
         {
-            <div class="mb-1">
-                <MudCheckBox T="bool" Value="@_chon.Contains(cn.Ma)" ValueChanged="@(v => DoiChon(cn.Ma, v))"
-                             Color="Color.Primary" Dense="true" Label="@cn.Ten" />
-                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" Style="margin-left:34px;margin-top:-6px">
-                    @cn.MoTa@(cn.PhuThuoc.Count > 0 ? $" — cần {string.Join(", ", cn.PhuThuoc.Select(ChucNang.Ten))}" : "")
-                </MudText>
+            var muc = ChucNang.TheoNhom(nhom);
+            var soBat = muc.Count(c => _chon.Contains(c.Ma));
+
+            <div class="mb-2">
+                <div class="d-flex align-center" style="border-bottom:1px solid var(--mud-palette-divider)">
+                    <MudCheckBox T="bool?" Value="@(soBat == 0 ? false : soBat == muc.Count ? true : null)"
+                                 ValueChanged="@(v => DoiCaNhom(muc, v == true))" TriState="true"
+                                 Color="Color.Primary" Dense="true" />
+                    <MudText Typo="Typo.subtitle2">@nhom</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">(@soBat/@muc.Count)</MudText>
+                </div>
+
+                @foreach (var cn in muc)
+                {
+                    <div style="margin-left:28px">
+                        <MudCheckBox T="bool" Value="@_chon.Contains(cn.Ma)" ValueChanged="@(v => DoiChon(cn.Ma, v))"
+                                     Color="Color.Primary" Dense="true" Label="@cn.Ten" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block"
+                                 Style="margin-left:34px;margin-top:-6px">
+                            @cn.MoTa@(cn.PhuThuoc.Count > 0 ? $" — cần {string.Join(", ", cn.PhuThuoc.Select(ChucNang.Ten))}" : "")
+                        </MudText>
+                    </div>
+                }
             </div>
         }
     </DialogContent>
@@ -173,7 +192,13 @@ else
 
     private void ApGoi(IReadOnlyList<string> ma) => _chon = ChucNang.Tach(ChucNang.Ghep(ma)).ToHashSet();
 
-    /// <summary>Bật thì kéo theo module phụ thuộc; tắt thì tắt luôn các module cần nó.</summary>
+    /// <summary>Tick ở nhánh: bật cả nhóm (kéo theo phụ thuộc) hoặc tắt cả nhóm.</summary>
+    private void DoiCaNhom(IReadOnlyList<ChucNang.MoTaChucNang> muc, bool bat)
+    {
+        foreach (var cn in muc) DoiChon(cn.Ma, bat);
+    }
+
+    /// <summary>Bật thì kéo theo chức năng phụ thuộc; tắt thì tắt luôn các chức năng cần nó.</summary>
     private void DoiChon(string ma, bool bat)
     {
         if (bat)

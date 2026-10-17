@@ -71,7 +71,7 @@ public static class AuthApi
                 await LenhSanXuatApi.MaNhanSuTaiKhoanAsync(db, tenant.MultiTenantContext?.TenantInfo?.Id,
                     user.FindFirstValue(ClaimTypes.NameIdentifier), user.IsInRole(AppRoles.TenantAdmin), ct),
                 tenant.MultiTenantContext?.TenantInfo?.Name,
-                ChucNang.Tach(tenant.MultiTenantContext?.TenantInfo?.ChucNangCsv))))
+                ChucNang.KemMaCu(tenant.MultiTenantContext?.TenantInfo?.ChucNangCsv))))
             .RequireAuthorization(ApiAuth.ChinhSach);
 
         // Đăng ký/bỏ đăng ký token thiết bị (FCM) để nhận thông báo đẩy - gọi lúc đăng nhập/đăng xuất.
@@ -115,7 +115,7 @@ public static class AuthApi
                              p.NguoiDung.TenantId, p.VaiTro, await HanoiCheckBatAsync(db, p.NguoiDung.TenantId, ct),
                              await LenhSanXuatApi.MaNhanSuTaiKhoanAsync(db, p.NguoiDung.TenantId, p.NguoiDung.Id,
                                                                         p.VaiTro.Contains(AppRoles.TenantAdmin), ct),
-                             tenant?.Name, ChucNang.Tach(tenant?.ChucNangCsv)));
+                             tenant?.Name, ChucNang.KemMaCu(tenant?.ChucNangCsv)));
     }
 
     /// <summary>

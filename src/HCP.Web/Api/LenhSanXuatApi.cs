@@ -28,7 +28,7 @@ public static class LenhSanXuatApi
     {
         var nhom = app.MapGroup("/api/v1/lenh-san-xuat")
             .RequireAuthorization(ApiAuth.ChinhSach)
-            .RequireAuthorization(ChucNang.ChinhSach.KhoSanXuat)
+            .RequireAuthorization(ChucNang.ChinhSach.LenhSanXuat)
             .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = AppRoles.QuyenSanXuat })
             .WithTags("Lệnh sản xuất");
 
