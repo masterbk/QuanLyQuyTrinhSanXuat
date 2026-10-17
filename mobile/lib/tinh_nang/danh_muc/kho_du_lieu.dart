@@ -17,6 +17,11 @@ class DanhMucQuanLyData {
       ((await _api.get('/api/v1/quan-ly/thuc-pham')) as List)
           .map((e) => SanPham.tuJson(e as Map<String, dynamic>)).toList();
 
+  /// Bản mới nhất của một thực phẩm. Dùng trước khi mở form sửa: danh sách tải từ lúc mở màn,
+  /// người khác có thể đã sửa bản ghi đó rồi - lưu đè bằng dữ liệu cũ sẽ mất thay đổi của họ.
+  Future<SanPham> chiTietThucPham(int id) async =>
+      SanPham.tuJson(await _api.get('/api/v1/quan-ly/thuc-pham/$id') as Map<String, dynamic>);
+
   Future<String> luuThucPham(SanPham sp) async {
     final j = (sp.id == 0
         ? await _api.post('/api/v1/quan-ly/thuc-pham', than: sp.raJson())
@@ -63,6 +68,10 @@ class DanhMucQuanLyData {
   Future<List<QuyTrinhQuanLy>> quyTrinh() async =>
       ((await _api.get('/api/v1/quan-ly/quy-trinh')) as List)
           .map((e) => QuyTrinhQuanLy.tuJson(e as Map<String, dynamic>)).toList();
+
+  /// Bản mới nhất của một quy trình - xem [chiTietThucPham].
+  Future<QuyTrinhQuanLy> chiTietQuyTrinh(int id) async =>
+      QuyTrinhQuanLy.tuJson(await _api.get('/api/v1/quan-ly/quy-trinh/$id') as Map<String, dynamic>);
 
   Future<String> luuQuyTrinh({
     int? id,

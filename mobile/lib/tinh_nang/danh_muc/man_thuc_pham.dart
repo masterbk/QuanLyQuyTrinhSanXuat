@@ -85,8 +85,7 @@ class _TheSanPham extends ConsumerWidget {
               IconButton(
                 tooltip: 'Sửa',
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => ManSuaThucPham(sanPham: sp))),
+                onPressed: () => _moSua(context, ref, sp),
               ),
               IconButton(
                 tooltip: 'Xoá',
@@ -97,6 +96,17 @@ class _TheSanPham extends ConsumerWidget {
           ),
         ),
       );
+
+  /// Tải lại bản mới nhất rồi mới mở form sửa - xem giải thích ở màn Quy trình (man_quy_trinh.dart).
+  Future<void> _moSua(BuildContext context, WidgetRef ref, SanPham sp) async {
+    try {
+      final moiNhat = await ref.read(danhMucQuanLyProvider).chiTietThucPham(sp.id);
+      if (!context.mounted) return;
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => ManSuaThucPham(sanPham: moiNhat)));
+    } on LoiApi catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.thongBao)));
+    }
+  }
 
   Future<void> _xacNhanXoa(BuildContext context, WidgetRef ref, SanPham sp) async {
     final dongY = await showDialog<bool>(

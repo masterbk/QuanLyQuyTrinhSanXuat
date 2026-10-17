@@ -69,8 +69,7 @@ class _TheQuyTrinh extends ConsumerWidget {
               IconButton(
                 tooltip: 'Sửa',
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () =>
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => ManSuaQuyTrinh(quyTrinh: qt))),
+                onPressed: () => _moSua(context, ref, qt),
               ),
               IconButton(
                 tooltip: 'Xoá',
@@ -81,6 +80,18 @@ class _TheQuyTrinh extends ConsumerWidget {
           ),
         ),
       );
+
+  /// Tải lại bản mới nhất rồi mới mở form sửa: danh sách lấy từ lúc mở màn, người khác có thể đã
+  /// sửa quy trình đó rồi - sửa trên dữ liệu cũ rồi lưu sẽ ghi đè mất thay đổi của họ.
+  Future<void> _moSua(BuildContext context, WidgetRef ref, QuyTrinhQuanLy qt) async {
+    try {
+      final moiNhat = await ref.read(danhMucQuanLyProvider).chiTietQuyTrinh(qt.id);
+      if (!context.mounted) return;
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => ManSuaQuyTrinh(quyTrinh: moiNhat)));
+    } on LoiApi catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.thongBao)));
+    }
+  }
 
   Future<void> _xacNhanXoa(BuildContext context, WidgetRef ref, QuyTrinhQuanLy qt) async {
     final dongY = await showDialog<bool>(
