@@ -77,16 +77,26 @@ else
     @if (_coQuyenNhapLieu)
     {
         <div class="d-flex flex-wrap align-center gap-2 mb-3">
-            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Factory"
-                       Disabled="@(_chon.Count == 0)" OnClick="MoTaoLenhAsync">
-                Tạo lệnh sản xuất theo đơn hàng (@_chon.Count)
-            </MudButton>
+            @if (CoDongThucPham)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Factory"
+                           OnClick="MoTaoLenhAsync">
+                    Tạo lệnh sản xuất (@_chon.Count)
+                </MudButton>
+            }
+            @if (CoDongMonAn)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Tertiary" StartIcon="@Icons.Material.Filled.Inventory2"
+                           OnClick="MoTaoLenhNhapNguyenLieuAsync">
+                    Tạo lệnh nhập nguyên liệu (@_chon.Count)
+                </MudButton>
+            }
             @if (_chon.Count > 0)
             {
                 <MudButton Variant="Variant.Text" OnClick="@(() => _chon.Clear())">Bỏ chọn</MudButton>
             }
             <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                Tick các đơn chưa xuất kho rồi gộp sản phẩm + số lượng thành một lệnh sản xuất.
+                Tick đơn chưa xuất kho: dòng thực phẩm gộp thành lệnh sản xuất; dòng suất ăn gộp nguyên liệu thành lô nhập kho.
             </MudText>
         </div>
     }
@@ -689,6 +699,32 @@ else
             _chon.Clear();
             await TaiAsync();
         }
+    }
+
+    private IEnumerable<DonHangBan> DonChon() => _danhSach.Where(d => _chon.Contains(d.Id) && CoTheTaoLenh(d));
+
+    /// <summary>Đơn đã chọn có dòng thực phẩm (thành phẩm) để tạo lệnh sản xuất.</summary>
+    private bool CoDongThucPham => DonChon().SelectMany(d => d.Dong)
+        .Any(l => !l.LaMonAn && !string.IsNullOrWhiteSpace(l.MaThanhPham) && l.SoLuong > 0);
+
+    /// <summary>Đơn đã chọn có dòng suất ăn (món ăn) để tạo lệnh nhập nguyên liệu.</summary>
+    private bool CoDongMonAn => DonChon().SelectMany(d => d.Dong).Any(l => l.LaMonAn && l.SoLuong > 0);
+
+    /// <summary>Gộp nguyên liệu từ dòng suất ăn của các đơn đã chọn rồi mở dialog tạo lô + nhập kho.</summary>
+    private async Task MoTaoLenhNhapNguyenLieuAsync()
+    {
+        var ids = DonChon().Select(d => d.Id).ToList();
+        if (ids.Count == 0) return;
+        var nl = await DonHangService.TongNhuCauNguyenLieuMonAnAsync(ids);
+        if (nl.Count == 0)
+        {
+            Snackbar.Add("Các đơn đã chọn không có nguyên liệu suất ăn nào (hoặc món chưa có công thức).", Severity.Info);
+            return;
+        }
+        var thamSo = new DialogParameters<TaoLenhNhapNguyenLieuDialog> { { x => x.NguyenLieu, nl } };
+        var dialog = await DialogService.ShowAsync<TaoLenhNhapNguyenLieuDialog>("Tạo lệnh nhập nguyên liệu", thamSo, _dialogLon);
+        var kq = await dialog.Result;
+        if (kq is { Canceled: false }) { _chon.Clear(); await TaiAsync(); }
     }
 
     private async Task TaiAsync()

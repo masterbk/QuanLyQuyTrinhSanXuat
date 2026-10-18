@@ -1,0 +1,161 @@
+@using HCP.Domain
+@using HCP.Domain.Entities.Business
+@using HCP.Infrastructure.Services.BanHang
+@using HCP.Infrastructure.Services.DanhMuc
+@using HCP.Infrastructure.Services.Kho
+@inject IDanhMucService<Batch> LoService
+@inject IKhoNoiBoService KhoNoiBo
+@inject IDanhMucService<Warehouse> KhoDanhMucService
+@inject IDanhMucService<SubSupplier> NccService
+@inject ISnackbar Snackbar
+
+@* Tạo "lệnh nhập nguyên liệu" từ đơn hàng suất ăn: mỗi nguyên liệu (gộp định lượng × số suất) tạo một Lô nhập kho
+   (Batch) rồi nhập kho theo đúng lô đó. KHÔNG trừ tồn - số lượng là đúng nhu cầu của đơn. *@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Tạo lệnh nhập nguyên liệu (suất ăn)</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_dong.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">Các đơn đã chọn không có nguyên liệu suất ăn nào (hoặc món chưa có công thức).</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Mỗi nguyên liệu dưới đây sẽ tạo một lô nhập kho (mã lô tự sinh) và nhập đúng số lượng cần. Số lượng = định
+                lượng × số suất, cộng dồn các đơn đã chọn (chưa trừ tồn hiện có) - sửa lại nếu cần.
+            </MudText>
+
+            <MudGrid Spacing="2" Class="mb-2">
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" @bind-Value="_maKho" Label="Kho nhập *" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var k in _kho)
+                        {
+                            <MudSelectItem T="string" Value="@k.MaKho">@k.TenKho (@k.MaKho)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" @bind-Value="_maNcc" Label="Nhà cung ứng (tuỳ chọn)" Variant="Variant.Outlined"
+                               Margin="Margin.Dense" Clearable="true">
+                        @foreach (var n in _ncc)
+                        {
+                            <MudSelectItem T="string" Value="@n.MaNccDauVao">@n.Ten</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudDatePicker @bind-Date="_ngayNhap" Label="Ngày nhập" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudDatePicker @bind-Date="_hanDung" Label="Hạn dùng" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   DateFormat="dd/MM/yyyy" Editable="true" Mask="@(new DateMask("dd/MM/yyyy"))" Clearable="true" />
+                </MudItem>
+            </MudGrid>
+
+            <MudTable Items="_dong" Dense="true" Elevation="0" Hover="true">
+                <HeaderContent>
+                    <MudTh>Nguyên liệu</MudTh>
+                    <MudTh Style="text-align:right;width:160px">Số lượng cần</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Nguyên liệu">@context.Ten <span class="mud-text-secondary">(@context.Ma)</span></MudTd>
+                    <MudTd DataLabel="Số lượng" Style="text-align:right">
+                        <div class="d-flex align-center justify-end gap-1">
+                            <MudNumericField @bind-Value="context.SoLuong" Min="0m" Format="0.###" Margin="Margin.Dense"
+                                             Variant="Variant.Outlined" Style="width:110px"
+                                             Culture="@System.Globalization.CultureInfo.InvariantCulture" />
+                            <MudText Typo="Typo.body2" Style="width:40px">@context.DonViTinh</MudText>
+                        </div>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Dong">Huỷ</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_dangLuu || _dong.Count == 0)" OnClick="LuuAsync">
+            Tạo lô &amp; nhập kho
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Nguyên liệu cần nhập (đã gộp từ các đơn), điền sẵn số lượng.</summary>
+    [Parameter] public IReadOnlyList<NhuCauNguyenLieuDto> NguyenLieu { get; set; } = Array.Empty<NhuCauNguyenLieuDto>();
+
+    private sealed class DongNhap
+    {
+        public string Ma = "";
+        public string Ten = "";
+        public string? DonViTinh;
+        public decimal SoLuong;
+    }
+
+    private List<DongNhap> _dong = new();
+    private List<Warehouse> _kho = new();
+    private List<SubSupplier> _ncc = new();
+    private string _maKho = "";
+    private string? _maNcc;
+    private DateTime? _ngayNhap = GioVietNam.Nay.Date;
+    private DateTime? _hanDung;
+    private bool _dangLuu;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _kho = (await KhoDanhMucService.LayTatCaAsync()).ToList();
+        _ncc = (await NccService.LayTatCaAsync()).ToList();
+        if (_kho.Count == 1) _maKho = _kho[0].MaKho;
+        _dong = NguyenLieu.Select(n => new DongNhap
+        {
+            Ma = n.MaNguyenLieu, Ten = n.TenNguyenLieu, DonViTinh = n.DonViTinh, SoLuong = n.SoLuong
+        }).ToList();
+    }
+
+    private async Task LuuAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_maKho)) { Snackbar.Add("Vui lòng chọn kho nhập.", Severity.Warning); return; }
+        var canNhap = _dong.Where(d => d.SoLuong > 0).ToList();
+        if (canNhap.Count == 0) { Snackbar.Add("Không có nguyên liệu nào có số lượng > 0.", Severity.Warning); return; }
+
+        var ngayNhap = _ngayNhap is { } dn ? DateOnly.FromDateTime(dn) : GioVietNam.HomNay;
+        DateOnly? hanDung = _hanDung is { } hd ? DateOnly.FromDateTime(hd) : null;
+        var maNcc = string.IsNullOrWhiteSpace(_maNcc) ? null : _maNcc;
+
+        _dangLuu = true;
+        int xong = 0, loi = 0;
+        foreach (var d in canNhap)
+        {
+            var lo = new Batch
+            {
+                MaSanPham = d.Ma,
+                TenLo = $"{d.Ten} - {ngayNhap:dd/MM/yyyy}",
+                NgayNhap = ngayNhap,
+                HanSuDung = hanDung,
+                MaNccDauVao = maNcc,
+                DongBoHnC = false,   // nhập nhanh: chưa gửi HanoiCheck (tránh bắt buộc 1-3 ảnh); bật + thêm ảnh ở màn Lô nếu cần
+                DanhSachKho = { new BatchWarehouse { MaKho = _maKho } }
+            };
+            var kqLo = await LoService.ThemAsync(lo);
+            if (!kqLo.ThanhCong) { loi++; continue; }
+
+            var kqNhap = await KhoNoiBo.NhapNguyenLieuAsync(new NhapKhoRequest
+            {
+                MaSanPham = d.Ma, MaKho = _maKho, MaLo = lo.MaLo, SoLuong = d.SoLuong,
+                HanSuDung = hanDung, MaNccDauVao = maNcc, GhiChu = "Nhập nguyên liệu theo đơn hàng suất ăn"
+            });
+            if (kqNhap.ThanhCong) xong++; else loi++;
+        }
+        _dangLuu = false;
+
+        var tb = $"Đã tạo lô & nhập kho {xong} nguyên liệu" + (loi > 0 ? $", {loi} dòng lỗi." : ".");
+        Snackbar.Add(tb, loi > 0 ? Severity.Warning : Severity.Success);
+        if (xong > 0) MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Dong() => MudDialog.Cancel();
+}

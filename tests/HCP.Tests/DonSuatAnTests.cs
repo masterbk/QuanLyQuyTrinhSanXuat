@@ -244,6 +244,39 @@ public class DonSuatAnTests
     }
 
     [Fact]
+    public async Task Tong_Nhu_Cau_Nguyen_Lieu_Mon_An_Cong_Don_Va_Bo_Qua_Dong_Thuc_Pham()
+    {
+        var id1 = Seed();   // 30 suất MA-1
+        int id2;
+        using (var db = MoDb())
+        {
+            var don = new DonHangBan
+            {
+                MaKhachHang = "KH01", MaKho = "KHO01", MaDonHang = "DH-002", NgayDat = new DateOnly(2026, 10, 16),
+                TrangThai = TrangThaiDonHangBan.DaXacNhan,
+                Dong =
+                {
+                    new DonHangBanDong { MaThanhPham = "MA-1", SoLuong = 20, LaMonAn = true },
+                    new DonHangBanDong { MaThanhPham = "TP-THIT", SoLuong = 5, LaMonAn = false }  // dòng thực phẩm -> bỏ qua
+                }
+            };
+            db.DonHangBans.Add(don);
+            db.SaveChanges();
+            id2 = don.Id;
+        }
+
+        using var db2 = MoDb();
+        var nl = await Svc(db2, new FakeHanoiCheckOrderCommandClient())
+            .TongNhuCauNguyenLieuMonAnAsync(new[] { id1, id2 });
+
+        // 50 suất MA-1: thịt 0,08×50 = 4,0; rau 0,02×50 = 1,0. Dòng thực phẩm TP-THIT (5) KHÔNG cộng.
+        Assert.Equal(2, nl.Count);
+        Assert.Equal(4.0m, nl.Single(x => x.MaNguyenLieu == "TP-THIT").SoLuong);
+        Assert.Equal(1.0m, nl.Single(x => x.MaNguyenLieu == "TP-RAU").SoLuong);
+        Assert.Equal("kg", nl.Single(x => x.MaNguyenLieu == "TP-THIT").DonViTinh);
+    }
+
+    [Fact]
     public void App_Gui_Phan_Bo_Kem_Ma_Nguyen_Lieu_Doc_Duoc()
     {
         // Đúng dạng form "phanBo" app mobile gửi (DonHangApi đọc với PropertyNameCaseInsensitive).
