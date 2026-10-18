@@ -3,6 +3,9 @@ using HCP.Domain.Enums;
 
 namespace HCP.Infrastructure.Services.Kho;
 
+/// <summary>Một nguyên liệu cần nhập (mã + số lượng) khi tạo lệnh nhập nguyên liệu từ đơn suất ăn.</summary>
+public sealed record DongNhapNguyenLieu(string MaNguyenLieu, decimal SoLuong);
+
 /// <summary>Yêu cầu nhập kho nguyên liệu.</summary>
 public sealed class NhapKhoRequest
 {
@@ -51,6 +54,14 @@ public sealed record TonKhoDto(
 public interface IKhoNoiBoService
 {
     Task<KetQuaThaoTac> NhapNguyenLieuAsync(NhapKhoRequest req, CancellationToken ct = default);
+
+    /// <summary>
+    /// Với mỗi nguyên liệu (phải là Product loại NguyenLieu): tạo một Lô (Batch, DongBoHnC=false) rồi nhập kho đúng
+    /// số lượng vào lô đó. Dùng cho "Tạo lệnh nhập nguyên liệu" từ đơn hàng (web + app). Trả tóm tắt; nguyên liệu lỗi
+    /// được bỏ qua và liệt kê, KHÔNG làm hỏng các nguyên liệu khác.
+    /// </summary>
+    Task<KetQuaThaoTac> NhapNguyenLieuTaoLoAsync(IReadOnlyList<DongNhapNguyenLieu> dong, string maKho,
+        string? maNccDauVao, DateOnly ngayNhap, DateOnly? hanDung, CancellationToken ct = default);
 
     /// <summary>Điều chỉnh tồn một lô về số thực tế (kiểm kê); ghi dòng "Điều chỉnh" chênh lệch.</summary>
     Task<KetQuaThaoTac> DieuChinhTonAsync(DieuChinhTonRequest req, CancellationToken ct = default);

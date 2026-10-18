@@ -7,6 +7,7 @@ import '../lenh_san_xuat/man_sua.dart';
 import '../xac_thuc/xac_thuc.dart';
 import 'kho_du_lieu.dart';
 import 'man_chi_tiet.dart';
+import 'man_nhap_nguyen_lieu_don.dart';
 import 'man_sua.dart';
 import 'man_xuat_kho.dart';
 import 'mo_hinh.dart';
@@ -70,6 +71,11 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
     final nguoiDungHienTai = ref.watch(xacThucProvider).nguoiDung;
     final coQuyenNhapLieu = nguoiDungHienTai?.coQuyenNhapLieu ?? false;
     final laChuCoSo = nguoiDungHienTai?.laChuCoSo ?? false;
+
+    // Đơn đã chọn (chưa xuất kho) có dòng thực phẩm -> hiện nút "Tạo lệnh sản xuất".
+    final donDaChon = (ds.value ?? const <DonHangBan>[]).where((d) => _chon.contains(d.id) && d.chuaXuatKho);
+    final coThucPhamChon = donDaChon
+        .any((d) => d.dong.any((l) => !l.laMonAn && l.maThanhPham.isNotEmpty && l.soLuong > 0));
 
     return Scaffold(
       body: Column(
@@ -170,16 +176,35 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
                 top: false,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(child: Text('Đã chọn ${_chon.length} đơn')),
-                      TextButton(onPressed: () => setState(_chon.clear), child: const Text('Bỏ chọn')),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: _taoLenhTheoDon,
-                        icon: const Icon(Icons.factory_outlined, size: 18),
-                        label: const Text('Tạo lệnh sản xuất'),
-                      ),
+                      Row(children: [
+                        Expanded(child: Text('Đã chọn ${_chon.length} đơn')),
+                        TextButton(onPressed: () => setState(_chon.clear), child: const Text('Bỏ chọn')),
+                      ]),
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        if (coThucPhamChon)
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: _taoLenhTheoDon,
+                              icon: const Icon(Icons.factory_outlined, size: 18),
+                              label: const Text('Lệnh sản xuất'),
+                            ),
+                          ),
+                        if (coThucPhamChon) const SizedBox(width: 8),
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.tertiary,
+                                foregroundColor: Theme.of(context).colorScheme.onTertiary),
+                            onPressed: _taoLenhNhapNguyenLieu,
+                            icon: const Icon(Icons.inventory_2, size: 18),
+                            label: const Text('Nhập nguyên liệu'),
+                          ),
+                        ),
+                      ]),
                     ],
                   ),
                 ),
@@ -223,12 +248,12 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
     final tong = <String, double>{};
     for (final don in ds.where((d) => _chon.contains(d.id) && d.chuaXuatKho)) {
       for (final l in don.dong) {
-        if (l.maThanhPham.isEmpty || l.soLuong <= 0) continue;
+        if (l.laMonAn || l.maThanhPham.isEmpty || l.soLuong <= 0) continue;   // dòng suất ăn không vào lệnh SX
         tong[l.maThanhPham] = (tong[l.maThanhPham] ?? 0) + l.soLuong;
       }
     }
     if (tong.isEmpty) {
-      _bao('Các đơn đã chọn không có sản phẩm nào để sản xuất.');
+      _bao('Các đơn đã chọn không có thành phẩm nào để sản xuất.');
       return;
     }
     final kq = await Navigator.push<bool>(
@@ -236,6 +261,20 @@ class _ManDanhSachDonState extends ConsumerState<ManDanhSachDon> {
     if (kq == true && mounted) {
       setState(_chon.clear);
       ref.read(danhSachDonProvider.notifier).taiLai();
+    }
+  }
+
+  /// Mở màn tạo lệnh nhập nguyên liệu cho các đơn đã chọn (gộp nguyên liệu món ăn + thực phẩm).
+  Future<void> _taoLenhNhapNguyenLieu() async {
+    final ds = ref.read(danhSachDonProvider).value ?? const <DonHangBan>[];
+    final ids = ds.where((d) => _chon.contains(d.id) && d.chuaXuatKho).map((d) => d.id).toList();
+    if (ids.isEmpty) return;
+    final tb = await Navigator.push<String>(
+        context, MaterialPageRoute(builder: (_) => ManNhapNguyenLieuDon(donIds: ids)));
+    if (tb != null && mounted) {
+      setState(_chon.clear);
+      ref.read(danhSachDonProvider.notifier).taiLai();
+      _bao(tb);
     }
   }
 

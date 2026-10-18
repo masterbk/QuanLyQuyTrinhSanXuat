@@ -2,6 +2,7 @@ using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.DanhMuc;
 using Microsoft.EntityFrameworkCore;
 
 namespace HCP.Infrastructure.Services.Kho;
@@ -10,8 +11,13 @@ namespace HCP.Infrastructure.Services.Kho;
 public sealed class KhoNoiBoService : IKhoNoiBoService
 {
     private readonly AppDbContext _db;
+    private readonly IDanhMucService<Batch>? _lo;
 
-    public KhoNoiBoService(AppDbContext db) => _db = db;
+    public KhoNoiBoService(AppDbContext db, IDanhMucService<Batch>? lo = null)
+    {
+        _db = db;
+        _lo = lo;
+    }
 
     public async Task<KetQuaThaoTac> NhapNguyenLieuAsync(NhapKhoRequest req, CancellationToken ct = default)
     {
@@ -49,6 +55,52 @@ public sealed class KhoNoiBoService : IKhoNoiBoService
 
         return KetQuaThaoTac.Ok(
             $"Đã nhập {req.SoLuong:0.###} {sp.DonViTinh} \"{sp.TenSanPham}\" (lô {req.MaLo}) vào kho.");
+    }
+
+    public async Task<KetQuaThaoTac> NhapNguyenLieuTaoLoAsync(IReadOnlyList<DongNhapNguyenLieu> dong, string maKho,
+        string? maNccDauVao, DateOnly ngayNhap, DateOnly? hanDung, CancellationToken ct = default)
+    {
+        if (_lo is null) return KetQuaThaoTac.Loi("Chưa cấu hình dịch vụ lô sản xuất.");
+        maKho = maKho?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(maKho)) return KetQuaThaoTac.Loi("Vui lòng chọn kho nhập.");
+        if (!await _db.Warehouses.AnyAsync(k => k.MaKho == maKho, ct))
+            return KetQuaThaoTac.Loi($"Không tìm thấy kho \"{maKho}\".");
+
+        var canNhap = (dong ?? Array.Empty<DongNhapNguyenLieu>())
+            .Where(d => !string.IsNullOrWhiteSpace(d.MaNguyenLieu) && d.SoLuong > 0).ToList();
+        if (canNhap.Count == 0) return KetQuaThaoTac.Loi("Không có nguyên liệu nào có số lượng > 0.");
+
+        var ncc = string.IsNullOrWhiteSpace(maNccDauVao) ? null : maNccDauVao.Trim();
+        var xong = 0;
+        var loi = new List<string>();
+        foreach (var d in canNhap)
+        {
+            var sp = await _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.MaSanPham == d.MaNguyenLieu, ct);
+            if (sp is null || sp.LoaiSanPham != LoaiSanPham.NguyenLieu)
+            {
+                loi.Add($"{d.MaNguyenLieu} (không phải nguyên liệu)");
+                continue;
+            }
+            var lo = new Batch
+            {
+                MaSanPham = d.MaNguyenLieu, TenLo = $"{sp.TenSanPham} - {ngayNhap:dd/MM/yyyy}",
+                NgayNhap = ngayNhap, HanSuDung = hanDung, MaNccDauVao = ncc, DongBoHnC = false,
+                DanhSachKho = { new BatchWarehouse { MaKho = maKho } }
+            };
+            var kqLo = await _lo.ThemAsync(lo, ct);
+            if (!kqLo.ThanhCong) { loi.Add($"{sp.TenSanPham}: {kqLo.ThongBao}"); continue; }
+
+            var kqNhap = await NhapNguyenLieuAsync(new NhapKhoRequest
+            {
+                MaSanPham = d.MaNguyenLieu, MaKho = maKho, MaLo = lo.MaLo, SoLuong = d.SoLuong,
+                HanSuDung = hanDung, MaNccDauVao = ncc, GhiChu = "Nhập nguyên liệu theo đơn hàng"
+            }, ct);
+            if (kqNhap.ThanhCong) xong++; else loi.Add($"{sp.TenSanPham}: {kqNhap.ThongBao}");
+        }
+
+        var tb = $"Đã tạo lô & nhập kho {xong} nguyên liệu";
+        if (loi.Count > 0) tb += $". Bỏ qua {loi.Count}: {string.Join("; ", loi)}";
+        return xong > 0 ? KetQuaThaoTac.Ok(tb) : KetQuaThaoTac.Loi(tb);
     }
 
     public async Task<KetQuaThaoTac> DieuChinhTonAsync(DieuChinhTonRequest req, CancellationToken ct = default)

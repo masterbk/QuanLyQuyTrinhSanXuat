@@ -244,7 +244,7 @@ public class DonSuatAnTests
     }
 
     [Fact]
-    public async Task Tong_Nhu_Cau_Nguyen_Lieu_Mon_An_Cong_Don_Va_Bo_Qua_Dong_Thuc_Pham()
+    public async Task Tong_Nhu_Cau_Nguyen_Lieu_Mon_An_Cong_Don_Kem_Ton()
     {
         var id1 = Seed();   // 30 suất MA-1
         int id2;
@@ -254,11 +254,7 @@ public class DonSuatAnTests
             {
                 MaKhachHang = "KH01", MaKho = "KHO01", MaDonHang = "DH-002", NgayDat = new DateOnly(2026, 10, 16),
                 TrangThai = TrangThaiDonHangBan.DaXacNhan,
-                Dong =
-                {
-                    new DonHangBanDong { MaThanhPham = "MA-1", SoLuong = 20, LaMonAn = true },
-                    new DonHangBanDong { MaThanhPham = "TP-THIT", SoLuong = 5, LaMonAn = false }  // dòng thực phẩm -> bỏ qua
-                }
+                Dong = { new DonHangBanDong { MaThanhPham = "MA-1", SoLuong = 20, LaMonAn = true } }
             };
             db.DonHangBans.Add(don);
             db.SaveChanges();
@@ -266,14 +262,52 @@ public class DonSuatAnTests
         }
 
         using var db2 = MoDb();
-        var nl = await Svc(db2, new FakeHanoiCheckOrderCommandClient())
-            .TongNhuCauNguyenLieuMonAnAsync(new[] { id1, id2 });
+        var nl = await Svc(db2, new FakeHanoiCheckOrderCommandClient()).TongNhuCauNguyenLieuAsync(new[] { id1, id2 });
 
-        // 50 suất MA-1: thịt 0,08×50 = 4,0; rau 0,02×50 = 1,0. Dòng thực phẩm TP-THIT (5) KHÔNG cộng.
+        // 50 suất MA-1: thịt cần 0,08×50 = 4,0 (tồn 7); rau cần 0,02×50 = 1,0 (tồn 1).
         Assert.Equal(2, nl.Count);
-        Assert.Equal(4.0m, nl.Single(x => x.MaNguyenLieu == "TP-THIT").SoLuong);
-        Assert.Equal(1.0m, nl.Single(x => x.MaNguyenLieu == "TP-RAU").SoLuong);
-        Assert.Equal("kg", nl.Single(x => x.MaNguyenLieu == "TP-THIT").DonViTinh);
+        var thit = nl.Single(x => x.MaNguyenLieu == "TP-THIT");
+        Assert.Equal(4.0m, thit.Can);
+        Assert.Equal(7m, thit.Ton);
+        Assert.Equal("kg", thit.DonViTinh);
+        Assert.Equal(1.0m, nl.Single(x => x.MaNguyenLieu == "TP-RAU").Can);
+    }
+
+    [Fact]
+    public async Task Tong_Nhu_Cau_Gom_Ca_Dong_Thuc_Pham_Theo_Dinh_Muc()
+    {
+        int id;
+        using (var db = MoDb())
+        {
+            db.Products.Add(new Product { MaSanPham = "NL-BOT", TenSanPham = "Bột mì",
+                                          LoaiSanPham = LoaiSanPham.NguyenLieu, DonViTinh = "kg" });
+            var banh = new Product { MaSanPham = "TP-BANH", TenSanPham = "Bánh mì", MaLoaiSp = "x",
+                                     LoaiSanPham = LoaiSanPham.ThanhPham, DonViTinh = "cái" };
+            banh.DanhSachDinhMuc.Add(new DinhMucNguyenLieu { MaNguyenLieu = "NL-BOT", SoLuong = 0.1m, HaoHutPhanTram = 10 });
+            db.Products.Add(banh);
+            db.Warehouses.Add(new Warehouse { MaKho = "KHO01", TenKho = "Kho", DiaChi = "HN" });
+            db.KhachHangs.Add(new KhachHang { MaKhachHang = "KH9", TenKhachHang = "Khách" });
+            db.KhoGiaoDichs.Add(new KhoGiaoDich { MaSanPham = "NL-BOT", MaKho = "KHO01", MaLo = "L1", SoLuong = 1,
+                                                  Loai = LoaiGiaoDichKho.NhapNguyenLieu, ThoiGianUtc = DateTime.UtcNow });
+            var don = new DonHangBan
+            {
+                MaKhachHang = "KH9", MaKho = "KHO01", MaDonHang = "DH-TP", NgayDat = new DateOnly(2026, 10, 16),
+                TrangThai = TrangThaiDonHangBan.DaXacNhan,
+                Dong = { new DonHangBanDong { MaThanhPham = "TP-BANH", SoLuong = 100, LaMonAn = false } }
+            };
+            db.DonHangBans.Add(don);
+            db.SaveChanges();
+            id = don.Id;
+        }
+
+        using var db2 = MoDb();
+        var nl = await Svc(db2, new FakeHanoiCheckOrderCommandClient()).TongNhuCauNguyenLieuAsync(new[] { id });
+
+        // 100 bánh × 0,1kg × 1,1 (hao hụt 10%) = 11,0 kg; tồn 1 kg.
+        var bot = Assert.Single(nl);
+        Assert.Equal("NL-BOT", bot.MaNguyenLieu);
+        Assert.Equal(11.0m, bot.Can);
+        Assert.Equal(1m, bot.Ton);   // gợi ý nhập = 11 − 1 = 10
     }
 
     [Fact]

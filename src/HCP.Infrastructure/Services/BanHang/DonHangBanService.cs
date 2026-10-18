@@ -30,8 +30,10 @@ public sealed record SuaSoLuongDongRequest(int DongId, decimal SoLuongMoi);
 /// <summary>Một ảnh tổng quan đã tải lên (tên gốc + đường dẫn công khai) gắn cho đơn lúc xuất kho.</summary>
 public sealed record AnhDauVao(string TenAnh, string DuongDan);
 
-/// <summary>Một nguyên liệu cần nhập (gộp từ các dòng món ăn của đơn: định lượng × số suất).</summary>
-public sealed record NhuCauNguyenLieuDto(string MaNguyenLieu, string TenNguyenLieu, string? DonViTinh, decimal SoLuong);
+/// <summary>Một nguyên liệu cần cho các đơn đã chọn: <see cref="Can"/> = định mức/công thức × số lượng (gộp mọi
+/// dòng, cả món ăn lẫn thực phẩm); <see cref="Ton"/> = tồn hiện có (mọi kho). Gợi ý nhập = max(0, Can − Ton).</summary>
+public sealed record NhuCauNguyenLieuDto(string MaNguyenLieu, string TenNguyenLieu, string? DonViTinh,
+                                         decimal Can, decimal Ton);
 
 /// <summary>
 /// Đơn hàng bán: lập đơn → xác nhận → xuất kho (trừ tồn theo lô, gợi ý FEFO, cho sửa) → đã giao; huỷ khi
@@ -108,11 +110,12 @@ public interface IDonHangBanService
     Task<KetQuaThaoTac> XoaAsync(int id, CancellationToken ct = default);
 
     /// <summary>
-    /// Tổng nhu cầu nguyên liệu từ các DÒNG MÓN ĂN của những đơn đã chọn (định lượng × số suất, cộng dồn theo
-    /// nguyên liệu, KHÔNG trừ tồn). Bỏ qua dòng thực phẩm. Dùng cho "Tạo lệnh nhập nguyên liệu" ở màn Đơn hàng bán.
+    /// Tổng nhu cầu nguyên liệu của các đơn đã chọn, gộp theo nguyên liệu: dòng MÓN ĂN theo công thức
+    /// (định lượng × số suất), dòng THỰC PHẨM theo định mức (× số lượng × (1 + hao hụt%)). Kèm tồn hiện có để gợi ý
+    /// nhập phần thiếu. Dùng cho "Tạo lệnh nhập nguyên liệu" ở màn Đơn hàng bán.
     /// </summary>
-    Task<IReadOnlyList<NhuCauNguyenLieuDto>> TongNhuCauNguyenLieuMonAnAsync(IReadOnlyList<int> donIds,
-                                                                           CancellationToken ct = default);
+    Task<IReadOnlyList<NhuCauNguyenLieuDto>> TongNhuCauNguyenLieuAsync(IReadOnlyList<int> donIds,
+                                                                      CancellationToken ct = default);
 }
 
 /// <inheritdoc cref="IDonHangBanService"/>
@@ -502,36 +505,56 @@ public sealed class DonHangBanService : IDonHangBanService
     /// Một "nhu cầu xuất" của đơn: dòng thực phẩm cần chính thành phẩm; dòng món ăn tách thành từng nguyên liệu với
     /// lượng = định lượng/suất × số suất (làm tròn 5 chữ số thập phân - giới hạn của HanoiCheck).
     /// </summary>
-    public async Task<IReadOnlyList<NhuCauNguyenLieuDto>> TongNhuCauNguyenLieuMonAnAsync(
+    public async Task<IReadOnlyList<NhuCauNguyenLieuDto>> TongNhuCauNguyenLieuAsync(
         IReadOnlyList<int> donIds, CancellationToken ct = default)
     {
         if (donIds is null || donIds.Count == 0) return Array.Empty<NhuCauNguyenLieuDto>();
 
-        var dongMon = await _db.DonHangBanDongs.AsNoTracking()
-            .Where(l => donIds.Contains(l.DonHangBanId) && l.LaMonAn && l.SoLuong > 0)
-            .Select(l => new { l.MaThanhPham, l.SoLuong })
+        var dong = await _db.DonHangBanDongs.AsNoTracking()
+            .Where(l => donIds.Contains(l.DonHangBanId) && l.SoLuong > 0 && l.MaThanhPham != "")
+            .Select(l => new { l.MaThanhPham, l.SoLuong, l.LaMonAn })
             .ToListAsync(ct);
-        if (dongMon.Count == 0) return Array.Empty<NhuCauNguyenLieuDto>();
-
-        var maMon = dongMon.Select(l => l.MaThanhPham).Distinct().ToList();
-        var monAn = await _db.Dishes.AsNoTracking().Include(d => d.DanhSachNguyenLieu)
-            .Where(d => maMon.Contains(d.MaMonAn)).ToDictionaryAsync(d => d.MaMonAn, ct);
+        if (dong.Count == 0) return Array.Empty<NhuCauNguyenLieuDto>();
 
         var gop = new Dictionary<string, decimal>();
-        foreach (var l in dongMon)
+
+        // Dòng món ăn: công thức (định lượng × số suất).
+        var maMon = dong.Where(l => l.LaMonAn).Select(l => l.MaThanhPham).Distinct().ToList();
+        if (maMon.Count > 0)
         {
-            if (!monAn.TryGetValue(l.MaThanhPham, out var mon)) continue;
-            foreach (var nl in mon.DanhSachNguyenLieu)
-                gop[nl.MaNguyenLieu] = gop.GetValueOrDefault(nl.MaNguyenLieu) + decimal.Round(nl.DinhLuong * l.SoLuong, 5);
+            var monAn = await _db.Dishes.AsNoTracking().Include(d => d.DanhSachNguyenLieu)
+                .Where(d => maMon.Contains(d.MaMonAn)).ToDictionaryAsync(d => d.MaMonAn, ct);
+            foreach (var l in dong.Where(x => x.LaMonAn))
+                if (monAn.TryGetValue(l.MaThanhPham, out var mon))
+                    foreach (var nl in mon.DanhSachNguyenLieu)
+                        gop[nl.MaNguyenLieu] = gop.GetValueOrDefault(nl.MaNguyenLieu) + decimal.Round(nl.DinhLuong * l.SoLuong, 5);
         }
+
+        // Dòng thực phẩm: định mức × số lượng × (1 + hao hụt%).
+        var maTp = dong.Where(l => !l.LaMonAn).Select(l => l.MaThanhPham).Distinct().ToList();
+        if (maTp.Count > 0)
+        {
+            var thanhPham = await _db.Products.AsNoTracking().Include(p => p.DanhSachDinhMuc)
+                .Where(p => maTp.Contains(p.MaSanPham)).ToDictionaryAsync(p => p.MaSanPham, ct);
+            foreach (var l in dong.Where(x => !x.LaMonAn))
+                if (thanhPham.TryGetValue(l.MaThanhPham, out var p))
+                    foreach (var dm in p.DanhSachDinhMuc)
+                        gop[dm.MaNguyenLieu] = gop.GetValueOrDefault(dm.MaNguyenLieu)
+                            + decimal.Round(dm.SoLuong * l.SoLuong * (1 + dm.HaoHutPhanTram / 100m), 5);
+        }
+
         if (gop.Count == 0) return Array.Empty<NhuCauNguyenLieuDto>();
 
         var maNL = gop.Keys.ToList();
         var sp = await _db.Products.AsNoTracking().Where(p => maNL.Contains(p.MaSanPham))
             .ToDictionaryAsync(p => p.MaSanPham, ct);
+        var ton = await _db.KhoGiaoDichs.AsNoTracking().Where(g => maNL.Contains(g.MaSanPham))
+            .GroupBy(g => g.MaSanPham).Select(g => new { Ma = g.Key, Ton = g.Sum(x => x.SoLuong) })
+            .ToDictionaryAsync(x => x.Ma, x => x.Ton, ct);
+
         return gop.Select(x => new NhuCauNguyenLieuDto(x.Key,
                     sp.GetValueOrDefault(x.Key)?.TenSanPham ?? x.Key,
-                    sp.GetValueOrDefault(x.Key)?.DonViTinh, x.Value))
+                    sp.GetValueOrDefault(x.Key)?.DonViTinh, x.Value, ton.GetValueOrDefault(x.Key, 0m)))
                   .OrderBy(x => x.TenNguyenLieu).ToList();
     }
 

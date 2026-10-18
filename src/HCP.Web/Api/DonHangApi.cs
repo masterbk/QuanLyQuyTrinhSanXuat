@@ -2,6 +2,7 @@ using HCP.Web.Services;
 using HCP.Infrastructure.Persistence;
 using System.Security.Claims;
 using System.Text.Json;
+using HCP.Domain;
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.Services.DanhMuc;
@@ -173,6 +174,25 @@ public static class DonHangApi
         ban.MapGet("/{id:int}/goi-y-xuat-kho", async (int id, IDonHangBanService svc, CancellationToken ct) =>
             Results.Ok(await svc.GoiYXuatKhoAsync(id, ct))).RequireAuthorization(quyenXuLyDon);
 
+        // Tổng nhu cầu nguyên liệu (món ăn + thực phẩm) của các đơn đã chọn, kèm tồn - để tạo lệnh nhập nguyên liệu.
+        ban.MapGet("/nhu-cau-nguyen-lieu", async (string? ids, IDonHangBanService svc, CancellationToken ct) =>
+        {
+            var list = (ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => int.TryParse(s, out var n) ? n : 0).Where(n => n > 0).ToList();
+            return Results.Ok(await svc.TongNhuCauNguyenLieuAsync(list, ct));
+        }).RequireAuthorization(quyenXuLyDon);
+
+        // Tạo lô + nhập kho cho các nguyên liệu đã chọn (mỗi nguyên liệu 1 lô, DongBoHnC=false).
+        ban.MapPost("/tao-lo-nhap-nguyen-lieu", async (TaoLoNhapNguyenLieuRequest req, IKhoNoiBoService kho, CancellationToken ct) =>
+        {
+            var dong = (req.Dong ?? Array.Empty<DongNhapNguyenLieuRequest>())
+                .Select(d => new DongNhapNguyenLieu(d.MaNguyenLieu, d.SoLuong)).ToList();
+            var kq = await kho.NhapNguyenLieuTaoLoAsync(dong, req.MaKho, req.MaNccDauVao,
+                req.NgayNhap ?? GioVietNam.HomNay, req.HanDung, ct);
+            return kq.ThanhCong ? Results.Ok(new KetQuaDto(true, kq.ThongBao))
+                                : Results.BadRequest(new LoiDto(kq.ThongBao));
+        }).RequireAuthorization(quyenXuLyDon);
+
         // Xuất kho: multipart/form-data. Field "phanBo" (JSON [{dongId,maLo,soLuong}], rỗng/bỏ trống =
         // dùng gợi ý FEFO), "maNguoiGiao", "ghiChu"; files "anh" = ảnh tổng quan (chỉ có ý nghĩa với đơn
         // nguồn HanoiCheck, tối đa DonHangBanService.SoAnhToiDa).
@@ -322,7 +342,7 @@ public static class DonHangApi
         d.MaDonHnC, d.GhiChu, d.LyDoHuy, d.TongTien, d.ThoiGianXuatKhoUtc, d.ThoiGianGiaoUtc,
         d.Dong.OrderBy(l => l.Id).Select(l => new DonHangBanDongDto(
             l.Id, l.MaThanhPham, ten.SanPham.GetValueOrDefault(l.MaThanhPham), l.SoLuong, l.DonGia, l.ThanhTien,
-            l.XuatLo.Select(x => new XuatLoDto(x.MaLo, x.HanSuDung, x.SoLuong)).ToList())).ToList());
+            l.XuatLo.Select(x => new XuatLoDto(x.MaLo, x.HanSuDung, x.SoLuong)).ToList(), l.LaMonAn)).ToList());
 
     private static string TenTrangThaiBan(TrangThaiDonHangBan t) => t switch
     {

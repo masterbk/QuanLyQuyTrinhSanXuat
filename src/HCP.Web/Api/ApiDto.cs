@@ -141,7 +141,8 @@ public sealed record DonHangBanDto(
     DateTime? ThoiGianXuatKhoUtc, DateTime? ThoiGianGiaoUtc, IReadOnlyList<DonHangBanDongDto> Dong);
 
 public sealed record DonHangBanDongDto(int Id, string MaThanhPham, string? TenThanhPham, decimal SoLuong,
-                                       decimal DonGia, decimal ThanhTien, IReadOnlyList<XuatLoDto> XuatLo);
+                                       decimal DonGia, decimal ThanhTien, IReadOnlyList<XuatLoDto> XuatLo,
+                                       bool LaMonAn = false);
 
 public sealed record XuatLoDto(string MaLo, DateOnly? HanSuDung, decimal SoLuong);
 
@@ -152,6 +153,12 @@ public sealed record DonHangBanLuuRequest(
     IReadOnlyList<DonHangBanDongRequest>? Dong);
 
 public sealed record DonHangBanDongRequest(string MaThanhPham, decimal SoLuong, decimal DonGia, string? GhiChu);
+
+/// <summary>Tạo lô + nhập kho nguyên liệu theo đơn (app/web): chọn kho/NCC/ngày + danh sách nguyên liệu nhập.</summary>
+public sealed record TaoLoNhapNguyenLieuRequest(string MaKho, string? MaNccDauVao, DateOnly? NgayNhap,
+                                                DateOnly? HanDung, IReadOnlyList<DongNhapNguyenLieuRequest>? Dong);
+
+public sealed record DongNhapNguyenLieuRequest(string MaNguyenLieu, decimal SoLuong);
 
 public sealed record HuyDonHangRequest(string? LyDo);
 

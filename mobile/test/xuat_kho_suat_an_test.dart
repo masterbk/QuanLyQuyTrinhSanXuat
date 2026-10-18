@@ -62,6 +62,16 @@ class _KhoGia implements KhoDonHang {
   Future<List<ThanhPham>> thanhPhamBan() async => const [];
   @override
   Future<Uint8List> qrPng(int id) async => Uint8List(0);
+  @override
+  Future<List<NhuCauNguyenLieu>> nhuCauNguyenLieu(List<int> ids) async => const [];
+  @override
+  Future<String> taoLoNhapNguyenLieu({required String maKho, String? maNccDauVao, DateTime? ngayNhap,
+          DateTime? hanDung, required List<Map<String, dynamic>> dong}) async =>
+      'Đã nhập kho.';
+  @override
+  Future<List<MucChonDm>> khoDanhMuc() async => const [];
+  @override
+  Future<List<MucChonDm>> nccDanhMuc() async => const [];
 }
 
 void main() {

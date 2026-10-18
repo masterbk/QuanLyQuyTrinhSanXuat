@@ -125,6 +125,38 @@ class KhoDonHang {
 
   /// Ảnh QR (PNG, đã kèm chữ mã đơn) - cùng nội dung QR với web.
   Future<Uint8List> qrPng(int id) => _api.getBytes('/api/v1/don-hang-ban/$id/qr');
+
+  /// Tổng nhu cầu nguyên liệu (món ăn + thực phẩm) của các đơn đã chọn, kèm tồn.
+  Future<List<NhuCauNguyenLieu>> nhuCauNguyenLieu(List<int> ids) async =>
+      ((await _api.get('/api/v1/don-hang-ban/nhu-cau-nguyen-lieu', thamSo: {'ids': ids.join(',')})) as List)
+          .map((e) => NhuCauNguyenLieu.tuJson(e as Map<String, dynamic>)).toList();
+
+  /// Tạo lô + nhập kho cho các nguyên liệu đã chọn. [dong] mỗi phần tử {maNguyenLieu, soLuong}.
+  Future<String> taoLoNhapNguyenLieu({
+    required String maKho,
+    String? maNccDauVao,
+    DateTime? ngayNhap,
+    DateTime? hanDung,
+    required List<Map<String, dynamic>> dong,
+  }) async {
+    final j = await _api.post('/api/v1/don-hang-ban/tao-lo-nhap-nguyen-lieu', than: {
+      'maKho': maKho,
+      'maNccDauVao': maNccDauVao,
+      'ngayNhap': ngayNhap == null ? null : _chuoiNgay(ngayNhap),
+      'hanDung': hanDung == null ? null : _chuoiNgay(hanDung),
+      'dong': dong,
+    }) as Map<String, dynamic>;
+    return j['thongBao'] as String? ?? 'Đã nhập kho.';
+  }
+
+  Future<List<MucChonDm>> khoDanhMuc() async => ((await _api.get('/api/v1/danh-muc/kho')) as List)
+      .map((e) => MucChonDm((e as Map)['maKho'] as String? ?? '', e['tenKho'] as String? ?? '')).toList();
+
+  Future<List<MucChonDm>> nccDanhMuc() async => ((await _api.get('/api/v1/danh-muc/ncc')) as List)
+      .map((e) => MucChonDm((e as Map)['ma'] as String? ?? '', e['ten'] as String? ?? '')).toList();
+
+  static String _chuoiNgay(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
 final khoDonProvider = Provider<KhoDonHang>((ref) => KhoDonHang(ref.watch(apiProvider)));

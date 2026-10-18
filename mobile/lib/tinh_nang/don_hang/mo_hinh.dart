@@ -91,6 +91,7 @@ class DongDonHang {
   final String? tenThanhPham;
   final double soLuong;
   final double donGia;
+  final bool laMonAn;
   final List<XuatLoDon> xuatLo;
 
   const DongDonHang({
@@ -99,6 +100,7 @@ class DongDonHang {
     this.tenThanhPham,
     required this.soLuong,
     this.donGia = 0,
+    this.laMonAn = false,
     this.xuatLo = const [],
   });
 
@@ -110,6 +112,7 @@ class DongDonHang {
         tenThanhPham: j['tenThanhPham'] as String?,
         soLuong: _so(j['soLuong']),
         donGia: _so(j['donGia']),
+        laMonAn: j['laMonAn'] as bool? ?? false,
         xuatLo: ((j['xuatLo'] as List?) ?? const [])
             .map((e) => XuatLoDon.tuJson(e as Map<String, dynamic>))
             .toList(),
@@ -207,3 +210,38 @@ class XuatLoDon {
 double _so(dynamic v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
 
 DateTime? _ngay(dynamic v) => (v is String && v.isNotEmpty) ? DateTime.tryParse(v) : null;
+
+/// Một mục danh mục đơn giản (mã + tên) cho ô chọn Kho / Nhà cung ứng.
+class MucChonDm {
+  final String ma;
+  final String ten;
+  const MucChonDm(this.ma, this.ten);
+}
+
+/// Nhu cầu một nguyên liệu khi tạo lệnh nhập nguyên liệu từ đơn: cần (định mức/công thức × SL) + tồn hiện có.
+class NhuCauNguyenLieu {
+  final String maNguyenLieu;
+  final String tenNguyenLieu;
+  final String? donViTinh;
+  final double can;
+  final double ton;
+
+  const NhuCauNguyenLieu({
+    required this.maNguyenLieu,
+    required this.tenNguyenLieu,
+    this.donViTinh,
+    required this.can,
+    required this.ton,
+  });
+
+  /// Gợi ý nhập = phần còn thiếu so với tồn.
+  double get goiYNhap => (can - ton) > 0 ? can - ton : 0;
+
+  factory NhuCauNguyenLieu.tuJson(Map<String, dynamic> j) => NhuCauNguyenLieu(
+        maNguyenLieu: j['maNguyenLieu'] as String? ?? '',
+        tenNguyenLieu: j['tenNguyenLieu'] as String? ?? '',
+        donViTinh: j['donViTinh'] as String?,
+        can: _so(j['can']),
+        ton: _so(j['ton']),
+      );
+}
