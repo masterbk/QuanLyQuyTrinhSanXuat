@@ -36,6 +36,20 @@ public sealed class ProcessOrderRequest
     public List<ProcessOrderLine> ChiTiet { get; set; } = new();
 }
 
+/// <summary>
+/// Một dòng số lượng giao khi chuyển "Đã giao hàng" (status.chi_tiet[]). Định danh bằng <see cref="TraceCode"/>;
+/// đơn cũ chưa có mã truy vết thì dùng <see cref="MaThucPham"/> / <see cref="MaMonAn"/> (mã phải duy nhất trong đơn).
+/// <see cref="GhiChu"/> bắt buộc khi giao THIẾU so với số lượng đặt.
+/// </summary>
+public sealed record DeliveryLineInput(string? TraceCode, string? MaThucPham, string? MaMonAn,
+                                       decimal SoLuongGiao, string? GhiChu);
+
+/// <summary>
+/// Thông tin lần giao gửi kèm khi chuyển DA_GIAO: số lượng giao từng dòng (đủ mọi dòng) + 1-10 ảnh giao hàng.
+/// Đặc tả v2.7 (dịch vụ 11.l): hai phần phải gửi TRONG CÙNG một lần gọi status, lỗi phần nào thì không ghi gì.
+/// </summary>
+public sealed record GiaoHangInput(IReadOnlyList<DeliveryLineInput> ChiTiet, IReadOnlyList<string> AnhGiaoHang);
+
 /// <summary>Kết quả gọi 1 trong 2 dịch vụ ghi của mục "Đơn hàng" (process/status) - đồng bộ, có kết quả ngay.</summary>
 public sealed record OrderCommandResult(bool ThanhCong, bool ChuaCauHinh, string? ThongBao)
 {
@@ -54,7 +68,12 @@ public interface IHanoiCheckOrderCommandClient
     Task<OrderCommandResult> XuLyDonAsync(string tenantId, string maDon, ProcessOrderRequest noiDung,
                                           CancellationToken ct = default);
 
-    /// <summary>Đổi trạng thái đơn (không nhận GIAO_HANG_THANH_CONG - chỉ trường xác nhận mới đặt được).</summary>
+    /// <summary>
+    /// Đổi trạng thái đơn (không nhận GIAO_HANG_THANH_CONG - chỉ trường xác nhận mới đặt được).
+    /// Khi chuyển DA_GIAO, truyền <paramref name="giaoHang"/> để gửi kèm chi_tiet + anh_giao_hang (đặc tả v2.7 bắt buộc);
+    /// trạng thái khác thì bỏ trống (gửi hai trường này ở trạng thái khác sẽ bị 422).
+    /// Tham số <paramref name="giaoHang"/> đặt SAU ct để không ảnh hưởng các lời gọi cũ.
+    /// </summary>
     Task<OrderCommandResult> DoiTrangThaiAsync(string tenantId, string maDon, string trangThai, string? ghiChu,
-                                               CancellationToken ct = default);
+                                               CancellationToken ct = default, GiaoHangInput? giaoHang = null);
 }

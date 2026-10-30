@@ -69,9 +69,24 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
     }
 
     public Task<OrderCommandResult> DoiTrangThaiAsync(string tenantId, string maDon, string trangThai, string? ghiChu,
-                                                      CancellationToken ct = default)
+                                                      CancellationToken ct = default, GiaoHangInput? giaoHang = null)
     {
-        var payload = new StatusPayload { TrangThai = trangThai, GhiChu = ghiChu };
+        var payload = new StatusPayload
+        {
+            TrangThai = trangThai,
+            GhiChu = ghiChu,
+            // chi_tiet + anh_giao_hang chỉ gửi khi có thông tin lần giao (DA_GIAO). Trạng thái khác giaoHang là null
+            // -> bỏ hẳn hai khoá (gửi ở trạng thái khác bị 422 "Chỉ gửi ... khi chuyển sang Đã giao hàng").
+            ChiTiet = giaoHang?.ChiTiet.Select(l => new StatusPayloadChiTiet
+            {
+                TraceCode = l.TraceCode,
+                MaThucPham = l.MaThucPham,
+                MaMonAn = l.MaMonAn,
+                SoLuongGiao = l.SoLuongGiao,
+                GhiChu = string.IsNullOrWhiteSpace(l.GhiChu) ? null : l.GhiChu
+            }).ToList(),
+            AnhGiaoHang = giaoHang?.AnhGiaoHang.Select(a => new ProcessPayloadAnh { DuongDan = a }).ToList()
+        };
         var path = "/api/supplier/orders/" + maDon + "/status";
         return GuiAsync(tenantId, path, JsonSerializer.Serialize(payload, JsonOpts), ct);
     }
@@ -215,9 +230,34 @@ public sealed class HanoiCheckOrderCommandClient : IHanoiCheckOrderCommandClient
         public List<ProcessPayloadLine>? ChiTiet { get; set; }
     }
 
+    /// <summary>Một dòng số lượng giao của status.chi_tiet[] (đặc tả v2.7 mục 11.l).</summary>
+    private sealed class StatusPayloadChiTiet
+    {
+        [JsonPropertyName("trace_code"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? TraceCode { get; set; }
+
+        [JsonPropertyName("ma_thuc_pham"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MaThucPham { get; set; }
+
+        [JsonPropertyName("ma_mon_an"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? MaMonAn { get; set; }
+
+        [JsonPropertyName("so_luong_giao")] public decimal SoLuongGiao { get; set; }
+
+        [JsonPropertyName("ghi_chu"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? GhiChu { get; set; }
+    }
+
     private sealed class StatusPayload
     {
         [JsonPropertyName("trang_thai")] public string TrangThai { get; set; } = string.Empty;
         [JsonPropertyName("ghi_chu")] public string? GhiChu { get; set; }
+
+        // Chỉ xuất hiện khi chuyển DA_GIAO (null thì bỏ hẳn khoá).
+        [JsonPropertyName("chi_tiet"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<StatusPayloadChiTiet>? ChiTiet { get; set; }
+
+        [JsonPropertyName("anh_giao_hang"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<ProcessPayloadAnh>? AnhGiaoHang { get; set; }
     }
 }

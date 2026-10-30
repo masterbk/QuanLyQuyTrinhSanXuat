@@ -370,6 +370,39 @@ public class DonHangBanServiceHnCTests
         Assert.Equal("NS01", donSau.MaNguoiGiao);
     }
 
+    /// <summary>v2.7 (A5): chuyển "Đã giao" phải gửi kèm chi_tiet (số lượng giao TỪNG dòng, giao đủ số đặt, định danh
+    /// bằng trace_code) và 1-10 ảnh giao hàng trong cùng lần gọi status DA_GIAO.</summary>
+    [Fact]
+    public async Task Hoan_Tat_Giao_Day_DA_GIAO_Kem_ChiTiet_So_Luong_Va_Anh_Giao()
+    {
+        var id = Seed();
+        var fake = new FakeHanoiCheckOrderCommandClient
+        {
+            XuLyDon = (_, _) => OrderCommandResult.Ok(),
+            DoiTrangThai = (_, _) => OrderCommandResult.Ok()
+        };
+
+        using (var db = MoDb())
+            Assert.True((await Svc(db, fake).XuatKhoAsync(id, null, "NS01")).ThanhCong);   // -> Đang giao
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db, fake).HoanTatGiaoAsync(id, DonHangBanServiceTests.AnhGiaoMau);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+
+        Assert.NotNull(fake.GiaoHangCuoi);
+        // 2 dòng trace_code khác nhau -> 2 phần tử chi_tiet, giao đủ số đặt (4 và 3), không ghi chú thiếu.
+        var chiTiet = fake.GiaoHangCuoi!.ChiTiet.OrderBy(c => c.TraceCode).ToList();
+        Assert.Equal(2, chiTiet.Count);
+        Assert.Equal(("TRACE-1", 4m), (chiTiet[0].TraceCode, chiTiet[0].SoLuongGiao));
+        Assert.Equal(("TRACE-2", 3m), (chiTiet[1].TraceCode, chiTiet[1].SoLuongGiao));
+        Assert.All(chiTiet, c => Assert.Null(c.GhiChu));
+        // Dòng có trace_code thì KHÔNG kèm ma_thuc_pham/ma_mon_an.
+        Assert.All(chiTiet, c => { Assert.Null(c.MaThucPham); Assert.Null(c.MaMonAn); });
+        Assert.Single(fake.GiaoHangCuoi!.AnhGiaoHang);
+    }
+
     [Fact]
     public async Task Xuat_Kho_Cong_Tac_Tat_Van_Xuat_Kho_Noi_Bo_Khong_Goi_HanoiCheck()
     {

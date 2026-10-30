@@ -815,9 +815,9 @@ public sealed class DonHangBanService : IDonHangBanService
     /// <summary>Số ảnh tối đa cho một đơn (upload + lưu nội bộ làm bằng chứng).</summary>
     public const int SoAnhToiDa = 10;
 
-    /// <summary>Số ảnh tối đa gửi sang HanoiCheck cho một đơn (danh_sach_anh): API HnC chỉ nhận 1-3 ảnh,
-    /// nên dù lưu nhiều hơn vẫn chỉ gửi 3 ảnh đầu.</summary>
-    public const int SoAnhGuiHnC = 3;
+    /// <summary>Số ảnh tối đa gửi sang HanoiCheck cho một đơn (ảnh tổng quan / ảnh giao hàng): đặc tả v2.7 nới
+    /// 1-3 lên 1-10, nên dù lưu nhiều hơn vẫn chỉ gửi 10 ảnh đầu.</summary>
+    public const int SoAnhGuiHnC = 10;
 
     public async Task<KetQuaThaoTac> HoanTatGiaoAsync(int id, IReadOnlyList<AnhDauVao> anhGiao,
                                                       CancellationToken ct = default)
@@ -831,9 +831,9 @@ public sealed class DonHangBanService : IDonHangBanService
             .Where(a => !string.IsNullOrWhiteSpace(a.DuongDan)).Take(SoAnhToiDa).ToList();
         if (anh.Count == 0) return KetQuaThaoTac.Loi("Cần ít nhất 1 ảnh chứng minh đã giao hàng.");
 
-        // Đơn từ trường: HanoiCheck bắt buộc đơn có 1-3 ảnh tổng quan trước khi chuyển "Đã giao" (API status không
-        // nhận ảnh), nên gửi ảnh qua "process" trước - ưu tiên ảnh giao, thiếu chỗ thì bù ảnh lúc xuất kho.
-        // Lỗi thật thì dừng, giữ nguyên "Đang giao" để bấm lại (process ghi đè nên gọi lại an toàn).
+        // Đơn từ trường (đặc tả v2.7 mục 11.l): ảnh bị khóa từ "Đã giao" nên phải bảo đảm đơn có 1-10 ảnh TỔNG QUAN
+        // trước, gửi qua "process" khi đơn còn "Đang giao". Rồi chuyển DA_GIAO kèm số lượng giao TỪNG dòng (giao đủ
+        // số đặt) + 1-10 ảnh GIAO HÀNG trong CÙNG một lần gửi. Lỗi thật thì dừng, giữ "Đang giao" để bấm lại.
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
             var duongDanAnh = anh.Select(a => a.DuongDan)
@@ -851,7 +851,21 @@ public sealed class DonHangBanService : IDonHangBanService
 
             if (ketAnh.ThanhCong)
             {
-                var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DA_GIAO", null, ct);
+                // chi_tiet: số lượng giao mỗi dòng = số lượng đặt (giao đủ -> không cần ghi chú thiếu hàng). Gộp theo
+                // mã truy vết để mỗi trace_code chỉ một dòng (HnC từ chối 422 nếu trùng trong cùng lần gửi).
+                var chiTietGiao = don.Dong
+                    .GroupBy(d => (TruyVet: d.MaTruyVetHnC, Ma: d.MaTruyVetHnC is null ? d.MaThanhPham : null, d.LaMonAn))
+                    .Select(g => new DeliveryLineInput(
+                        TraceCode: g.Key.TruyVet,
+                        MaThucPham: g.Key is { LaMonAn: false, Ma: not null } ? g.Key.Ma : null,
+                        MaMonAn: g.Key is { LaMonAn: true, Ma: not null } ? g.Key.Ma : null,
+                        SoLuongGiao: g.Sum(d => d.SoLuong),
+                        GhiChu: null))
+                    .ToList();
+                var duongDanAnhGiao = anh.Select(a => a.DuongDan).Take(SoAnhGuiHnC).ToList();
+
+                var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DA_GIAO", null,
+                    ct, new GiaoHangInput(chiTietGiao, duongDanAnhGiao));
                 if (!ketTrangThai.ThanhCong)
                     return KetQuaThaoTac.Loi($"Không đẩy được trạng thái \"Đã giao\" sang HanoiCheck: {ketTrangThai.ThongBao}");
             }

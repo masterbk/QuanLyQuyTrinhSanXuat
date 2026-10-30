@@ -361,10 +361,14 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
         {
             if (!anhTheoDong.TryGetValue(sp.Id, out var anh) || anh.Count == 0)
                 return KetQuaThaoTac.Loi($"Cần ít nhất 1 ảnh lô thành phẩm cho \"{sp.MaThanhPham}\" (lô {sp.MaLoThanhPham}).");
-            // Ảnh lô là album ảnh của Lô sản xuất gửi HanoiCheck - đặc tả chỉ nhận 1-3 ảnh.
+            // Ảnh lô là album ảnh của Lô sản xuất gửi HanoiCheck - đặc tả v2.7 nhận 1-10 ảnh.
             if (apHnC && anh.Count > LoSanXuatService.SoAnhLoToiDa)
                 return KetQuaThaoTac.Loi($"Lô {sp.MaLoThanhPham}: tối đa {LoSanXuatService.SoAnhLoToiDa} ảnh "
                                          + $"(đang chọn {anh.Count}) - giới hạn album ảnh lô của HanoiCheck.");
+            // v2.7: lô đồng bộ bắt buộc hạn sử dụng (ngày sản xuất đã lấy từ lệnh).
+            if (apHnC && sp.HanSuDung is null)
+                return KetQuaThaoTac.Loi($"Lô {sp.MaLoThanhPham} ({sp.MaThanhPham}): cần nhập hạn sử dụng - "
+                                         + "HanoiCheck (v2.7) bắt buộc hạn dùng cho lô đồng bộ.");
         }
 
         // Cho phép sửa lại người thực hiện / cơ sở ngay lúc hoàn thành (ai làm thực tế có thể khác kế hoạch).
@@ -632,6 +636,9 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             HanSuDung = sp.HanSuDung,
             // Cơ sở của lô lấy theo khâu đầu tiên - HanoiCheck chỉ nhận một mã cơ sở cho cả lô.
             MaCoSo = khauSapXep.FirstOrDefault()?.MaCoSo,
+            // v2.7: lô bắt buộc dia_chi_thu_mua HOẶC ma_ncc_dau_vao. Lô sản xuất nội bộ không mua từ NCC đầu vào,
+            // nên lấy địa chỉ CƠ SỞ SẢN XUẤT (nơi làm ra lô) làm địa chỉ nguồn của lô.
+            DiaChiThuMua = diaChiCoSo.GetValueOrDefault(khauSapXep.FirstOrDefault()?.MaCoSo ?? ""),
             GhiChu = $"Tự động từ lệnh sản xuất {lenh.MaLenh}."
                      + (moTaNL.Length > 0 ? $" Nguyên liệu tiêu hao: {moTaNL}." : ""),
             DanhSachKho = new() { new BatchWarehouse { MaKho = lenh.MaKho } }

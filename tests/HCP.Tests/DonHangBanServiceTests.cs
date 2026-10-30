@@ -18,13 +18,19 @@ public sealed class FakeHanoiCheckOrderCommandClient : IHanoiCheckOrderCommandCl
     public Func<string, ProcessOrderRequest, OrderCommandResult>? XuLyDon;
     public Func<string, string, OrderCommandResult>? DoiTrangThai;
 
+    /// <summary>Thông tin lần giao của lần gọi DA_GIAO gần nhất - để test A5 kiểm chứng chi_tiet + ảnh giao hàng.</summary>
+    public GiaoHangInput? GiaoHangCuoi;
+
     public Task<OrderCommandResult> XuLyDonAsync(string tenantId, string maDon, ProcessOrderRequest noiDung,
                                                  CancellationToken ct = default) =>
         Task.FromResult(XuLyDon?.Invoke(maDon, noiDung) ?? OrderCommandResult.ChuaCauHinhKq("stub"));
 
     public Task<OrderCommandResult> DoiTrangThaiAsync(string tenantId, string maDon, string trangThai, string? ghiChu,
-                                                      CancellationToken ct = default) =>
-        Task.FromResult(DoiTrangThai?.Invoke(maDon, trangThai) ?? OrderCommandResult.ChuaCauHinhKq("stub"));
+                                                      CancellationToken ct = default, GiaoHangInput? giaoHang = null)
+    {
+        if (giaoHang is not null) GiaoHangCuoi = giaoHang;
+        return Task.FromResult(DoiTrangThai?.Invoke(maDon, trangThai) ?? OrderCommandResult.ChuaCauHinhKq("stub"));
+    }
 }
 
 /// <summary>Fake không gọi Firebase - chỉ ghi lại lệnh gọi để test kiểm nội dung nếu cần.</summary>

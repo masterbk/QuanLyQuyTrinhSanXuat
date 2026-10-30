@@ -1,3 +1,4 @@
+using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
@@ -16,11 +17,11 @@ public class LoSanXuatService : IDanhMucService<Batch>
     /// <summary>danh_sach_nguoi_thuc_hien tối đa 20 mã theo đặc tả.</summary>
     private const int MaxNguoiThucHien = 20;
 
-    /// <summary>Album ảnh chung của lô: 1-3 ảnh (đặc tả v2.2).</summary>
-    public const int SoAnhLoToiDa = 3;
+    /// <summary>Album ảnh chung của lô: 1-10 ảnh (đặc tả v2.7 nới từ 1-3 của v2.2).</summary>
+    public const int SoAnhLoToiDa = 10;
 
-    /// <summary>Tệp minh chứng mỗi khâu: tối đa 3 (đặc tả v2.2).</summary>
-    public const int SoTepMoiKhauToiDa = 3;
+    /// <summary>Tệp minh chứng mỗi khâu: tối đa 10 (đặc tả v2.7 nới từ 3 của v2.2; món ăn vẫn 3).</summary>
+    public const int SoTepMoiKhauToiDa = 10;
 
     private readonly AppDbContext _db;
     private readonly ISyncOutboxWriter _outbox;
@@ -202,8 +203,35 @@ public class LoSanXuatService : IDanhMucService<Batch>
 
         if (!apHnC) return null;
 
+        // === v2.7 (dịch vụ 8): các ràng buộc BẮT BUỘC khi lô đồng bộ HanoiCheck - thiếu thì HnC trả 422 ===
+        // Ngày sản xuất + hạn dùng bắt buộc; NSX không sau hôm nay; HSD không trước NSX.
+        if (b.NgaySanXuat is null)
+            return "Lô đồng bộ HanoiCheck phải có ngày sản xuất (đặc tả v2.7 bắt buộc).";
+        if (b.NgaySanXuat > GioVietNam.HomNay)
+            return "Ngày sản xuất không được sau ngày hôm nay.";
+        if (b.HanSuDung is null)
+            return "Lô đồng bộ HanoiCheck phải có hạn sử dụng (đặc tả v2.7 bắt buộc).";
+        if (b.HanSuDung < b.NgaySanXuat)
+            return "Hạn sử dụng không được trước ngày sản xuất.";
+
+        // Phải có ít nhất một trong địa chỉ thu mua hoặc nhà cung ứng đầu vào.
+        if (string.IsNullOrWhiteSpace(b.DiaChiThuMua) && string.IsNullOrWhiteSpace(b.MaNccDauVao))
+            return "Lô phải có địa chỉ thu mua hoặc nhà cung ứng đầu vào (đặc tả v2.7 bắt buộc một trong hai).";
+
+        // Thực phẩm của lô phải đã gán quy trình mẫu có ít nhất 1 khâu.
+        var maQtSp = (await _db.Products.AsNoTracking().Where(p => p.MaSanPham == b.MaSanPham.Trim())
+            .Select(p => p.MaQuyTrinh).FirstOrDefaultAsync(ct))?.Trim();
+        if (string.IsNullOrWhiteSpace(maQtSp))
+            return $"Thực phẩm \"{b.MaSanPham}\" chưa gán quy trình sản xuất - HanoiCheck yêu cầu thực phẩm của lô "
+                   + "có quy trình mẫu (≥1 khâu). Gán quy trình cho thực phẩm trước khi đồng bộ lô.";
+        var soKhauQt = await _db.ProductionProcesses.AsNoTracking()
+            .Where(q => q.MaQuyTrinh == maQtSp).Select(q => q.DanhSachKhau.Count).FirstOrDefaultAsync(ct);
+        if (soKhauQt == 0)
+            return $"Quy trình \"{maQtSp}\" của thực phẩm chưa có khâu nào - HanoiCheck yêu cầu quy trình mẫu có ít nhất 1 khâu.";
+
         // HanoiCheck thực tế chặn (422 "Nhà cung cấp phụ không cung ứng danh mục của thực phẩm", dù tài liệu v2.2 ghi
-        // "không kiểm tra"): nhom_thuc_pham của NCC đầu vào của lô phải chứa ma_loai_sp của thực phẩm.
+        // "không kiểm tra"): nhom_thuc_pham của NCC đầu vào của lô phải chứa ma_loai_sp của thực phẩm. v2.7 thêm: NCC
+        // phải có hợp đồng hiện hành còn hạn.
         if (!string.IsNullOrWhiteSpace(b.MaNccDauVao))
         {
             var maNcc = b.MaNccDauVao.Trim();
@@ -213,7 +241,17 @@ public class LoSanXuatService : IDanhMucService<Batch>
             var maLoai = (await _db.Products.Where(p => p.MaSanPham == maSp)
                 .Select(p => p.MaLoaiSp).FirstOrDefaultAsync(ct))?.Trim();
 
-            if (ncc is not null && !string.IsNullOrWhiteSpace(maLoai)
+            // v2.7: NCC đầu vào phải tồn tại, có hợp đồng và hợp đồng còn hạn.
+            if (ncc is null)
+                return $"Nhà cung ứng đầu vào \"{maNcc}\" không có trong danh mục nhà cung ứng phụ.";
+            if (!ncc.CoHopDong)
+                return $"Nhà cung ứng \"{ncc.Ten}\" ({maNcc}) chưa có hợp đồng - HanoiCheck không nhận lô dùng NCC "
+                       + "chưa có hợp đồng. Bổ sung hợp đồng cho nhà cung ứng hoặc bỏ trống NCC đầu vào của lô.";
+            if (ncc.HopDongNgayHetHan is { } hetHan && hetHan < GioVietNam.HomNay)
+                return $"Nhà cung ứng \"{ncc.Ten}\" ({maNcc}) có hợp đồng đã hết hạn ({hetHan:dd/MM/yyyy}) - HanoiCheck "
+                       + "không nhận. Cập nhật hợp đồng còn hạn hoặc bỏ trống NCC đầu vào của lô.";
+
+            if (!string.IsNullOrWhiteSpace(maLoai)
                 && !ncc.NhomThucPham.Any(g => g.MaNhom.Trim() == maLoai))
             {
                 var idLoai = int.TryParse(maLoai, out var id) ? id : -1;

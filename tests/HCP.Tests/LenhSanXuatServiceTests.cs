@@ -95,9 +95,11 @@ public class LenhSanXuatServiceTests
         new() { MaKhau = "KHAU02", ThuTu = 2, MaCoSo = "CS01", NguoiThucHienCsv = nguoi }
     };
 
-    private static LenhSanXuatSanPham DongSp(string maTp, decimal sl, string loTp) => new()
+    private static LenhSanXuatSanPham DongSp(string maTp, decimal sl, string loTp, DateOnly? hsd = null) => new()
     {
-        MaThanhPham = maTp, SoLuong = sl, MaLoThanhPham = loTp, MaQuyTrinh = "QT01", Khau = Khau()
+        MaThanhPham = maTp, SoLuong = sl, MaLoThanhPham = loTp, MaQuyTrinh = "QT01", Khau = Khau(),
+        // v2.7: lô đồng bộ bắt buộc hạn dùng -> mặc định sẵn để test chạy; test cần giá trị riêng thì truyền hsd.
+        HanSuDung = hsd ?? new DateOnly(2026, 12, 31)
     };
 
     /// <summary>Lệnh một sản phẩm BANH_MI lô LOTP1.</summary>
@@ -951,7 +953,7 @@ public class LenhSanXuatServiceTests
     }
 
     [Fact]
-    public async Task Moi_Lo_Toi_Da_3_Anh_Theo_Gioi_Han_HanoiCheck()
+    public async Task Moi_Lo_Toi_Da_10_Anh_Theo_Gioi_Han_HanoiCheck()
     {
         SeedDanhMuc();
         NhapBot("LO_A", 5m, new DateOnly(2026, 1, 1));
@@ -959,17 +961,18 @@ public class LenhSanXuatServiceTests
         lenhAnh.TaoLoDongBo = true;          // giới hạn album chỉ áp khi lệnh tạo Lô đồng bộ
         var id = await TaoAsync(lenhAnh);
 
-        var bonAnh = await AnhAsync(id, soAnh: 4);
+        // v2.7: nới 1-3 lên 1-10 -> 11 ảnh mới bị chặn.
+        var muoiMotAnh = await AnhAsync(id, soAnh: 11);
         using (var db = MoDb())
         {
-            var kq = await Svc(db).ThucHienAsync(id, bonAnh);
+            var kq = await Svc(db).ThucHienAsync(id, muoiMotAnh);
             Assert.False(kq.ThanhCong);
-            Assert.Contains("tối đa 3 ảnh", kq.ThongBao);
+            Assert.Contains("tối đa 10 ảnh", kq.ThongBao);
         }
         Assert.Equal(5m, TonLo("BOT_MI", "LO_A"));              // chưa động vào kho
 
-        var baAnh = await AnhAsync(id, soAnh: 3);
-        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, baAnh)).ThanhCong);
+        var muoiAnh = await AnhAsync(id, soAnh: 10);
+        using (var db = MoDb()) Assert.True((await Svc(db).ThucHienAsync(id, muoiAnh)).ThanhCong);
     }
 
     [Fact]

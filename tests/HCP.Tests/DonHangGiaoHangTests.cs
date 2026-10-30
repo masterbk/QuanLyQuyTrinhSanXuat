@@ -191,7 +191,7 @@ public class DonHangGiaoHangTests
     }
 
     [Fact]
-    public async Task Giao_Hang_Luu_Nhieu_Anh_Nhung_Gui_HanoiCheck_Toi_Da_3()
+    public async Task Giao_Hang_Luu_Nhieu_Anh_Nhung_Gui_HanoiCheck_Toi_Da_10()
     {
         Seed();
         var id = await DonDangGiaoAsync("DH-HNC-5");
@@ -200,19 +200,18 @@ public class DonHangGiaoHangTests
         _hnc.XuLyDon = (_, noiDung) => { anhDaGui.AddRange(noiDung.DanhSachAnh ?? new List<string>()); return OrderCommandResult.Ok(); };
         _hnc.DoiTrangThai = (_, _) => OrderCommandResult.Ok();
 
-        var namAnh = Enumerable.Range(1, 5)
+        // Gửi 12 ảnh: nội bộ lưu tối đa 10, gửi HnC tối đa 10 (đặc tả v2.7 nới 1-3 lên 1-10).
+        var muoiHaiAnh = Enumerable.Range(1, 12)
             .Select(i => new AnhDauVao($"giao-{i}.jpg", $"https://app.vn/uploads/giao-{i}.jpg")).ToList();
 
         using (var db = MoDb()) Assert.True((await Svc(db).NhanDonAsync(id, "NS01")).ThanhCong);
-        using (var db = MoDb()) Assert.True((await Svc(db).HoanTatGiaoAsync(id, namAnh)).ThanhCong);
+        using (var db = MoDb()) Assert.True((await Svc(db).HoanTatGiaoAsync(id, muoiHaiAnh)).ThanhCong);
 
-        // Lưu nội bộ đủ 5 ảnh giao làm bằng chứng.
         using (var db = MoDb())
         {
             var don = await db.DonHangBans.Include(d => d.AnhTongQuan).SingleAsync();
-            Assert.Equal(5, don.AnhTongQuan.Count(a => a.Loai == LoaiAnhDonHang.Giao));
+            Assert.Equal(10, don.AnhTongQuan.Count(a => a.Loai == LoaiAnhDonHang.Giao));
         }
-        // Nhưng gửi sang HanoiCheck tối đa 3 ảnh (giới hạn API HnC).
-        Assert.Equal(3, anhDaGui.Count);
+        Assert.Equal(10, anhDaGui.Count);
     }
 }

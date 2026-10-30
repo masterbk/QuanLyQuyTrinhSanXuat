@@ -49,14 +49,19 @@ public class DongBoHnCTests
     private void SeedLo()
     {
         using var db = MoDb();
-        db.Products.Add(new Product { MaSanPham = "SP01", TenSanPham = "Bánh", MaLoaiSp = "x", LoaiSanPham = LoaiSanPham.ThanhPham });
+        db.Products.Add(new Product { MaSanPham = "SP01", TenSanPham = "Bánh", MaLoaiSp = "x",
+                                      LoaiSanPham = LoaiSanPham.ThanhPham, MaQuyTrinh = "QT01" });
+        db.ProductionProcesses.Add(new ProductionProcess { MaQuyTrinh = "QT01", TenQuyTrinh = "Quy trình",
+            DanhSachKhau = { new ProcessStepLine { MaKhau = "KHAU-0001", ThuTu = 1 } } });
         db.Warehouses.Add(new Warehouse { MaKho = "KHO01", TenKho = "Kho", DiaChi = "HN" });
         db.SaveChanges();
     }
 
+    // v2.7: điền sẵn ngày SX/hạn dùng/địa chỉ thu mua để qua các ràng buộc A2, test tập trung vào album ảnh.
     private static Batch LoKhongAnh(bool dongBo = true) => new()
     {
         MaSanPham = "SP01", TenLo = "Lô", NgayNhap = new DateOnly(2026, 9, 13), DongBoHnC = dongBo,
+        NgaySanXuat = new DateOnly(2026, 9, 13), HanSuDung = new DateOnly(2026, 9, 20), DiaChiThuMua = "Chợ HN",
         DanhSachKho = { new BatchWarehouse { MaKho = "KHO01" } }
     };
 
