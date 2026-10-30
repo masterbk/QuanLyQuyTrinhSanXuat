@@ -84,10 +84,19 @@ Log "Tao thu muc tam tren VPS..."
 if ($LASTEXITCODE -ne 0) { throw "Khong tao duoc $RemoteDir tren VPS" }
 
 Log "Upload goi + script..."
-& scp @scpOpt $zip "${dest}:$RemoteDir/hcp-app.zip"
-if ($LASTEXITCODE -ne 0) { throw "scp goi that bai" }
-& scp @scpOpt (Join-Path $PSScriptRoot "remote-swap.ps1") "${dest}:$RemoteDir/remote-swap.ps1"
-if ($LASTEXITCODE -ne 0) { throw "scp script that bai" }
+# scp (Windows/OpenSSH) hiểu "C:\..." / "E:\..." là host:path vì dấu hai chấm ổ đĩa -> "unexpected filename".
+# Chạy scp TỪ thư mục nguồn và truyền tên file tương đối (không có dấu hai chấm) để tránh lỗi này.
+Push-Location (Split-Path -Parent $zip)
+& scp @scpOpt (Split-Path -Leaf $zip) "${dest}:$RemoteDir/hcp-app.zip"
+$scpZipMa = $LASTEXITCODE
+Pop-Location
+if ($scpZipMa -ne 0) { throw "scp goi that bai" }
+
+Push-Location $PSScriptRoot
+& scp @scpOpt "remote-swap.ps1" "${dest}:$RemoteDir/remote-swap.ps1"
+$scpScriptMa = $LASTEXITCODE
+Pop-Location
+if ($scpScriptMa -ne 0) { throw "scp script that bai" }
 
 # --- 5) Trao doi ban moi tren VPS ---------------------------------------
 Log "Chay remote-swap tren VPS..."
