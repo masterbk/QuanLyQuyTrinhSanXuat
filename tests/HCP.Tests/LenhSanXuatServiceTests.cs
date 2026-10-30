@@ -193,6 +193,54 @@ public class LenhSanXuatServiceTests
         }
     }
 
+    /// <summary>v2.7 (regression): lô đồng bộ mà dòng sản phẩm CHƯA lưu hạn dùng, nhưng app/web gửi hạn dùng lúc
+    /// hoàn thành -> KHÔNG được báo "cần nhập hạn sử dụng"; lô tạo ra mang đúng hạn dùng đã gửi.</summary>
+    [Fact]
+    public async Task Lo_Dong_Bo_Nhan_Han_Dung_Gui_Luc_Hoan_Thanh_Khong_Bao_Thieu()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 5m, new DateOnly(2026, 1, 1));
+
+        var lenh = Lenh(10);
+        lenh.TaoLoDongBo = true;
+        lenh.SanPham[0].HanSuDung = null;   // giống app: hạn dùng chưa lưu vào dòng, chỉ gửi lúc hoàn thành
+        var id = await TaoAsync(lenh);
+
+        int spId;
+        using (var db = MoDb())
+            spId = (await db.LenhSanXuatSanPhams.SingleAsync(s => s.LenhSanXuatId == id)).Id;
+
+        var hsd = new DateOnly(2026, 11, 2);
+        var anh = await AnhAsync(id);
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db).ThucHienAsync(id, anh,
+                hanSuDungTheoSanPham: new Dictionary<int, DateOnly?> { [spId] = hsd });
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        using (var db = MoDb())
+            Assert.Equal(hsd, (await db.Batches.SingleAsync(b => b.MaSanPham == "BANH_MI")).HanSuDung);
+    }
+
+    /// <summary>v2.7: lô đồng bộ mà KHÔNG có hạn dùng (cả DB lẫn lúc hoàn thành) thì bị chặn.</summary>
+    [Fact]
+    public async Task Lo_Dong_Bo_Thieu_Han_Dung_Thi_Bi_Chan()
+    {
+        SeedDanhMuc();
+        NhapBot("LO_A", 5m, new DateOnly(2026, 1, 1));
+
+        var lenh = Lenh(10);
+        lenh.TaoLoDongBo = true;
+        lenh.SanPham[0].HanSuDung = null;
+        var id = await TaoAsync(lenh);
+
+        var anh = await AnhAsync(id);
+        using var db = MoDb();
+        var kq = await Svc(db).ThucHienAsync(id, anh);   // không gửi hanSuDungTheoSanPham
+        Assert.False(kq.ThanhCong);
+        Assert.Contains("cần nhập hạn sử dụng", kq.ThongBao);
+    }
+
     [Fact]
     public async Task Thieu_Nguyen_Lieu_Thi_Khong_Tru_Gi()
     {

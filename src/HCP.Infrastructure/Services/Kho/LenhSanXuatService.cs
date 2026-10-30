@@ -365,8 +365,11 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             if (apHnC && anh.Count > LoSanXuatService.SoAnhLoToiDa)
                 return KetQuaThaoTac.Loi($"Lô {sp.MaLoThanhPham}: tối đa {LoSanXuatService.SoAnhLoToiDa} ảnh "
                                          + $"(đang chọn {anh.Count}) - giới hạn album ảnh lô của HanoiCheck.");
-            // v2.7: lô đồng bộ bắt buộc hạn sử dụng (ngày sản xuất đã lấy từ lệnh).
-            if (apHnC && sp.HanSuDung is null)
+            // v2.7: lô đồng bộ bắt buộc hạn sử dụng (ngày sản xuất đã lấy từ lệnh). Kiểm hạn dùng HIỆU LỰC = giá trị
+            // app/web gửi lên lúc hoàn thành (nếu có) chứ không chỉ giá trị đã lưu - vì nó mới được gán vào sp bên dưới.
+            var hsdHieuLuc = hanSuDungTheoSanPham is not null && hanSuDungTheoSanPham.TryGetValue(sp.Id, out var hsdMoi)
+                ? hsdMoi : sp.HanSuDung;
+            if (apHnC && hsdHieuLuc is null)
                 return KetQuaThaoTac.Loi($"Lô {sp.MaLoThanhPham} ({sp.MaThanhPham}): cần nhập hạn sử dụng - "
                                          + "HanoiCheck (v2.7) bắt buộc hạn dùng cho lô đồng bộ.");
         }
