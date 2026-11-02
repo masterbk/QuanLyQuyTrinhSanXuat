@@ -148,7 +148,7 @@ public sealed class DonHangBanService : IDonHangBanService
 
     public async Task<IReadOnlyList<DonHangBan>> LayTatCaAsync(CancellationToken ct = default) =>
         await QueryDayDu().AsNoTracking()
-            .OrderByDescending(d => d.NgayDat).ThenByDescending(d => d.NgayGiao).ThenByDescending(d => d.Id)
+            .OrderByDescending(d => d.CreatedAtUtc).ThenByDescending(d => d.NgayGiao).ThenByDescending(d => d.Id)
             .ToListAsync(ct);
 
     public Task<DonHangBan?> LayTheoIdAsync(int id, CancellationToken ct = default) =>
@@ -180,7 +180,7 @@ public sealed class DonHangBanService : IDonHangBanService
         // KHÔNG dùng QueryDayDu() (có AnhTongQuan) - danh sách không cần ảnh, đỡ tải thêm dữ liệu vô ích.
         // AsSplitQuery(): Dong->XuatLo là 1-nhiều-tới-nhiều, gộp 1 câu JOIN sẽ nhân dòng cả trang, tách câu
         // truy vấn cho rẻ hơn và đúng khi kết hợp Skip/Take.
-        var ds = await q.OrderByDescending(d => d.NgayDat).ThenByDescending(d => d.NgayGiao).ThenByDescending(d => d.Id)
+        var ds = await q.OrderByDescending(d => d.CreatedAtUtc).ThenByDescending(d => d.NgayGiao).ThenByDescending(d => d.Id)
             .Skip((t - 1) * n).Take(n)
             .Include(d => d.Dong).ThenInclude(l => l.XuatLo)
             .AsSplitQuery()

@@ -206,23 +206,24 @@ public class DonHangBanServiceTests
     public async Task Lay_Trang_Loc_Theo_Khoang_Ngay_Hen_Giao()
     {
         Seed();
-        var som = Don((1, 1000)); som.NgayGiao = new DateOnly(2026, 9, 13);
-        var giua = Don((1, 1000)); giua.NgayGiao = new DateOnly(2026, 9, 15);
-        var muon = Don((1, 1000)); muon.NgayGiao = new DateOnly(2026, 9, 20);
-        var chuaHen = Don((1, 1000));   // NgayGiao null - không có ngày hẹn
+        // Ngày tạo (CreatedAtUtc) tăng dần theo thứ tự tạo -> sắp giảm dần sẽ đảo lại.
+        var baseTao = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
+        var som = Don((1, 1000)); som.NgayGiao = new DateOnly(2026, 9, 13); som.CreatedAtUtc = baseTao.AddMinutes(1);
+        var giua = Don((1, 1000)); giua.NgayGiao = new DateOnly(2026, 9, 15); giua.CreatedAtUtc = baseTao.AddMinutes(2);
+        var muon = Don((1, 1000)); muon.NgayGiao = new DateOnly(2026, 9, 20); muon.CreatedAtUtc = baseTao.AddMinutes(3);
+        var chuaHen = Don((1, 1000)); chuaHen.CreatedAtUtc = baseTao.AddMinutes(4);   // tạo mới nhất, NgayGiao null
         var idSom = await TaoAsync(som);
         var idGiua = await TaoAsync(giua);
         var idMuon = await TaoAsync(muon);
-        await TaoAsync(chuaHen);
+        var idChuaHen = await TaoAsync(chuaHen);
 
         using var db = MoDb();
         var svc = Svc(db);
 
-        // Mặc định (không lọc): sắp theo Ngày hẹn giảm dần, đơn chưa có ngày hẹn xếp cuối.
+        // Mặc định (không lọc): sắp theo Ngày TẠO giảm dần (đơn tạo gần nhất lên đầu), rồi đến Ngày hẹn.
         var (tatCa, tongTatCa) = await svc.LayTrangAsync(null, false, null, null, null, null, 1, 20);
         Assert.Equal(4, tongTatCa);
-        Assert.Equal(new[] { idMuon, idGiua, idSom }, tatCa.Take(3).Select(d => d.Id));
-        Assert.Null(tatCa.Last().NgayGiao);   // chưa có ngày hẹn ở cuối
+        Assert.Equal(new[] { idChuaHen, idMuon, idGiua, idSom }, tatCa.Select(d => d.Id));
 
         // Lọc khoảng 14/9 - 18/9: chỉ đơn "giua" (13/9 và 20/9 nằm ngoài, chưa có ngày hẹn cũng bị loại).
         var (khoang, tongKhoang) = await svc.LayTrangAsync(
