@@ -18,6 +18,13 @@ class SanPham {
   final String? moTa;
   final String? maQuyTrinh;
 
+  /// food_config.measure_id - id đơn vị tính trong danh mục HanoiCheck. null = chưa khai
+  /// (máy chủ giữ nguyên cấu hình đang lưu khi app gửi null).
+  final int? donViTinhHnCId;
+
+  /// food_config.gam_exchange - 1 đơn vị tính bằng bao nhiêu gam.
+  final double? quyDoiGam;
+
   const SanPham({
     required this.id,
     this.dongBoHnC = true,
@@ -32,6 +39,8 @@ class SanPham {
     this.quocGia,
     this.moTa,
     this.maQuyTrinh,
+    this.donViTinhHnCId,
+    this.quyDoiGam,
   });
 
   bool get laThanhPham => loaiSanPham == 'ThanhPham';
@@ -50,6 +59,8 @@ class SanPham {
         quocGia: j['quocGia'] as String?,
         moTa: j['moTa'] as String?,
         maQuyTrinh: j['maQuyTrinh'] as String?,
+        donViTinhHnCId: j['donViTinhHnCId'] as int?,
+        quyDoiGam: _so(j['quyDoiGam']),
       );
 
   Map<String, dynamic> raJson() => {
@@ -65,7 +76,20 @@ class SanPham {
         'quocGia': quocGia,
         'moTa': moTa,
         'maQuyTrinh': maQuyTrinh,
+        'donViTinhHnCId': donViTinhHnCId,
+        'quyDoiGam': quyDoiGam,
       };
+}
+
+/// Một dòng danh mục đơn vị tính của HanoiCheck (GET /supplier/measures).
+class DonViTinhHnC {
+  final int id;
+  final String ten;
+
+  const DonViTinhHnC({required this.id, required this.ten});
+
+  factory DonViTinhHnC.tuJson(Map<String, dynamic> j) =>
+      DonViTinhHnC(id: j['id'] as int? ?? 0, ten: j['ten'] as String? ?? '');
 }
 
 /// Một dòng định mức (công thức) của thành phẩm: cần bao nhiêu nguyên liệu cho 1 đơn vị thành phẩm.

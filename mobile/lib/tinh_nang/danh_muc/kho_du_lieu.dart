@@ -11,6 +11,12 @@ class DanhMucQuanLyData {
 
   DanhMucQuanLyData(this._api);
 
+  // ---------- Danh mục đơn vị tính HanoiCheck ----------
+
+  Future<List<DonViTinhHnC>> donViTinh() async =>
+      ((await _api.get('/api/v1/quan-ly/don-vi-tinh')) as List)
+          .map((e) => DonViTinhHnC.tuJson(e as Map<String, dynamic>)).toList();
+
   // ---------- Thực phẩm / SKU ----------
 
   Future<List<SanPham>> thucPham() async =>
@@ -107,3 +113,5 @@ final danhMucQuanLyProvider = Provider<DanhMucQuanLyData>((ref) => DanhMucQuanLy
 final dsThucPhamProvider = FutureProvider.autoDispose<List<SanPham>>((ref) => ref.watch(danhMucQuanLyProvider).thucPham());
 final dsKhauProvider = FutureProvider.autoDispose<List<Khau>>((ref) => ref.watch(danhMucQuanLyProvider).khauSanXuat());
 final dsQuyTrinhProvider = FutureProvider.autoDispose<List<QuyTrinhQuanLy>>((ref) => ref.watch(danhMucQuanLyProvider).quyTrinh());
+final dsDonViTinhProvider =
+    FutureProvider.autoDispose<List<DonViTinhHnC>>((ref) => ref.watch(danhMucQuanLyProvider).donViTinh());

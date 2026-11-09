@@ -27,7 +27,10 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
   late final TextEditingController _gtin;
   late final TextEditingController _quocGia;
   late final TextEditingController _moTa;
+  late final TextEditingController _quyDoiGam;
   late String _loaiSanPham;
+  int? _donViTinhHnCId;
+  bool _daKhopDonVi = false;
   String? _maQuyTrinh;
   late bool _dongBoHnC;
   bool _dangLuu = false;
@@ -45,8 +48,11 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
     _maLoaiSp = TextEditingController(text: sp?.maLoaiSp ?? '');
     _maThucPhamChuan = TextEditingController(text: sp?.maThucPhamChuan ?? '');
     _gtin = TextEditingController(text: sp?.gtin ?? '');
-    _quocGia = TextEditingController(text: sp?.quocGia ?? '');
+    // Hàng của cơ sở gần như luôn là hàng Việt Nam, và HanoiCheck yêu cầu khai xuất xứ -> điền sẵn.
+    _quocGia = TextEditingController(text: sp?.quocGia ?? 'Việt Nam');
     _moTa = TextEditingController(text: sp?.moTa ?? '');
+    _quyDoiGam = TextEditingController(text: sp?.quyDoiGam == null ? '' : _boSo0(sp!.quyDoiGam!));
+    _donViTinhHnCId = sp?.donViTinhHnCId;
     _loaiSanPham = sp?.loaiSanPham ?? 'ThanhPham';
     _maQuyTrinh = sp?.maQuyTrinh;
     _dongBoHnC = sp?.dongBoHnC ?? true;
@@ -63,6 +69,7 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
     _gtin.dispose();
     _quocGia.dispose();
     _moTa.dispose();
+    _quyDoiGam.dispose();
     super.dispose();
   }
 
@@ -88,6 +95,11 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
       quocGia: _quocGia.text.trim().isEmpty ? null : _quocGia.text.trim(),
       moTa: _moTa.text.trim().isEmpty ? null : _moTa.text.trim(),
       maQuyTrinh: _maQuyTrinh,
+      // null = không khai -> máy chủ giữ nguyên cấu hình đơn vị tính đang lưu.
+      donViTinhHnCId: _donViTinhHnCId,
+      quyDoiGam: _donViTinhHnCId == null
+          ? null
+          : double.tryParse(_quyDoiGam.text.trim().replaceAll(',', '.')),
     );
     try {
       final tb = await ref.read(danhMucQuanLyProvider).luuThucPham(sp);
@@ -99,6 +111,66 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
     } finally {
       if (mounted) setState(() => _dangLuu = false);
     }
+  }
+
+  /// Ô "Đơn vị tính" dạng chữ - dùng khi chưa tải được danh mục đơn vị tính của HanoiCheck
+  /// (cơ sở chưa bật đồng bộ, hoặc danh mục chưa tải về) để vẫn khai được đơn vị cho tồn kho.
+  Widget _oDonViTinhChu({bool dangTaiDanhMuc = false}) => TextFormField(
+        controller: _donViTinh,
+        decoration: InputDecoration(
+            labelText: 'Đơn vị tính',
+            helperText: dangTaiDanhMuc
+                ? 'Đang tải danh mục đơn vị tính...'
+                : 'vd kg, cái, quả. Dùng cho tồn kho.',
+            helperMaxLines: 2,
+            border: const OutlineInputBorder()),
+      );
+
+  /// Dropdown có tìm kiếm trên danh mục đơn vị tính của HanoiCheck. Chọn xong gán cả measure_id
+  /// (gửi HanoiCheck) và tên đơn vị (hiển thị tồn kho) để hai chỗ không lệch nhau.
+  Widget _oDonViTinh(List<DonViTinhHnC> ds) {
+    if (ds.isEmpty) return _oDonViTinhChu();
+
+    // Lần đầu dựng: chưa có measure_id thì khớp theo TÊN đang lưu (dữ liệu cũ khai bằng chữ).
+    if (!_daKhopDonVi) {
+      _daKhopDonVi = true;
+      if (_donViTinhHnCId == null) {
+        final ten = _donViTinh.text.trim().toLowerCase();
+        for (final d in ds) {
+          if (d.ten.trim().toLowerCase() == ten) {
+            _donViTinhHnCId = d.id;
+            break;
+          }
+        }
+      }
+    }
+
+    final daChon = ds.any((d) => d.id == _donViTinhHnCId) ? _donViTinhHnCId : null;
+    final conChuaKhop = daChon == null && _donViTinh.text.trim().isNotEmpty;
+
+    return DropdownMenu<int>(
+      initialSelection: daChon,
+      enableFilter: true,
+      requestFocusOnTap: true,
+      expandedInsets: EdgeInsets.zero,
+      label: const Text('Đơn vị tính'),
+      helperText: conChuaKhop
+          ? 'Đang lưu "${_donViTinh.text.trim()}" - chưa khớp danh mục HanoiCheck, chọn lại giúp tôi.'
+          : 'Gõ để tìm. Dùng cho tồn kho và gửi HanoiCheck.',
+      inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
+      dropdownMenuEntries: [for (final d in ds) DropdownMenuEntry(value: d.id, label: d.ten)],
+      onSelected: (v) => setState(() {
+        _donViTinhHnCId = v;
+        if (v != null) {
+          for (final d in ds) {
+            if (d.id == v) {
+              _donViTinh.text = d.ten;
+              break;
+            }
+          }
+        }
+      }),
+    );
   }
 
   @override
@@ -137,12 +209,23 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
               onChanged: (v) => setState(() => _loaiSanPham = v ?? 'ThanhPham'),
             ),
             const SizedBox(height: 14),
-            TextFormField(
-              controller: _donViTinh,
-              decoration: const InputDecoration(
-                  labelText: 'Đơn vị tính', helperText: 'vd kg, cái, quả. Dùng cho tồn kho.',
-                  border: OutlineInputBorder()),
-            ),
+            ref.watch(dsDonViTinhProvider).when(
+                  loading: () => _oDonViTinhChu(dangTaiDanhMuc: true),
+                  error: (e, _) => _oDonViTinhChu(),
+                  data: _oDonViTinh,
+                ),
+            if (_donViTinhHnCId != null) ...[
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _quyDoiGam,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                    labelText: 'Quy đổi ra gam',
+                    helperText: '1 đơn vị tính bằng bao nhiêu gam, vd Kg = 1000. Để trống nếu không khai.',
+                    helperMaxLines: 2,
+                    border: OutlineInputBorder()),
+              ),
+            ],
             const SizedBox(height: 14),
             TextFormField(
               controller: _tonToiThieu,

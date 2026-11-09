@@ -31,6 +31,13 @@ public static class QuanLyDanhMucApi
 
     private static void MapThucPham(RouteGroupBuilder nhom)
     {
+        // Danh mục đơn vị tính của HanoiCheck (GET /supplier/measures, tải về bằng job danh mục chuẩn) -
+        // app dùng để đổ dropdown "Đơn vị tính" có tìm kiếm.
+        nhom.MapGet("/don-vi-tinh", async (IDanhMucChuanService svc) =>
+            Results.Ok((await svc.LayDonViTinhAsync())
+                .OrderBy(d => d.Ten, StringComparer.CurrentCulture)
+                .Select(d => new DonViTinhDto(d.Id, d.Ten)).ToList()));
+
         nhom.MapGet("/thuc-pham", async (IDanhMucService<Product> svc) =>
             Results.Ok((await svc.LayTatCaAsync()).OrderBy(p => p.MaSanPham).Select(Map).ToList()));
 
@@ -48,8 +55,8 @@ public static class QuanLyDanhMucApi
 
         nhom.MapPut("/thuc-pham/{id:int}", async (int id, SanPhamLuuRequest req, IDanhMucService<Product> svc) =>
         {
-            // App chưa có ô cấu hình đơn vị tính HnC (food_config, chỉ sửa trên web) -> giữ nguyên giá trị đang lưu,
-            // không thì mỗi lần sửa trên app sẽ xoá mất.
+            // Nạp sẵn cấu hình đơn vị tính đang lưu: app không khai (hoặc app bản cũ không có trường) thì
+            // TuRequest giữ nguyên các giá trị này, không thì mỗi lần sửa trên app sẽ xoá mất.
             var cu = await svc.LayTheoIdAsync(id);
             var sp = TuRequest(new Product
             {
@@ -90,7 +97,8 @@ public static class QuanLyDanhMucApi
 
     private static SanPhamQuanLyDto Map(Product p) => new(
         p.Id, p.DongBoHnC, p.MaSanPham, p.TenSanPham, p.LoaiSanPham.ToString(),
-        p.DonViTinh, p.TonToiThieu, p.MaLoaiSp, p.MaThucPhamChuan, p.Gtin, p.QuocGia, p.MoTa, p.MaQuyTrinh);
+        p.DonViTinh, p.TonToiThieu, p.MaLoaiSp, p.MaThucPhamChuan, p.Gtin, p.QuocGia, p.MoTa, p.MaQuyTrinh,
+        p.DonViTinhHnCId, p.QuyDoiGam);
 
     private static Product TuRequest(Product p, SanPhamLuuRequest r)
     {
@@ -106,6 +114,16 @@ public static class QuanLyDanhMucApi
         p.QuocGia = r.QuocGia;
         p.MoTa = r.MoTa;
         p.MaQuyTrinh = r.MaQuyTrinh;
+
+        // Cấu hình đơn vị tính HanoiCheck (food_config): app bản cũ không gửi hai trường này -> null nghĩa là
+        // "không khai", giữ nguyên giá trị đang lưu trong p (nơi gọi đã nạp sẵn khi sửa). Có khai thì áp cả
+        // measure_id và quy đổi gam; hệ số thải bỏ vẫn chỉ sửa trên web nên luôn giữ nguyên.
+        if (r.DonViTinhHnCId is not null)
+        {
+            p.DonViTinhHnCId = r.DonViTinhHnCId;
+            p.QuyDoiGam = r.QuyDoiGam;
+        }
+
         return p;
     }
 

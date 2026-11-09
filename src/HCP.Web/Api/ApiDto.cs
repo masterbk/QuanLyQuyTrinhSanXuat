@@ -190,13 +190,24 @@ public sealed record NccDauVaoDto(string MaNccDauVao, string Ten);
 public sealed record SanPhamQuanLyDto(
     int Id, bool DongBoHnC, string MaSanPham, string TenSanPham, string LoaiSanPham,
     string? DonViTinh, decimal? TonToiThieu, string MaLoaiSp, string? MaThucPhamChuan,
-    string? Gtin, string? QuocGia, string? MoTa, string? MaQuyTrinh);
+    string? Gtin, string? QuocGia, string? MoTa, string? MaQuyTrinh,
+    int? DonViTinhHnCId, decimal? QuyDoiGam);
 
-/// <summary>LoaiSanPham: "ThanhPham" | "NguyenLieu".</summary>
+/// <summary>
+/// LoaiSanPham: "ThanhPham" | "NguyenLieu".
+///
+/// <paramref name="DonViTinhHnCId"/> null = KHÔNG khai cấu hình đơn vị tính trong lần gửi này, máy chủ giữ
+/// nguyên cấu hình đang lưu (app bản cũ không có hai trường này - gửi null sẽ xoá mất cấu hình trên
+/// HanoiCheck). Muốn bỏ đơn vị tính thì sửa trên web.
+/// </summary>
 public sealed record SanPhamLuuRequest(
     bool DongBoHnC, string MaSanPham, string TenSanPham, string LoaiSanPham,
     string? DonViTinh, decimal? TonToiThieu, string? MaLoaiSp, string? MaThucPhamChuan,
-    string? Gtin, string? QuocGia, string? MoTa, string? MaQuyTrinh);
+    string? Gtin, string? QuocGia, string? MoTa, string? MaQuyTrinh,
+    int? DonViTinhHnCId = null, decimal? QuyDoiGam = null);
+
+/// <summary>Một dòng danh mục đơn vị tính của HanoiCheck (GET /supplier/measures) - để app đổ dropdown.</summary>
+public sealed record DonViTinhDto(int Id, string Ten);
 
 public sealed record DinhMucDongDto(string MaNguyenLieu, string? TenNguyenLieu, decimal SoLuong, decimal HaoHutPhanTram);
 
