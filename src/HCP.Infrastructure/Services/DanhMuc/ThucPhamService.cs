@@ -2,6 +2,7 @@ using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -70,6 +71,15 @@ public class ThucPhamService : IDanhMucService<Product>
         var loi = await KiemTraAsync(entity, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
+        // v2.7.1 (DV7 a): thực phẩm đang nằm trong đơn "Đang giao"/"Đã giao hàng" mà trường chưa xác nhận thì
+        // KHÔNG được đổi đơn vị tính - gửi lại HnC sẽ 422. Các trường khác (tên, mô tả, quy trình…) sửa bình thường.
+        if (await DoiDonViTinhAsync(hienTai, entity, ct)
+            && await KhoaDonDangGiao.DonKhoaThucPhamAsync(_db, hienTai.MaSanPham, ct) is { } maDonKhoa)
+        {
+            return KetQuaThaoTac.Loi(KhoaDonDangGiao.ThongBao(
+                $"Thực phẩm \"{hienTai.TenSanPham}\"", maDonKhoa, "đổi đơn vị tính"));
+        }
+
         ChuanHoa(entity);
 
         hienTai.MaSanPham = maMoi;
@@ -107,6 +117,30 @@ public class ThucPhamService : IDanhMucService<Product>
 
         return KetQuaThaoTac.Ok($"Đã xoá thực phẩm \"{sp.TenSanPham}\".");
     }
+
+    /// <summary>
+    /// Đơn vị tính GỬI SANG HanoiCheck có đổi không. HnC hiểu: có food_config thì dùng food_config.measure_id,
+    /// không gửi food_config thì dùng đơn vị tính mặc định của danh mục thực phẩm chuẩn (ma_loai_sp) - nên đổi
+    /// danh mục cũng có thể là đổi đơn vị tính.
+    /// </summary>
+    private async Task<bool> DoiDonViTinhAsync(Product cu, Product moi, CancellationToken ct)
+    {
+        if (cu.DonViTinhHnCId != moi.DonViTinhHnCId) return true;
+        if (cu.DonViTinhHnCId is not null) return false;    // đã khai tường minh và không đổi
+
+        var maCu = cu.MaLoaiSp?.Trim();
+        var maMoi = moi.MaLoaiSp?.Trim();
+        if (string.Equals(maCu, maMoi, StringComparison.Ordinal)) return false;
+
+        return !string.Equals(await DonViTinhMacDinhAsync(maCu, ct), await DonViTinhMacDinhAsync(maMoi, ct),
+                              StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<string?> DonViTinhMacDinhAsync(string? maLoaiSp, CancellationToken ct) =>
+        string.IsNullOrWhiteSpace(maLoaiSp)
+            ? null
+            : await _db.StandardFoodCategories.AsNoTracking()
+                .Where(c => c.Code == maLoaiSp).Select(c => c.MeasureName).FirstOrDefaultAsync(ct);
 
     /// <summary>
     /// Kiểm tra ràng buộc để không bị HanoiCheck trả 422: bắt buộc mã loại (danh mục thực phẩm

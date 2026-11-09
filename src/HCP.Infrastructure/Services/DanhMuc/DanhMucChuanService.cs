@@ -101,6 +101,8 @@ public class DanhMucChuanService : IDanhMucChuanService
             Code = moi.Code.Trim(),
             Name = moi.Name.Trim(),
             MeasureName = moi.MeasureName?.Trim(),
+            BatBuocNgaySanXuat = moi.BatBuocNgaySanXuat,
+            BatBuocHanSuDung = moi.BatBuocHanSuDung,
             CapNhatLucUtc = DateTime.UtcNow
         }));
 

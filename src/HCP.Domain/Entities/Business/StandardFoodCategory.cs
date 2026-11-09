@@ -20,5 +20,13 @@ public class StandardFoodCategory
     /// <summary>measure_name - đơn vị đo, vd "Kilogram".</summary>
     public string? MeasureName { get; set; }
 
+    /// <summary>v2.7.1: lô nhập kho của thực phẩm thuộc danh mục này có bắt buộc NGÀY SẢN XUẤT không
+    /// (cờ required_manufacturing_date). Mặc định TRUE: máy chủ HnC bản cũ không trả cờ thì giữ nguyên
+    /// quy định cũ của v2.7 (luôn bắt buộc) cho an toàn.</summary>
+    public bool BatBuocNgaySanXuat { get; set; } = true;
+
+    /// <summary>v2.7.1: tương tự cho HẠN SỬ DỤNG (cờ required_expiry_date).</summary>
+    public bool BatBuocHanSuDung { get; set; } = true;
+
     public DateTime CapNhatLucUtc { get; set; } = DateTime.UtcNow;
 }

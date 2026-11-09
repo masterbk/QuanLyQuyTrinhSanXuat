@@ -419,4 +419,64 @@ public class DonHangBanServiceHnCTests
         var don = await db.DonHangBans.SingleAsync(d => d.Id == id);
         Assert.Equal(TrangThaiDonHangBan.DangGiao, don.TrangThai);
     }
+
+    // ===== v2.7.1 (DV11 mục l): nguồn hàng đã khai phải CÒN hợp lệ mới chuyển được trạng thái =====
+
+    /// <summary>Kho của đơn bị xoá sau khi xuất kho -> không đẩy "Đang giao", báo rõ ngay tại app.</summary>
+    [Fact]
+    public async Task v271_Kho_Cua_Don_Bi_Xoa_Thi_Khong_Nhan_Don_Duoc()
+    {
+        var id = Seed();
+        var fake = new FakeHanoiCheckOrderCommandClient
+        {
+            XuLyDon = (_, _) => OrderCommandResult.Ok(),
+            DoiTrangThai = (_, _) => OrderCommandResult.Ok()
+        };
+
+        using (var db = MoDb())
+            Assert.True((await Svc(db, fake).XuatKhoAsync(id, null, null)).ThanhCong);   // -> Chờ giao hàng
+
+        using (var db = MoDb())
+        {
+            db.Warehouses.RemoveRange(db.Warehouses.Where(k => k.MaKho == "KHO01"));
+            db.SaveChanges();
+        }
+
+        using var db2 = MoDb();
+        var kq = await Svc(db2, fake).NhanDonAsync(id, "NS01");
+        Assert.False(kq.ThanhCong, kq.ThongBao);
+        Assert.Contains("không còn tồn tại", kq.ThongBao);
+    }
+
+    /// <summary>Lô đã khai bị gỡ khỏi kho của đơn -> không đẩy "Đã giao".</summary>
+    [Fact]
+    public async Task v271_Lo_Khong_Con_Gan_Vao_Kho_Da_Khai_Thi_Khong_Hoan_Tat_Giao_Duoc()
+    {
+        var id = Seed();
+        var fake = new FakeHanoiCheckOrderCommandClient
+        {
+            XuLyDon = (_, _) => OrderCommandResult.Ok(),
+            DoiTrangThai = (_, _) => OrderCommandResult.Ok()
+        };
+
+        using (var db = MoDb())
+        {
+            // Lô LO1 có trong danh mục nhưng chỉ gán vào KHO02 (đơn khai xuất từ KHO01).
+            db.Warehouses.Add(new Warehouse { MaKho = "KHO02", TenKho = "Kho 2", DiaChi = "HN" });
+            db.Batches.Add(new Batch
+            {
+                MaLo = "LO1", MaSanPham = "BANH_MI", TenLo = "Lô 1", NgayNhap = new DateOnly(2026, 9, 16),
+                DanhSachKho = { new BatchWarehouse { MaKho = "KHO02" } }
+            });
+            db.SaveChanges();
+        }
+
+        using (var db = MoDb())
+            Assert.True((await Svc(db, fake).XuatKhoAsync(id, null, "NS01")).ThanhCong);   // -> Đang giao
+
+        using var db2 = MoDb();
+        var kq = await Svc(db2, fake).HoanTatGiaoAsync(id, DonHangBanServiceTests.AnhGiaoMau);
+        Assert.False(kq.ThanhCong, kq.ThongBao);
+        Assert.Contains("không còn được gán vào kho", kq.ThongBao);
+    }
 }

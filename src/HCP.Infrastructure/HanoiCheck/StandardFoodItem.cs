@@ -12,6 +12,14 @@ public sealed class StandardFoodItem
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("code")] public string? Code { get; set; }
     [JsonPropertyName("measure_name")] public string? MeasureName { get; set; }
+
+    /// <summary>v2.7.1: lô nhập kho của thực phẩm thuộc danh mục này có bắt buộc ngay_san_xuat không.
+    /// HnC quản lý theo từng danh mục và CÓ THỂ ĐỔI, nên phải đọc lại danh mục chứ đừng nhớ cố định.
+    /// Máy chủ bản cũ không trả trường này -> null -> hiểu là BẮT BUỘC (an toàn, giống v2.7).</summary>
+    [JsonPropertyName("required_manufacturing_date")] public bool? RequiredManufacturingDate { get; set; }
+
+    /// <summary>v2.7.1: tương tự cho han_su_dung.</summary>
+    [JsonPropertyName("required_expiry_date")] public bool? RequiredExpiryDate { get; set; }
 }
 
 /// <summary>Phong bì phản hồi chung của HnC (mục 1.4) cho endpoint standard-foods.</summary>

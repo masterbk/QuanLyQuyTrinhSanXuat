@@ -2,6 +2,7 @@ using HCP.Domain;
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.MaTuSinh;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +83,12 @@ public class LoSanXuatService : IDanhMucService<Batch>
         var loi = await KiemTraAsync(entity, ct);
         if (loi is not null) return KetQuaThaoTac.Loi(loi);
 
+        // v2.7.1 (DV8 a): lô đã xuất cho đơn "Đang giao"/"Đã giao hàng" mà trường chưa xác nhận thì KHÔNG được
+        // đổi ma_san_pham, cũng không được bỏ kho đã xuất hàng khỏi danh_sach_kho. Ngày sản xuất, hạn sử dụng,
+        // NCC đầu vào, khâu, ảnh… vẫn sửa bình thường.
+        var loiKhoa = await KiemTraKhoaDangGiaoAsync(hienTai, entity, ct);
+        if (loiKhoa is not null) return KetQuaThaoTac.Loi(loiKhoa);
+
         ChuanHoa(entity);
 
         hienTai.MaSanPham = entity.MaSanPham;
@@ -117,10 +124,42 @@ public class LoSanXuatService : IDanhMucService<Batch>
         var lo = await _db.Batches.FirstOrDefaultAsync(b => b.Id == id, ct);
         if (lo is null) return KetQuaThaoTac.Loi("Không tìm thấy lô cần xoá.");
 
+        // v2.7.1 (Phần IV mục 2.c): không xoá lô đang là nguồn hàng của đơn chưa được trường xác nhận -
+        // xoá rồi thì đơn mất nguồn hàng và HnC từ chối cả lúc chuyển trạng thái lẫn lúc trường tiếp nhận.
+        if (await KhoaDonDangGiao.DonKhoaLoAsync(_db, lo.MaLo, ct) is { } maDonKhoa)
+            return KetQuaThaoTac.Loi(KhoaDonDangGiao.ThongBao($"Lô \"{lo.MaLo}\"", maDonKhoa, "xoá"));
+
         _db.Batches.Remove(lo); // các bảng con xoá theo cascade.
         await _db.SaveChangesAsync(ct);
 
         return KetQuaThaoTac.Ok($"Đã xoá lô \"{lo.TenLo}\".");
+    }
+
+    /// <summary>
+    /// v2.7.1 (DV8 a): phần bị khoá khi lô đang là nguồn hàng của đơn chưa được trường xác nhận.
+    /// Trả null nếu không vi phạm.
+    /// </summary>
+    private async Task<string?> KiemTraKhoaDangGiaoAsync(Batch hienTai, Batch moi, CancellationToken ct)
+    {
+        if (!string.Equals(hienTai.MaSanPham?.Trim(), moi.MaSanPham?.Trim(), StringComparison.Ordinal)
+            && await KhoaDonDangGiao.DonKhoaLoAsync(_db, hienTai.MaLo, ct) is { } maDonSp)
+        {
+            return KhoaDonDangGiao.ThongBao($"Lô \"{hienTai.MaLo}\"", maDonSp, "đổi thực phẩm");
+        }
+
+        var khoMoi = moi.DanhSachKho.Select(k => k.MaKho?.Trim() ?? "")
+            .Where(k => k.Length > 0).ToHashSet(StringComparer.Ordinal);
+        var khoBiBo = hienTai.DanhSachKho.Select(k => k.MaKho?.Trim() ?? "")
+            .Where(k => k.Length > 0 && !khoMoi.Contains(k)).Distinct(StringComparer.Ordinal).ToList();
+
+        foreach (var kho in khoBiBo)
+        {
+            if (await KhoaDonDangGiao.DonKhoaLoAsync(_db, hienTai.MaLo, ct, kho) is { } maDonKho)
+                return KhoaDonDangGiao.ThongBao($"Lô \"{hienTai.MaLo}\"", maDonKho,
+                                                $"bỏ kho \"{kho}\" khỏi danh sách kho (đơn đã xuất hàng từ kho này)");
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -204,14 +243,18 @@ public class LoSanXuatService : IDanhMucService<Batch>
         if (!apHnC) return null;
 
         // === v2.7 (dịch vụ 8): các ràng buộc BẮT BUỘC khi lô đồng bộ HanoiCheck - thiếu thì HnC trả 422 ===
-        // Ngày sản xuất + hạn dùng bắt buộc; NSX không sau hôm nay; HSD không trước NSX.
-        if (b.NgaySanXuat is null)
-            return "Lô đồng bộ HanoiCheck phải có ngày sản xuất (đặc tả v2.7 bắt buộc).";
+        // v2.7.1 NỚI: ngày sản xuất / hạn sử dụng chỉ bắt buộc khi DANH MỤC THỰC PHẨM CHUẨN của thực phẩm
+        // yêu cầu (cờ required_manufacturing_date / required_expiry_date). Thực phẩm chưa gắn danh mục thì
+        // VẪN bắt buộc cả hai. Có nhập thì vẫn kiểm định dạng/logic như cũ.
+        var (batBuocNsx, batBuocHsd) = await BatBuocNgayThangAsync(b.MaSanPham.Trim(), ct);
+
+        if (b.NgaySanXuat is null && batBuocNsx)
+            return "Lô đồng bộ HanoiCheck phải có ngày sản xuất (danh mục thực phẩm chuẩn của thực phẩm này yêu cầu).";
         if (b.NgaySanXuat > GioVietNam.HomNay)
             return "Ngày sản xuất không được sau ngày hôm nay.";
-        if (b.HanSuDung is null)
-            return "Lô đồng bộ HanoiCheck phải có hạn sử dụng (đặc tả v2.7 bắt buộc).";
-        if (b.HanSuDung < b.NgaySanXuat)
+        if (b.HanSuDung is null && batBuocHsd)
+            return "Lô đồng bộ HanoiCheck phải có hạn sử dụng (danh mục thực phẩm chuẩn của thực phẩm này yêu cầu).";
+        if (b.HanSuDung is not null && b.NgaySanXuat is not null && b.HanSuDung < b.NgaySanXuat)
             return "Hạn sử dụng không được trước ngày sản xuất.";
 
         // Phải có ít nhất một trong địa chỉ thu mua hoặc nhà cung ứng đầu vào.
@@ -303,6 +346,30 @@ public class LoSanXuatService : IDanhMucService<Batch>
         MaCoSo = s.MaCoSo,
         MaNccDauVao = s.MaNccDauVao
     };
+
+    /// <summary>
+    /// v2.7.1: lô của thực phẩm này có bắt buộc ngày sản xuất / hạn sử dụng không. Quy tắc:
+    /// thực phẩm CHƯA gắn danh mục thực phẩm chuẩn (ma_loai_sp trống) thì bắt buộc cả hai; đã gắn thì
+    /// theo cờ của danh mục đó. Danh mục không tra được (chưa tải về) cũng coi là bắt buộc cho an toàn.
+    /// </summary>
+    public static async Task<(bool Nsx, bool Hsd)> BatBuocNgayThangAsync(
+        AppDbContext db, string maSanPham, CancellationToken ct)
+    {
+        var maLoai = (await db.Products.AsNoTracking().Where(p => p.MaSanPham == maSanPham)
+            .Select(p => p.MaLoaiSp).FirstOrDefaultAsync(ct))?.Trim();
+        if (string.IsNullOrWhiteSpace(maLoai)) return (true, true);
+
+        var dm = await db.StandardFoodCategories.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Code == maLoai, ct);
+        return dm is null ? (true, true) : (dm.BatBuocNgaySanXuat, dm.BatBuocHanSuDung);
+    }
+
+    /// <summary>Riêng cờ hạn sử dụng - dùng ở chỗ hoàn thành lệnh sản xuất (lô sinh tự động).</summary>
+    public static async Task<bool> BatBuocHanSuDungAsync(AppDbContext db, string maSanPham, CancellationToken ct) =>
+        (await BatBuocNgayThangAsync(db, maSanPham.Trim(), ct)).Hsd;
+
+    private Task<(bool Nsx, bool Hsd)> BatBuocNgayThangAsync(string maSanPham, CancellationToken ct) =>
+        BatBuocNgayThangAsync(_db, maSanPham, ct);
 
     private static BatchFile SaoChepFile(BatchFile f) => new()
     {

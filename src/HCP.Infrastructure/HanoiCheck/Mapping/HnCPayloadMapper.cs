@@ -108,7 +108,10 @@ public static class HnCPayloadMapper
             quoc_gia = p.QuocGia,
             mo_ta = p.MoTa,
             ma_quy_trinh = p.MaQuyTrinh,
-            // v2.6: cấu hình đơn vị tính. Chưa chọn đơn vị -> bỏ hẳn (HnC giữ nguyên cấu hình đang có).
+            // v2.6: cấu hình đơn vị tính. v2.7.1 làm rõ: KHÔNG gửi food_config nghĩa là "dùng đơn vị tính mặc
+            // định của ma_loai_sp" (chứ không phải "giữ nguyên cấu hình cũ"), nên thực phẩm dùng đơn vị tính
+            // riêng phải LUÔN khai DonViTinhHnCId để lần nào cũng gửi kèm measure_id - nếu không, HnC đổi đơn vị
+            // về mặc định của danh mục và trả 422 tại ma_loai_sp khi thực phẩm đang nằm trong đơn đang giao.
             food_config = p.DonViTinhHnCId is { } measureId
                 ? new
                 {

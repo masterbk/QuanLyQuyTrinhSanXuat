@@ -1,6 +1,7 @@
 using HCP.Domain.Entities.Business;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -85,6 +86,11 @@ public class KhoService : IDanhMucService<Warehouse>
     {
         var kho = await LayTheoIdAsync(id, ct);
         if (kho is null) return KetQuaThaoTac.Loi("Không tìm thấy kho cần xoá.");
+
+        // v2.7.1 (Phần IV mục 2.c): không xoá kho đang dùng cho đơn chưa được trường xác nhận - nguồn hàng của
+        // đơn khai theo kho, kho mất là đơn mất hiệu lực nguồn hàng.
+        if (await KhoaDonDangGiao.DonKhoaKhoAsync(_db, kho.MaKho, ct) is { } maDonKhoa)
+            return KetQuaThaoTac.Loi(KhoaDonDangGiao.ThongBao($"Kho \"{kho.TenKho}\"", maDonKhoa, "xoá"));
 
         _db.Warehouses.Remove(kho);
         await _db.SaveChangesAsync(ct);

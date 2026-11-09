@@ -3,6 +3,7 @@ using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
 using HCP.Infrastructure.HanoiCheck.Mapping;
 using HCP.Infrastructure.Persistence;
+using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -97,6 +98,16 @@ public class MonAnService : IDanhMucService<Dish>
                                          + string.Join(", ", thucDon) + ". Gỡ món khỏi các thực đơn đó trước.");
         }
 
+        // v2.7.1 (DV9 a): món có trong đơn "Đang giao"/"Đã giao hàng" mà trường chưa xác nhận thì KHÔNG được
+        // thêm/bớt nguyên liệu hay đổi định lượng (đơn đã khai nguồn hàng theo công thức này). Tên, ảnh, khâu,
+        // nhóm tuổi, mô tả sửa bình thường.
+        if (DoiCongThuc(hienTai.DanhSachNguyenLieu, entity.DanhSachNguyenLieu)
+            && await KhoaDonDangGiao.DonKhoaMonAnAsync(_db, hienTai.MaMonAn, ct) is { } maDonKhoa)
+        {
+            return KetQuaThaoTac.Loi(KhoaDonDangGiao.ThongBao(
+                $"Công thức món ăn \"{hienTai.TenMonAn}\"", maDonKhoa, "thêm, bớt nguyên liệu hay đổi định lượng"));
+        }
+
         ChuanHoa(entity);
 
         hienTai.MaMonAn = maMoi;
@@ -131,6 +142,10 @@ public class MonAnService : IDanhMucService<Dish>
         if (thucDon.Count > 0)
             return KetQuaThaoTac.Loi($"Không xoá được món \"{mon.TenMonAn}\": đang có trong thực đơn "
                                      + string.Join(", ", thucDon) + ". Gỡ món khỏi các thực đơn đó trước.");
+
+        // v2.7.1 (Phần IV mục 2.c): không xoá món đang thuộc đơn chưa được trường xác nhận.
+        if (await KhoaDonDangGiao.DonKhoaMonAnAsync(_db, mon.MaMonAn, ct) is { } maDonKhoa)
+            return KetQuaThaoTac.Loi(KhoaDonDangGiao.ThongBao($"Món ăn \"{mon.TenMonAn}\"", maDonKhoa, "xoá"));
 
         _db.Dishes.Remove(mon); // bảng con xoá theo cascade.
         await _db.SaveChangesAsync(ct);
@@ -279,6 +294,19 @@ public class MonAnService : IDanhMucService<Dish>
         d.TenMonAn = d.TenMonAn.Trim();
         d.MoTa = d.MoTa?.Trim();
         d.MaQuyTrinh = string.IsNullOrWhiteSpace(d.MaQuyTrinh) ? null : d.MaQuyTrinh.Trim();
+    }
+
+    /// <summary>Công thức (bộ nguyên liệu + định lượng) có khác nhau không - không xét thứ tự dòng.</summary>
+    private static bool DoiCongThuc(IEnumerable<DishIngredient> cu, IEnumerable<DishIngredient> moi)
+    {
+        static List<(string Ma, decimal DinhLuong)> Chuan(IEnumerable<DishIngredient> ds) => ds
+            .Select(n => (Ma: (n.MaNguyenLieu ?? "").Trim().ToUpperInvariant(), n.DinhLuong))
+            .OrderBy(n => n.Ma, StringComparer.Ordinal).ThenBy(n => n.DinhLuong)
+            .ToList();
+
+        var a = Chuan(cu);
+        var b = Chuan(moi);
+        return a.Count != b.Count || a.Where((t, i) => t != b[i]).Any();
     }
 
     private static DishIngredient SaoChepNguyenLieu(DishIngredient i) => new()

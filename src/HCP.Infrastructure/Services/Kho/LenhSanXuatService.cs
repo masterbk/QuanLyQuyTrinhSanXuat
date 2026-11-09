@@ -369,9 +369,12 @@ public sealed class LenhSanXuatService : ILenhSanXuatService
             // app/web gửi lên lúc hoàn thành (nếu có) chứ không chỉ giá trị đã lưu - vì nó mới được gán vào sp bên dưới.
             var hsdHieuLuc = hanSuDungTheoSanPham is not null && hanSuDungTheoSanPham.TryGetValue(sp.Id, out var hsdMoi)
                 ? hsdMoi : sp.HanSuDung;
-            if (apHnC && hsdHieuLuc is null)
+            // v2.7.1 NỚI: chỉ bắt buộc khi danh mục thực phẩm chuẩn của thành phẩm yêu cầu (thành phẩm chưa
+            // gắn danh mục thì vẫn bắt buộc) - xem LoSanXuatService.BatBuocHanSuDungAsync.
+            if (apHnC && hsdHieuLuc is null
+                && await LoSanXuatService.BatBuocHanSuDungAsync(_db, sp.MaThanhPham, ct))
                 return KetQuaThaoTac.Loi($"Lô {sp.MaLoThanhPham} ({sp.MaThanhPham}): cần nhập hạn sử dụng - "
-                                         + "HanoiCheck (v2.7) bắt buộc hạn dùng cho lô đồng bộ.");
+                                         + "danh mục thực phẩm chuẩn của thành phẩm này yêu cầu hạn dùng.");
         }
 
         // Cho phép sửa lại người thực hiện / cơ sở ngay lúc hoàn thành (ai làm thực tế có thể khác kế hoạch).

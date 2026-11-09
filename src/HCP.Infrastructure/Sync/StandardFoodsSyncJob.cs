@@ -76,7 +76,10 @@ public sealed class StandardFoodsSyncJob : IStandardFoodsSyncJob
             {
                 Code = i.Id!.Value.ToString(),
                 Name = (i.Name ?? string.Empty).Trim(),
-                MeasureName = i.MeasureName?.Trim()
+                MeasureName = i.MeasureName?.Trim(),
+                // Máy chủ HnC bản cũ không trả hai cờ này (null) -> giữ quy định cũ: luôn bắt buộc.
+                BatBuocNgaySanXuat = i.RequiredManufacturingDate ?? true,
+                BatBuocHanSuDung = i.RequiredExpiryDate ?? true
             });
 
         await _danhMucChuan.CapNhatTuHnCAsync(danhMuc, ct);

@@ -2624,6 +2624,12 @@ namespace HCP.Infrastructure.Persistence.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("BatBuocHanSuDung")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("BatBuocNgaySanXuat")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("CapNhatLucUtc")
                         .HasColumnType("datetime2");
 

@@ -174,8 +174,14 @@ class _ManSuaThucPhamState extends ConsumerState<ManSuaThucPham> {
               const SizedBox(height: 14),
               TextFormField(
                 controller: _maLoaiSp,
+                maxLines: 1,
                 decoration: const InputDecoration(
-                    labelText: 'Mã loại thực phẩm', helperText: 'Mã danh mục thực phẩm chuẩn HanoiCheck, vd THIT.',
+                    labelText: 'Mã loại thực phẩm',
+                    // v2.7.1: danh mục quyết định đơn vị tính gửi HanoiCheck, nên đổi danh mục cũng là đổi đơn
+                    // vị tính - HnC không cho đổi khi thực phẩm đang nằm trong đơn trường chưa xác nhận.
+                    helperText: 'Danh mục thực phẩm chuẩn HanoiCheck. Đổi danh mục có thể đổi đơn vị tính '
+                        'nên không đổi được khi thực phẩm đang trong đơn chờ trường xác nhận.',
+                    helperMaxLines: 3,
                     border: OutlineInputBorder()),
                 validator: (v) => (_dongBoHnC && (v ?? '').trim().isEmpty)
                     ? 'Vui lòng nhập mã loại thực phẩm'

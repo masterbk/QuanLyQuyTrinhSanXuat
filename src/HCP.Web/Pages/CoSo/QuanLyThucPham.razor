@@ -1,4 +1,4 @@
-@page "/app/thuc-pham"
+﻿@page "/app/thuc-pham"
 @using HCP.Domain.Constants
 @using HCP.Domain.Entities.Business
 @using HCP.Domain.Enums
@@ -159,7 +159,8 @@ else
                         }
                     </MudItem>
 
-                    @* food_config (đặc tả v2.6): tuỳ chọn. Không chọn đơn vị -> không gửi, HnC giữ cấu hình đang có. *@
+                    @* food_config: tuỳ chọn, nhưng v2.7.1 làm rõ "không gửi" = HnC dùng đơn vị tính MẶC ĐỊNH của
+                       danh mục chuẩn. Dùng đơn vị khác mặc định thì phải chọn ở đây và giữ nguyên. *@
                     <MudItem xs="12">
                         <MudText Typo="Typo.subtitle2" Class="mt-2">Đơn vị tính gửi HanoiCheck (tuỳ chọn)</MudText>
                         @if (_donViTinh.Count == 0)
@@ -309,9 +310,11 @@ else
     private string GoiYDonViTinh()
     {
         var dvChuan = _danhMucChuan.FirstOrDefault(x => x.Code == _input.MaLoaiSp)?.MeasureName;
+        // v2.7.1: để trống = HanoiCheck dùng đơn vị mặc định của danh mục chuẩn, KHÔNG phải "giữ nguyên".
+        // Ngoài ra không đổi được đơn vị tính khi thực phẩm đang nằm trong đơn trường chưa xác nhận nhận hàng.
         return string.IsNullOrWhiteSpace(dvChuan)
-            ? "Để trống nếu không cần khai."
-            : $"Danh mục chuẩn đang dùng đơn vị: {dvChuan}.";
+            ? "Để trống = dùng đơn vị tính mặc định của danh mục chuẩn."
+            : $"Để trống = dùng đơn vị mặc định của danh mục chuẩn ({dvChuan}).";
     }
 
     /// <summary>Lọc danh mục chuẩn theo mã hoặc tên; giới hạn 100 kết quả để dropdown mở nhanh.</summary>

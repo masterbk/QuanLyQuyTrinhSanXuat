@@ -168,6 +168,64 @@ public class LoSanXuatServiceTests
         Assert.Contains("không được trước ngày sản xuất", await ThemLoiAsync(hsdTruocNsx));
     }
 
+    // ===== v2.7.1: ngày sản xuất / hạn sử dụng chỉ bắt buộc khi danh mục thực phẩm chuẩn yêu cầu =====
+
+    [Fact]
+    public async Task v271_Danh_Muc_Khong_Yeu_Cau_Thi_Bo_Trong_Ngay_Van_Luu_Duoc()
+    {
+        Seed();
+        using (var db = MoDb())
+        {
+            db.StandardFoodCategories.Add(new StandardFoodCategory
+            {
+                Code = "x", Name = "Danh mục không yêu cầu ngày",
+                BatBuocNgaySanXuat = false, BatBuocHanSuDung = false
+            });
+            db.SaveChanges();
+        }
+
+        var b = Lo(Anh("A1"));
+        b.NgaySanXuat = null;
+        b.HanSuDung = null;
+
+        using var db2 = MoDb();
+        var kq = await new LoSanXuatService(db2, new NoOpOutbox(), new MaTuSinhService(db2)).ThemAsync(b);
+        Assert.True(kq.ThanhCong, kq.ThongBao);
+    }
+
+    [Fact]
+    public async Task v271_Danh_Muc_Yeu_Cau_Thi_Van_Bat_Buoc_Va_Van_Kiem_Dinh_Dang()
+    {
+        Seed();
+        using (var db = MoDb())
+        {
+            db.StandardFoodCategories.Add(new StandardFoodCategory
+            {
+                Code = "x", Name = "Danh mục yêu cầu ngày",
+                BatBuocNgaySanXuat = true, BatBuocHanSuDung = true
+            });
+            db.SaveChanges();
+        }
+
+        var khongNsx = Lo(Anh("A1")); khongNsx.NgaySanXuat = null;
+        Assert.Contains("ngày sản xuất", await ThemLoiAsync(khongNsx));
+
+        var khongHsd = Lo(Anh("A1")); khongHsd.HanSuDung = null;
+        Assert.Contains("hạn sử dụng", await ThemLoiAsync(khongHsd));
+
+        // Dù danh mục không yêu cầu, có gửi thì vẫn kiểm: hạn dùng không trước ngày sản xuất.
+        using (var db = MoDb())
+        {
+            var dm = db.StandardFoodCategories.Single(c => c.Code == "x");
+            dm.BatBuocNgaySanXuat = dm.BatBuocHanSuDung = false;
+            db.SaveChanges();
+        }
+        var nguoc = Lo(Anh("A1"));
+        nguoc.NgaySanXuat = new DateOnly(2026, 9, 20);
+        nguoc.HanSuDung = new DateOnly(2026, 9, 10);
+        Assert.Contains("không được trước ngày sản xuất", await ThemLoiAsync(nguoc));
+    }
+
     [Fact]
     public async Task v27_Lo_Phai_Co_Dia_Chi_Thu_Mua_Hoac_Ncc()
     {

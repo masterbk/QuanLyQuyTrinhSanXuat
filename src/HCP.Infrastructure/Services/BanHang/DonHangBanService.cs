@@ -783,6 +783,58 @@ public sealed class DonHangBanService : IDonHangBanService
     }
 
     /// <summary>
+    /// Đặc tả v2.7.1 (DV11 mục l): trước khi chuyển "Đang giao" / "Đã giao hàng", nguồn hàng đã khai phải CÒN
+    /// hợp lệ - kho còn tồn tại; lô còn tồn tại, đúng thực phẩm đã khai và còn được gán vào kho đã khai. Sai thì
+    /// HanoiCheck trả 422 tại status và nhà trường cũng không tiếp nhận được đơn. Trả null nếu hợp lệ.
+    /// </summary>
+    private async Task<string?> NguonHangHetHieuLucAsync(DonHangBan don, CancellationToken ct)
+    {
+        const string huongDan = " HanoiCheck sẽ từ chối chuyển trạng thái. Đơn còn \"Đã xác nhận\" thì khai lại "
+                                + "nguồn hàng (xuất kho lại); đơn đã \"Đang giao\" thì liên hệ bộ phận hỗ trợ "
+                                + "của HanoiCheck.";
+
+        var maKho = don.MaKho?.Trim() ?? "";
+        if (!await _db.Warehouses.AsNoTracking().AnyAsync(k => k.MaKho == maKho, ct))
+            return $"Kho \"{maKho}\" của đơn không còn tồn tại nên nguồn hàng đã khai không còn hợp lệ." + huongDan;
+
+        var canKiem = don.Dong
+            .SelectMany(d => d.XuatLo.Select(x => new
+            {
+                MaLo = (x.MaLo ?? "").Trim(),
+                MaThucPham = (x.MaNguyenLieu ?? d.MaThanhPham ?? "").Trim()
+            }))
+            .Where(x => x.MaLo.Length > 0)
+            .Distinct()
+            .ToList();
+        if (canKiem.Count == 0) return null;
+
+        var maLo = canKiem.Select(x => x.MaLo).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var loHienCo = (await _db.Batches.AsNoTracking()
+                .Where(b => maLo.Contains(b.MaLo))
+                .Select(b => new { b.MaLo, b.MaSanPham, Kho = b.DanhSachKho.Select(k => k.MaKho).ToList() })
+                .ToListAsync(ct))
+            .GroupBy(b => b.MaLo, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var x in canKiem)
+        {
+            // Không có bản ghi lô trong danh mục KHÔNG kết luận là lô bị xoá: tồn kho có thể đến từ điều chỉnh
+            // tồn / tồn đầu kỳ với mã lô tự khai. Để HnC tự báo trường hợp đó (việc xoá lô đang là nguồn hàng
+            // thì đã bị chặn ở LoSanXuatService.XoaAsync).
+            if (!loHienCo.TryGetValue(x.MaLo, out var lo)) continue;
+
+            if (!string.Equals((lo.MaSanPham ?? "").Trim(), x.MaThucPham, StringComparison.OrdinalIgnoreCase))
+                return $"Lô \"{x.MaLo}\" nay thuộc thực phẩm \"{lo.MaSanPham}\" chứ không phải "
+                       + $"\"{x.MaThucPham}\" đã khai cho đơn." + huongDan;
+
+            if (!lo.Kho.Any(k => string.Equals((k ?? "").Trim(), maKho, StringComparison.OrdinalIgnoreCase)))
+                return $"Lô \"{x.MaLo}\" không còn được gán vào kho \"{maKho}\" đã khai cho đơn." + huongDan;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// chi_tiet của "process". Dòng thực phẩm: phan_bo (lô + kho + số lượng). Dòng suất ăn/thực đơn: nguyen_lieu, mỗi
     /// nguyên liệu kèm phan_bo riêng (dish_ingredient_fulfillment). Dòng định danh bằng trace_code; đơn kéo về trước khi
     /// có mã truy vết thì dùng ma_thuc_pham / ma_mon_an (gộp theo mã để mỗi mã chỉ một dòng, như đặc tả yêu cầu).
@@ -836,6 +888,9 @@ public sealed class DonHangBanService : IDonHangBanService
         // số đặt) + 1-10 ảnh GIAO HÀNG trong CÙNG một lần gửi. Lỗi thật thì dừng, giữ "Đang giao" để bấm lại.
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
+            // v2.7.1 (DV11 l): nguồn hàng phải còn hợp lệ mới chuyển được "Đã giao".
+            if (await NguonHangHetHieuLucAsync(don, ct) is { } loiNguon) return KetQuaThaoTac.Loi(loiNguon);
+
             var duongDanAnh = anh.Select(a => a.DuongDan)
                 .Concat(don.AnhTongQuan.Where(a => a.Loai == LoaiAnhDonHang.TongQuan).Select(a => a.DuongDan))
                 .Distinct().Take(SoAnhGuiHnC).ToList();
@@ -915,6 +970,9 @@ public sealed class DonHangBanService : IDonHangBanService
         // lỗi thật thì không nhận, giữ nguyên "Chờ giao hàng" để bấm lại (process ghi đè nên gọi lại an toàn).
         if (don.Nguon == NguonDonHang.HanoiCheck && don.MaDonHnC is not null && _db.TenantInfo?.Id is { } tenantId)
         {
+            // v2.7.1 (DV11 l): nguồn hàng phải còn hợp lệ mới chuyển được "Đang giao".
+            if (await NguonHangHetHieuLucAsync(don, ct) is { } loiNguon) return KetQuaThaoTac.Loi(loiNguon);
+
             var ket = await _orderCommandClient.XuLyDonAsync(tenantId, don.MaDonHnC, new ProcessOrderRequest
             {
                 MaNguoiGiao = maNhanSu,
