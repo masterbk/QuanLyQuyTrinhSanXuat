@@ -34,6 +34,9 @@ class KhoDanhMucGia implements DanhMucQuanLyData {
   }
 
   @override
+  Future<List<DonViTinhHnC>> donViTinh() async => const [];
+
+  @override
   Future<List<Khau>> khauSanXuat() async => const [];
 
   @override
