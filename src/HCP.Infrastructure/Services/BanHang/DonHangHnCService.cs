@@ -42,6 +42,8 @@ public sealed class DonHangHnCService : IDonHangHnCService
 {
     private static readonly HashSet<string> TrangThaiHuyHnC = new(StringComparer.OrdinalIgnoreCase) { "HUY", "TU_CHOI" };
 
+    private const string HnCChoXacNhan = "CHO_XAC_NHAN";
+
     private readonly AppDbContext _db;
     private readonly IMaTuSinhService _maTuSinh;
     private readonly IPushNotificationService _push;
@@ -80,6 +82,7 @@ public sealed class DonHangHnCService : IDonHangHnCService
 
         var now = DateTime.UtcNow;
         var soDon = 0;
+        var canXacNhanLai = new List<DonHangBan>();
         foreach (var n in donNhan.OrderBy(d => d.NgayTaoTrenHnC ?? DateTime.MaxValue).ThenBy(d => d.Id))
         {
             // KHÔNG gộp theo mã sản phẩm: mỗi dòng HnC (kèm trace_code riêng) phải giữ nguyên 1-1
@@ -102,10 +105,21 @@ public sealed class DonHangHnCService : IDonHangHnCService
                 continue;
             }
 
-            if (CapNhatDon(don, n, dong, biHuyTrenHnC, nhanSu, now)) soDon++;
+            if (CapNhatDon(don, n, dong, biHuyTrenHnC, nhanSu, now, canXacNhanLai)) soDon++;
         }
 
         await _db.SaveChangesAsync(ct);
+
+        // Báo cho người nhập liệu biết đơn vừa bị trường sửa - không thì đơn lặng lẽ quay về "Chờ xác nhận".
+        foreach (var d in canXacNhanLai)
+        {
+            await _push.GuiTheoQuyenAsync(tenantId, AppRoles.QuyenNhapLieu.Split(','),
+                "Trường sửa đơn - cần xác nhận lại",
+                $"Đơn {d.MaDonHang} vừa được trường sửa trên HanoiCheck nên quay về \"Chờ xác nhận\". "
+                + "Xem lại số lượng rồi bấm Xác nhận.",
+                new Dictionary<string, string> { ["loaiThongBao"] = "don_hang", ["donHangId"] = d.Id.ToString() }, ct);
+        }
+
         return soDon;
     }
 
@@ -165,9 +179,10 @@ public sealed class DonHangHnCService : IDonHangHnCService
 
     /// <summary>Áp thay đổi từ HanoiCheck vào đơn đã có. Trả true nếu có thay đổi.</summary>
     private bool CapNhatDon(DonHangBan don, DonHangNhanEntity n, List<(string Ma, decimal SoLuong, string? TraceCode, bool LaMonAn)> dong,
-                            bool biHuyTrenHnC, HashSet<string> nhanSu, DateTime now)
+                            bool biHuyTrenHnC, HashSet<string> nhanSu, DateTime now, List<DonHangBan> canXacNhanLai)
     {
         var coDoi = false;
+        var trangThaiHnCCu = don.TrangThaiHnC;   // bắt trước khi ghi đè, để biết HnC có LÙI trạng thái không
         if (don.TrangThaiHnC != n.TrangThai)
         {
             don.TrangThaiHnC = n.TrangThai;
@@ -226,6 +241,27 @@ public sealed class DonHangHnCService : IDonHangHnCService
                 don.HnCCoThayDoi = true;
                 coDoi = true;
             }
+        }
+
+        // Trường sửa đơn trên HanoiCheck thì HnC tự đưa đơn về "Chờ xác nhận" để NCC duyệt lại nội dung mới
+        // (nội dung mới đã được áp ở nhánh trên). Kéo trạng thái nội bộ về theo, không thì hai bên lệch và lúc
+        // Xuất kho HnC từ chối vì không cho nhảy thẳng từ "Chờ xác nhận" sang "Đang giao".
+        //
+        // Nhận biết bằng việc trạng thái HnC LÙI (đang từ "Đang chuẩn bị" trở lên về CHO_XAC_NHAN), KHÔNG phải
+        // chỉ nhìn giá trị mới: lần đồng bộ chạy chen ngay sau lúc bấm Xác nhận dùng ảnh chụp HnC lấy trước đó
+        // nên vẫn thấy CHO_XAC_NHAN - nhìn giá trị mới thì sẽ lùi nhầm đơn vừa xác nhận, rồi lần xác nhận sau
+        // bị HnC trả 422 "không thể chuyển từ Đang chuẩn bị sang Đang chuẩn bị".
+        //
+        // Chỉ áp cho đơn ĐÃ XÁC NHẬN mà CHƯA XUẤT KHO; đã xuất kho thì giữ nguyên (nhánh cờ HnCCoThayDoi ở trên).
+        if (!biHuyTrenHnC
+            && don.TrangThai == TrangThaiDonHangBan.DaXacNhan
+            && string.Equals(n.TrangThai, HnCChoXacNhan, StringComparison.OrdinalIgnoreCase)
+            && trangThaiHnCCu is not null
+            && !string.Equals(trangThaiHnCCu, HnCChoXacNhan, StringComparison.OrdinalIgnoreCase))
+        {
+            don.TrangThai = TrangThaiDonHangBan.ChoXacNhan;
+            canXacNhanLai.Add(don);
+            coDoi = true;
         }
 
         // Người giao do HnC phân công: chỉ điền khi NCC chưa chọn và đơn chưa xuất kho.

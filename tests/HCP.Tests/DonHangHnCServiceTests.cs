@@ -1,6 +1,7 @@
 using HCP.Domain.Constants;
 using HCP.Domain.Entities.Business;
 using HCP.Domain.Enums;
+using HCP.Infrastructure.HanoiCheck;
 using HCP.Infrastructure.Persistence;
 using HCP.Infrastructure.Services.BanHang;
 using HCP.Infrastructure.Services.MaTuSinh;
@@ -31,6 +32,13 @@ public class DonHangHnCServiceTests
         new(db, new MaTuSinhService(db), new FakePushNotificationService());
     private static DonHangBanService SvcBan(AppDbContext db) =>
         new(db, new MaTuSinhService(db), new FakeHanoiCheckOrderCommandClient(), new FakePushNotificationService());
+
+    /// <summary>Như <see cref="SvcBan"/> nhưng HanoiCheck NHẬN lệnh đổi trạng thái (mặc định của fake là
+    /// "chưa cấu hình" - khi đó app bỏ qua bước đẩy nên không ghi lại trạng thái HnC).</summary>
+    private static DonHangBanService SvcBanHnCOk(AppDbContext db) =>
+        new(db, new MaTuSinhService(db),
+            new FakeHanoiCheckOrderCommandClient { DoiTrangThai = (_, _) => OrderCommandResult.Ok() },
+            new FakePushNotificationService());
 
     /// <summary>BANH_MI tồn LO_A 10 (HSD 20/09, hết hạn trước) và LO_B 10 (HSD 30/09); 2 kho; người giao VC-03.</summary>
     private void Seed()
@@ -152,6 +160,68 @@ public class DonHangHnCServiceTests
             Assert.Equal("KH01", d.MaKhachHang);
             Assert.Equal("5 Hoa Sen", d.DiaChiGiao);                   // HnC không có địa chỉ -> lấy của khách
         });
+    }
+
+    /// <summary>
+    /// Trường vào sửa đơn sau khi NCC đã xác nhận: HanoiCheck tự đưa đơn về "Chờ xác nhận" để NCC duyệt lại
+    /// nội dung mới. Đơn CHƯA XUẤT KHO thì hệ thống phải lùi theo, không thì hai bên lệch và lúc Xuất kho
+    /// HnC từ chối (không cho nhảy từ "Chờ xác nhận" sang "Đang giao").
+    /// </summary>
+    [Fact]
+    public async Task Truong_Sua_Don_Lam_HnC_Lui_Thi_Don_Quay_Ve_Cho_Xac_Nhan_Va_Bao_Nguoi_Nhap_Lieu()
+    {
+        Seed();
+        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 20), ("BANH_MI", 8, null, null));
+        await DongBoAsync();
+        var id = LayDon("HNC-1").Id;
+
+        // NCC xác nhận -> đẩy DANG_CHUAN_BI sang HnC, và ghi lại ngay trạng thái HnC vừa đẩy.
+        using (var db = MoDb()) Assert.True((await SvcBanHnCOk(db).XacNhanAsync(id)).ThanhCong);
+        Assert.Equal("DANG_CHUAN_BI", LayDon("HNC-1").TrangThaiHnC);
+
+        // Trường sửa số lượng -> HnC lùi đơn về CHO_XAC_NHAN.
+        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 20), ("BANH_MI", 11, null, null));
+
+        var push = new FakePushNotificationService();
+        using (var db = MoDb())
+            Assert.Equal(1, await new DonHangHnCService(db, new MaTuSinhService(db), push).DongBoVaoDonHangBanAsync());
+
+        var don = LayDon("HNC-1");
+        Assert.Equal(TrangThaiDonHangBan.ChoXacNhan, don.TrangThai);   // lùi theo HnC
+        Assert.Equal("CHO_XAC_NHAN", don.TrangThaiHnC);
+        Assert.Equal(11m, don.Dong.Single().SoLuong);                  // số lượng mới của trường đã được áp
+        Assert.Contains(push.DaGui, g => g.TieuDe.Contains("xác nhận lại"));
+
+        // Xác nhận lại thì đẩy DANG_CHUAN_BI lần nữa, hai bên khớp.
+        using (var db = MoDb()) Assert.True((await SvcBanHnCOk(db).XacNhanAsync(id)).ThanhCong);
+        Assert.Equal((TrangThaiDonHangBan.DaXacNhan, "DANG_CHUAN_BI"),
+                     (LayDon("HNC-1").TrangThai, LayDon("HNC-1").TrangThaiHnC));
+    }
+
+    /// <summary>
+    /// Chốt an toàn: lần đồng bộ chạy chen ngay sau lúc bấm Xác nhận dùng ảnh chụp HnC lấy TRƯỚC đó nên vẫn
+    /// thấy CHO_XAC_NHAN. Phải nhìn trạng thái HnC có LÙI hay không, chứ nhìn giá trị mới thì sẽ lùi nhầm
+    /// đơn vừa xác nhận (rồi lần xác nhận sau bị HnC trả 422 "Đang chuẩn bị sang Đang chuẩn bị").
+    /// </summary>
+    [Fact]
+    public async Task HnC_Van_O_Cho_Xac_Nhan_Tu_Dau_Thi_Khong_Lui_Don_Vua_Xac_Nhan()
+    {
+        Seed();
+        NhanDon("HNC-1", "MN Hoa Sen", "CHO_XAC_NHAN", new DateOnly(2026, 9, 20), ("BANH_MI", 8, null, null));
+        await DongBoAsync();
+        var id = LayDon("HNC-1").Id;
+
+        using (var db = MoDb())
+        {
+            // Mô phỏng chưa kịp ghi trạng thái HnC (đơn cũ trước bản này, hoặc công tắc HnC tắt lúc xác nhận).
+            var don = await db.DonHangBans.SingleAsync(d => d.Id == id);
+            don.TrangThai = TrangThaiDonHangBan.DaXacNhan;
+            don.TrangThaiHnC = "CHO_XAC_NHAN";
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, await DongBoAsync());
+        Assert.Equal(TrangThaiDonHangBan.DaXacNhan, LayDon("HNC-1").TrangThai);
     }
 
     /// <summary>Trường được sửa đơn (đặc tả HnC v2.5 mục 11.a/11.c) tới sát lúc xác nhận nhận hàng, nên

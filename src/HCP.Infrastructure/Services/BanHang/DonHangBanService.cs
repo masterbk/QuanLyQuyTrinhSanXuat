@@ -482,6 +482,11 @@ public sealed class DonHangBanService : IDonHangBanService
             var ket = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_CHUAN_BI", null, ct);
             if (!ket.ThanhCong && !ket.ChuaCauHinh)
                 return KetQuaThaoTac.Loi($"Không đẩy được trạng thái sang HanoiCheck: {ket.ThongBao}");
+
+            // Ghi ngay trạng thái HnC vừa đẩy thành công, đừng đợi lần đồng bộ sau: cột "HnC" trên màn đơn
+            // hàng mới đúng, và quan trọng hơn là có mốc để nhận ra HnC LÙI trạng thái (trường sửa đơn thì
+            // HnC tự đưa đơn về "Chờ xác nhận" - xem DonHangHnCService.CapNhatDon).
+            if (ket.ThanhCong) don.TrangThaiHnC = "DANG_CHUAN_BI";
         }
 
         don.TrangThai = TrangThaiDonHangBan.DaXacNhan;
@@ -732,6 +737,7 @@ public sealed class DonHangBanService : IDonHangBanService
                 var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_GIAO", null, ct);
                 if (!ketTrangThai.ThanhCong)
                     return KetQuaThaoTac.Loi($"Không đẩy được trạng thái \"Đang giao\" sang HanoiCheck: {ketTrangThai.ThongBao}");
+                don.TrangThaiHnC = "DANG_GIAO";
             }
         }
 
@@ -923,6 +929,7 @@ public sealed class DonHangBanService : IDonHangBanService
                     ct, new GiaoHangInput(chiTietGiao, duongDanAnhGiao));
                 if (!ketTrangThai.ThanhCong)
                     return KetQuaThaoTac.Loi($"Không đẩy được trạng thái \"Đã giao\" sang HanoiCheck: {ketTrangThai.ThongBao}");
+                don.TrangThaiHnC = "DA_GIAO";
             }
         }
 
@@ -986,6 +993,7 @@ public sealed class DonHangBanService : IDonHangBanService
                 var ketTrangThai = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_GIAO", null, ct);
                 if (!ketTrangThai.ThanhCong)
                     return KetQuaThaoTac.Loi($"Không đẩy được trạng thái \"Đang giao\" sang HanoiCheck: {ketTrangThai.ThongBao}");
+                don.TrangThaiHnC = "DANG_GIAO";
             }
         }
 
