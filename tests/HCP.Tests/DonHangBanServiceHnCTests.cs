@@ -76,6 +76,38 @@ public class DonHangBanServiceHnCTests
         Assert.Equal(TrangThaiDonHangBan.DaXacNhan, don.TrangThai);
     }
 
+    /// <summary>HnC đã ở "Đang chuẩn bị" (cơ sở xử lý thẳng trên cổng HnC): bấm Xác nhận KHÔNG đẩy lại DANG_CHUAN_BI
+    /// (sẽ bị HnC từ chối làm đơn kẹt) mà coi như đã xác nhận, chỉ cập nhật nội bộ sang Đã xác nhận.</summary>
+    [Fact]
+    public async Task Xac_Nhan_Khi_HnC_Da_Dang_Chuan_Bi_Thi_Bo_Qua_Day_Khong_Bi_Ket()
+    {
+        var id = Seed();
+        using (var db = MoDb())
+        {
+            var don = await db.DonHangBans.SingleAsync(d => d.Id == id);
+            don.TrangThaiHnC = "DANG_CHUAN_BI";
+            await db.SaveChangesAsync();
+        }
+
+        // Fake báo lỗi NẾU bị gọi đẩy trạng thái -> dùng để chứng minh đã bỏ qua bước đẩy.
+        var daGoiDay = false;
+        var fake = new FakeHanoiCheckOrderCommandClient
+        {
+            DoiTrangThai = (_, _) => { daGoiDay = true; return OrderCommandResult.Loi("Không thể chuyển từ Đang chuẩn bị sang Đang chuẩn bị"); }
+        };
+
+        using (var db = MoDb())
+        {
+            var kq = await Svc(db, fake).XacNhanAsync(id);
+            Assert.True(kq.ThanhCong, kq.ThongBao);
+        }
+        Assert.False(daGoiDay);   // không đẩy lại DANG_CHUAN_BI
+
+        using var db2 = MoDb();
+        var donSau = await db2.DonHangBans.SingleAsync(d => d.Id == id);
+        Assert.Equal(TrangThaiDonHangBan.DaXacNhan, donSau.TrangThai);
+    }
+
     [Fact]
     public async Task Xac_Nhan_Loi_HanoiCheck_Thi_Khong_Doi_Trang_Thai_Noi_Bo()
     {

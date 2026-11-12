@@ -437,6 +437,12 @@ public sealed class DonHangBanService : IDonHangBanService
 
     // ==================== Chuyển trạng thái ====================
 
+    /// <summary>Các trạng thái HnC cho thấy đơn ĐÃ qua bước "Chờ xác nhận" (đã/đang chuẩn bị trở đi). Khi đơn đã ở
+    /// các trạng thái này mà đẩy lại DANG_CHUAN_BI thì HnC từ chối ("Không thể chuyển từ Đang chuẩn bị sang Đang
+    /// chuẩn bị") - nên bỏ qua bước đẩy, coi như đã xác nhận trên HnC.</summary>
+    private static readonly HashSet<string> DaQuaChoXacNhanTrenHnC = new(StringComparer.OrdinalIgnoreCase)
+        { "DANG_CHUAN_BI", "DANG_GIAO", "DA_GIAO", "GIAO_HANG_THANH_CONG", "TRA_HANG" };
+
     public async Task<KetQuaThaoTac> XacNhanAsync(int id, CancellationToken ct = default)
     {
         var don = await QueryDayDu().FirstOrDefaultAsync(d => d.Id == id, ct);
@@ -477,16 +483,23 @@ public sealed class DonHangBanService : IDonHangBanService
                         + ". Vào \"Sửa đơn\" bổ sung dòng thiếu trước khi xác nhận.");
             }
 
-            // Đẩy ngược "Đang chuẩn bị" TRƯỚC khi lưu nội bộ, để 2 bên luôn khớp - công tắc HnC
-            // tắt/chưa cấu hình thì bỏ qua (ChuaCauHinh), lỗi thật thì chặn xác nhận.
-            var ket = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_CHUAN_BI", null, ct);
-            if (!ket.ThanhCong && !ket.ChuaCauHinh)
-                return KetQuaThaoTac.Loi($"Không đẩy được trạng thái sang HanoiCheck: {ket.ThongBao}");
+            // Nếu HnC đã ở "Đang chuẩn bị" (hoặc xa hơn) - thường do cơ sở xử lý thẳng trên cổng HnC - thì đẩy
+            // lại DANG_CHUAN_BI sẽ bị HnC từ chối ("Không thể chuyển từ Đang chuẩn bị sang Đang chuẩn bị") khiến
+            // đơn KẸT ở "Chờ xác nhận". Trường hợp này coi như đã xác nhận trên HnC: bỏ qua bước đẩy, chỉ cập nhật
+            // nội bộ. (TrangThaiHnC cập nhật mỗi lần đồng bộ; nếu còn cũ thì bấm "Đồng bộ ngay" rồi xác nhận lại.)
+            if (!DaQuaChoXacNhanTrenHnC.Contains(don.TrangThaiHnC ?? ""))
+            {
+                // Đẩy ngược "Đang chuẩn bị" TRƯỚC khi lưu nội bộ, để 2 bên luôn khớp - công tắc HnC
+                // tắt/chưa cấu hình thì bỏ qua (ChuaCauHinh), lỗi thật thì chặn xác nhận.
+                var ket = await _orderCommandClient.DoiTrangThaiAsync(tenantId, don.MaDonHnC, "DANG_CHUAN_BI", null, ct);
+                if (!ket.ThanhCong && !ket.ChuaCauHinh)
+                    return KetQuaThaoTac.Loi($"Không đẩy được trạng thái sang HanoiCheck: {ket.ThongBao}");
 
-            // Ghi ngay trạng thái HnC vừa đẩy thành công, đừng đợi lần đồng bộ sau: cột "HnC" trên màn đơn
-            // hàng mới đúng, và quan trọng hơn là có mốc để nhận ra HnC LÙI trạng thái (trường sửa đơn thì
-            // HnC tự đưa đơn về "Chờ xác nhận" - xem DonHangHnCService.CapNhatDon).
-            if (ket.ThanhCong) don.TrangThaiHnC = "DANG_CHUAN_BI";
+                // Ghi ngay trạng thái HnC vừa đẩy thành công, đừng đợi lần đồng bộ sau: cột "HnC" trên màn đơn
+                // hàng mới đúng, và quan trọng hơn là có mốc để nhận ra HnC LÙI trạng thái (trường sửa đơn thì
+                // HnC tự đưa đơn về "Chờ xác nhận" - xem DonHangHnCService.CapNhatDon).
+                if (ket.ThanhCong) don.TrangThaiHnC = "DANG_CHUAN_BI";
+            }
         }
 
         don.TrangThai = TrangThaiDonHangBan.DaXacNhan;
